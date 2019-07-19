@@ -9,6 +9,7 @@
 #include <linux/atomic.h>
 #include <linux/wait.h>
 #include <linux/percpu_counter.h>
+#include "extent_io.h"
 
 #define BTRFS_WRITE_LOCK 1
 #define BTRFS_READ_LOCK 2
