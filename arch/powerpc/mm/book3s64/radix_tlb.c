@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * TLB flush routines for radix kernels.
  *
  * Copyright 2015-2016, Aneesh Kumar K.V, IBM Corporation.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version
- * 2 of the License, or (at your option) any later version.
  */
 
 #include <linux/mm.h>
@@ -670,6 +666,11 @@ EXPORT_SYMBOL(radix__flush_tlb_page);
 #define radix__flush_all_mm radix__local_flush_all_mm
 #endif /* CONFIG_SMP */
 
+/*
+ * If kernel TLBIs ever become local rather than global, then
+ * drivers/misc/ocxl/link.c:ocxl_link_add_pe will need some work, as it
+ * assumes kernel TLBIs are global.
+ */
 void radix__flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
 	_tlbie_pid(0, RIC_FLUSH_ALL);
