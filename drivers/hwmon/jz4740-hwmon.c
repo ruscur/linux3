@@ -93,11 +93,8 @@ static int jz4740_hwmon_probe(struct platform_device *pdev)
 	hwmon->cell = mfd_get_cell(pdev);
 
 	hwmon->irq = platform_get_irq(pdev, 0);
-	if (hwmon->irq < 0) {
-		dev_err(&pdev->dev, "Failed to get platform irq: %d\n",
-			hwmon->irq);
+	if (hwmon->irq < 0)
 		return hwmon->irq;
-	}
 
 	hwmon->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(hwmon->base))
