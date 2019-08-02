@@ -30,6 +30,8 @@
 #include <linux/slab.h>
 #include <linux/percpu-rwsem.h>
 #include <linux/torture.h>
+#include "../../fs/btrfs/ctree.h"
+#include "../../fs/btrfs/locking.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Paul E. McKenney <paulmck@linux.ibm.com>");
@@ -85,6 +87,7 @@ struct lock_torture_ops {
 
 	unsigned long flags; /* for irq spinlocks */
 	const char *name;
+	bool multiple;
 };
 
 struct lock_torture_cxt {
@@ -600,6 +603,7 @@ static void torture_percpu_rwsem_up_read(void) __releases(pcpu_rwsem)
 	percpu_up_read(&pcpu_rwsem);
 }
 
+
 static struct lock_torture_ops percpu_rwsem_lock_ops = {
 	.init		= torture_percpu_rwsem_init,
 	.writelock	= torture_percpu_rwsem_down_write,
@@ -610,6 +614,76 @@ static struct lock_torture_ops percpu_rwsem_lock_ops = {
 	.read_delay     = torture_rwsem_read_delay,
 	.readunlock     = torture_percpu_rwsem_up_read,
 	.name		= "percpu_rwsem_lock"
+};
+
+static struct btrfs_drw_lock torture_drw_lock;
+
+void torture_drw_init(void)
+{
+	BUG_ON(btrfs_drw_lock_init(&torture_drw_lock));
+}
+
+static int torture_drw_write_lock(void) __acquires(torture_drw_lock)
+{
+	btrfs_drw_write_lock(&torture_drw_lock);
+	return 0;
+}
+
+static void torture_drw_write_unlock(void) __releases(torture_drw_lock)
+{
+	btrfs_drw_write_unlock(&torture_drw_lock);
+}
+
+static int torture_drw_read_lock(void) __acquires(torture_drw_lock)
+{
+	btrfs_drw_read_lock(&torture_drw_lock);
+	return 0;
+}
+
+static void torture_drw_read_unlock(void) __releases(torture_drw_lock)
+{
+	btrfs_drw_read_unlock(&torture_drw_lock);
+}
+
+static void torture_drw_write_delay(struct torture_random_state *trsp)
+{
+	const unsigned long longdelay_ms = 100;
+
+	/* We want a long delay occasionally to force massive contention.  */
+	if (!(torture_random(trsp) %
+	      (cxt.nrealwriters_stress * 2000 * longdelay_ms)))
+		mdelay(longdelay_ms * 10);
+	else
+		mdelay(longdelay_ms / 10);
+	if (!(torture_random(trsp) % (cxt.nrealwriters_stress * 20000)))
+		torture_preempt_schedule();  /* Allow test to be preempted. */
+}
+
+static void torture_drw_read_delay(struct torture_random_state *trsp)
+{
+	const unsigned long longdelay_ms = 100;
+
+	/* We want a long delay occasionally to force massive contention.  */
+	if (!(torture_random(trsp) %
+	      (cxt.nrealreaders_stress * 2000 * longdelay_ms)))
+		mdelay(longdelay_ms * 2);
+	else
+		mdelay(longdelay_ms / 2);
+	if (!(torture_random(trsp) % (cxt.nrealreaders_stress * 20000)))
+		torture_preempt_schedule();  /* Allow test to be preempted. */
+}
+
+static struct lock_torture_ops btrfs_drw_lock_ops = {
+	.init		= torture_drw_init,
+	.writelock	= torture_drw_write_lock,
+	.write_delay	= torture_drw_write_delay,
+	.task_boost     = torture_boost_dummy,
+	.writeunlock	= torture_drw_write_unlock,
+	.readlock       = torture_drw_read_lock,
+	.read_delay     = torture_drw_read_delay, /* figure what to do with this */
+	.readunlock     = torture_drw_read_unlock,
+	.multiple = true,
+	.name		= "btrfs_drw_lock"
 };
 
 /*
@@ -630,7 +704,7 @@ static int lock_torture_writer(void *arg)
 
 		cxt.cur_ops->task_boost(&rand);
 		cxt.cur_ops->writelock();
-		if (WARN_ON_ONCE(lock_is_write_held))
+		if (!cxt.cur_ops->multiple && WARN_ON_ONCE(lock_is_write_held))
 			lwsp->n_lock_fail++;
 		lock_is_write_held = 1;
 		if (WARN_ON_ONCE(lock_is_read_held))
@@ -852,6 +926,7 @@ static int __init lock_torture_init(void)
 #endif
 		&rwsem_lock_ops,
 		&percpu_rwsem_lock_ops,
+		&btrfs_drw_lock_ops
 	};
 
 	if (!torture_init_begin(torture_type, verbose))
