@@ -627,6 +627,7 @@ static int spidev_release(struct inode *inode, struct file *filp)
 		if (dofree)
 			kfree(spidev);
 	}
+	spi_slave_abort(spidev->spi);
 	mutex_unlock(&device_list_lock);
 
 	return 0;
