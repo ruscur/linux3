@@ -109,6 +109,7 @@ extern int SendReceive(const unsigned int /* xid */ , struct cifs_ses *,
 extern int SendReceiveNoRsp(const unsigned int xid, struct cifs_ses *ses,
 			    char *in_buf, int flags);
 extern struct mid_q_entry *cifs_setup_request(struct cifs_ses *,
+				struct TCP_Server_Info *,
 				struct smb_rqst *);
 extern struct mid_q_entry *cifs_setup_async_request(struct TCP_Server_Info *,
 						struct smb_rqst *);
@@ -372,7 +373,8 @@ extern int CIFSSMBUnixSetPathInfo(const unsigned int xid,
 				  const struct nls_table *nls_codepage,
 				  int remap);
 
-extern int CIFSSMBMkDir(const unsigned int xid, struct cifs_tcon *tcon,
+extern int CIFSSMBMkDir(const unsigned int xid, struct inode *inode,
+			umode_t mode, struct cifs_tcon *tcon,
 			const char *name, struct cifs_sb_info *cifs_sb);
 extern int CIFSSMBRmDir(const unsigned int xid, struct cifs_tcon *tcon,
 			const char *name, struct cifs_sb_info *cifs_sb);
