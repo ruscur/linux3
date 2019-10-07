@@ -90,6 +90,10 @@ include ../lib.mk
 TEST_CUSTOM_PROGS = $(OUTPUT)/urandom_read
 all: $(TEST_CUSTOM_PROGS)
 
+bpf_helper_defs.h: $(APIDIR)/linux/bpf.h
+	$(BPFDIR)/../../../scripts/bpf_helpers_doc.py --header 		\
+		--file $(APIDIR)/linux/bpf.h > bpf_helper_defs.h
+
 $(OUTPUT)/urandom_read: $(OUTPUT)/%: %.c
 	$(CC) -o $@ $< -Wl,--build-id
 
@@ -123,7 +127,7 @@ $(OUTPUT)/test_cgroup_attach: cgroup_helpers.c
 # force a rebuild of BPFOBJ when its dependencies are updated
 force:
 
-$(BPFOBJ): force
+$(BPFOBJ): force bpf_helper_defs.h
 	$(MAKE) -C $(BPFDIR) OUTPUT=$(OUTPUT)/
 
 PROBE := $(shell $(LLC) -march=bpf -mcpu=probe -filetype=null /dev/null 2>&1)
@@ -271,7 +275,7 @@ PROG_TESTS_H := $(PROG_TESTS_DIR)/tests.h
 PROG_TESTS_FILES := $(wildcard prog_tests/*.c)
 test_progs.c: $(PROG_TESTS_H)
 $(OUTPUT)/test_progs: CFLAGS += $(TEST_PROGS_CFLAGS)
-$(OUTPUT)/test_progs: test_progs.c $(PROG_TESTS_FILES) | $(PROG_TESTS_H)
+$(OUTPUT)/test_progs: test_progs.c $(PROG_TESTS_FILES) | $(OUTPUT)/test_attach_probe.o $(PROG_TESTS_H)
 $(PROG_TESTS_H): $(PROG_TESTS_FILES) | $(PROG_TESTS_DIR)
 	$(shell ( cd prog_tests/; \
 		  echo '/* Generated header, do not edit */'; \
@@ -319,4 +323,4 @@ $(VERIFIER_TESTS_H): $(VERIFIER_TEST_FILES) | $(VERIFIER_TESTS_DIR)
 
 EXTRA_CLEAN := $(TEST_CUSTOM_PROGS) $(ALU32_BUILD_DIR) $(BPF_GCC_BUILD_DIR) \
 	$(VERIFIER_TESTS_H) $(PROG_TESTS_H) $(MAP_TESTS_H) \
-	feature
+	feature bpf_helper_defs.h
