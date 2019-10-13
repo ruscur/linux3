@@ -242,6 +242,8 @@ void		xfs_trans_buf_set_type(struct xfs_trans *, struct xfs_buf *,
 void		xfs_trans_buf_copy_type(struct xfs_buf *dst_bp,
 					struct xfs_buf *src_bp);
 
+void		xfs_ail_push_sync(struct xfs_ail *ailp);
+
 extern kmem_zone_t	*xfs_trans_zone;
 
 #endif	/* __XFS_TRANS_H__ */

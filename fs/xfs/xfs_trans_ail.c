@@ -488,7 +488,11 @@ xfsaild_push(
 	xfs_trans_ail_cursor_done(&cur);
 	spin_unlock(&ailp->ail_lock);
 
-	if (xfs_buf_delwri_submit_nowait(&ailp->ail_buf_list))
+	if (unlikely(mp->m_flags & XFS_MOUNT_METASYNC)) {
+		xfs_buf_delwri_submit(&ailp->ail_buf_list);
+		ailp->ail_log_flush++;
+		wake_up_all(&ailp->pushed_que);
+	} else if (xfs_buf_delwri_submit_nowait(&ailp->ail_buf_list))
 		ailp->ail_log_flush++;
 
 	if (!count || XFS_LSN_CMP(lsn, target) >= 0) {
@@ -639,6 +643,25 @@ xfs_ail_push(
 	smp_wmb();
 
 	wake_up_process(ailp->ail_task);
+}
+
+void
+xfs_ail_push_sync(
+	struct xfs_ail		*ailp)
+{
+	xfs_lsn_t		sync_lsn;
+	DEFINE_WAIT(wait);
+
+	sync_lsn = xfs_ail_max_lsn(ailp);
+	for (;;) {
+		xfs_ail_push(ailp, sync_lsn);
+		prepare_to_wait(&ailp->pushed_que, &wait, TASK_INTERRUPTIBLE);
+		if (XFS_LSN_CMP(READ_ONCE(ailp->ail_target_prev),
+			sync_lsn) >= 0)
+			break;
+		schedule();
+	}
+	finish_wait(&ailp->pushed_que, &wait);
 }
 
 /*
@@ -834,6 +857,7 @@ xfs_trans_ail_init(
 	spin_lock_init(&ailp->ail_lock);
 	INIT_LIST_HEAD(&ailp->ail_buf_list);
 	init_waitqueue_head(&ailp->ail_empty);
+	init_waitqueue_head(&ailp->pushed_que);
 
 	ailp->ail_task = kthread_run(xfsaild, ailp, "xfsaild/%s",
 			ailp->ail_mount->m_fsname);
