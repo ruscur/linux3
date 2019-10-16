@@ -13,11 +13,7 @@ int pnv_ocxl_get_actag(struct pci_dev *dev, u16 *base,
 		       u16 *enabled, u16 *supported);
 int pnv_ocxl_get_pasid_count(struct pci_dev *dev, int *count);
 
-int pnv_ocxl_get_tl_cap(struct pci_dev *dev, long *cap,
-			char *rate_buf, int rate_buf_size);
-int pnv_ocxl_set_tl_conf(struct pci_dev *dev, long cap,
-			 u64 rate_buf_phys,
-			 int rate_buf_size);
+int pnv_ocxl_set_TL(struct pci_dev *dev, int tl_dvsec);
 
 int pnv_ocxl_platform_setup(struct pci_dev *dev,
 			    int PE_mask, int *hwirq,
