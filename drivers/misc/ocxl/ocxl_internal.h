@@ -82,18 +82,6 @@ struct ocxl_context {
 	u16 tidr; // Thread ID used for P9 wait implementation
 };
 
-struct ocxl_process_element {
-	__be64 config_state;
-	__be32 reserved1[11];
-	__be32 lpid;
-	__be32 tid;
-	__be32 pid;
-	__be32 reserved2[10];
-	__be64 amr;
-	__be32 reserved3[3];
-	__be32 software_state;
-};
-
 int ocxl_create_cdev(struct ocxl_afu *afu);
 void ocxl_destroy_cdev(struct ocxl_afu *afu);
 int ocxl_file_register_afu(struct ocxl_afu *afu);

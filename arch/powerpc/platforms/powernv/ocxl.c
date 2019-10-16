@@ -12,11 +12,54 @@
 #define PNV_OCXL_PASID_BITS		15
 #define PNV_OCXL_PASID_MAX		((1 << PNV_OCXL_PASID_BITS) - 1)
 
-#define AFU_PRESENT (1 << 31)
-#define AFU_INDEX_MASK 0x3F000000
-#define AFU_INDEX_SHIFT 24
-#define ACTAG_MASK 0xFFF
+#define AFU_PRESENT	(1 << 31)
+#define AFU_INDEX_MASK	0x3F000000
+#define AFU_INDEX_SHIFT	24
+#define ACTAG_MASK	0xFFF
 
+#define SPA_PASID_BITS		15
+#define SPA_PASID_MAX		((1 << SPA_PASID_BITS) - 1)
+#define SPA_PE_MASK		SPA_PASID_MAX
+#define SPA_SPA_SIZE_LOG	22 /* Each SPA is 4 Mb */
+#define SPA_PE_VALID		0x80000000
+
+#define SPA_CFG_SF		(1ull << (63 - 0))
+#define SPA_CFG_TA		(1ull << (63 - 1))
+#define SPA_CFG_HV		(1ull << (63 - 3))
+#define SPA_CFG_UV		(1ull << (63 - 4))
+#define SPA_CFG_XLAT_hpt	(0ull << (63 - 6)) /* Hashed page table (HPT) mode */
+#define SPA_CFG_XLAT_roh	(2ull << (63 - 6)) /* Radix on HPT mode */
+#define SPA_CFG_XLAT_ror	(3ull << (63 - 6)) /* Radix on Radix mode */
+#define SPA_CFG_PR		(1ull << (63 - 49))
+#define SPA_CFG_TC		(1ull << (63 - 54))
+#define SPA_CFG_DR		(1ull << (63 - 59))
+
+struct ocxl_process_element {
+	__be64 config_state;
+	__be32 reserved1[11];
+	__be32 lpid;
+	__be32 tid;
+	__be32 pid;
+	__be32 reserved2[10];
+	__be64 amr;
+	__be32 reserved3[3];
+	__be32 software_state;
+};
+
+struct spa {
+	struct ocxl_process_element *spa_mem;
+	int spa_order;
+};
+
+struct platform_data {
+	struct spa *spa;
+	u64 phb_opal_id;
+	u32 bdfn;
+	void __iomem *dsisr;
+	void __iomem *dar;
+	void __iomem *tfc;
+	void __iomem *pe_handle;
+};
 
 struct actag_range {
 	u16 start;
@@ -369,7 +412,7 @@ int pnv_ocxl_set_tl_conf(struct pci_dev *dev, long cap,
 }
 EXPORT_SYMBOL_GPL(pnv_ocxl_set_tl_conf);
 
-int pnv_ocxl_get_xsl_irq(struct pci_dev *dev, int *hwirq)
+static int get_xsl_irq(struct pci_dev *dev, int *hwirq)
 {
 	int rc;
 
@@ -381,19 +424,17 @@ int pnv_ocxl_get_xsl_irq(struct pci_dev *dev, int *hwirq)
 	}
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pnv_ocxl_get_xsl_irq);
 
-void pnv_ocxl_unmap_xsl_regs(void __iomem *dsisr, void __iomem *dar,
-			void __iomem *tfc, void __iomem *pe_handle)
+static void unmap_xsl_regs(void __iomem *dsisr, void __iomem *dar,
+			   void __iomem *tfc, void __iomem *pe_handle)
 {
 	iounmap(dsisr);
 	iounmap(dar);
 	iounmap(tfc);
 	iounmap(pe_handle);
 }
-EXPORT_SYMBOL_GPL(pnv_ocxl_unmap_xsl_regs);
 
-int pnv_ocxl_map_xsl_regs(struct pci_dev *dev, void __iomem **dsisr,
+static int map_xsl_regs(struct pci_dev *dev, void __iomem **dsisr,
 			void __iomem **dar, void __iomem **tfc,
 			void __iomem **pe_handle)
 {
@@ -429,19 +470,50 @@ int pnv_ocxl_map_xsl_regs(struct pci_dev *dev, void __iomem **dsisr,
 	}
 	return rc;
 }
-EXPORT_SYMBOL_GPL(pnv_ocxl_map_xsl_regs);
 
-struct spa_data {
-	u64 phb_opal_id;
-	u32 bdfn;
-};
+static int alloc_spa(struct pci_dev *dev, struct platform_data *data)
+{
+	struct spa *spa;
 
-int pnv_ocxl_spa_setup(struct pci_dev *dev, void *spa_mem, int PE_mask,
-		void **platform_data)
+	spa = kzalloc(sizeof(*spa), GFP_KERNEL);
+	if (!spa)
+		return -ENOMEM;
+
+	spa->spa_order = SPA_SPA_SIZE_LOG - PAGE_SHIFT;
+	spa->spa_mem = (struct ocxl_process_element *)
+		__get_free_pages(GFP_KERNEL | __GFP_ZERO, spa->spa_order);
+	if (!spa->spa_mem) {
+		dev_err(&dev->dev, "Can't allocate Shared Process Area\n");
+		kfree(spa);
+		return -ENOMEM;
+	}
+
+	data->spa = spa;
+	dev_dbg(&dev->dev, "Allocated SPA for %x:%x:%x at %p\n",
+		pci_domain_nr(dev->bus), dev->bus->number,
+		PCI_SLOT(dev->devfn), spa->spa_mem);
+
+	return 0;
+}
+
+static void free_spa(struct platform_data *data)
+{
+	struct spa *spa = data->spa;
+
+	if (spa && spa->spa_mem) {
+		free_pages((unsigned long)spa->spa_mem, spa->spa_order);
+		kfree(spa);
+		data->spa = NULL;
+	}
+}
+
+int pnv_ocxl_platform_setup(struct pci_dev *dev, int PE_mask,
+			    int *hwirq, void **platform_data)
 {
 	struct pci_controller *hose = pci_bus_to_host(dev->bus);
 	struct pnv_phb *phb = hose->private_data;
-	struct spa_data *data;
+	struct platform_data *data;
+	int xsl_irq;
 	u32 bdfn;
 	int rc;
 
@@ -449,41 +521,83 @@ int pnv_ocxl_spa_setup(struct pci_dev *dev, void *spa_mem, int PE_mask,
 	if (!data)
 		return -ENOMEM;
 
+	rc = alloc_spa(dev, data);
+	if (rc) {
+		kfree(data);
+		return rc;
+	}
+
+	rc = get_xsl_irq(dev, &xsl_irq);
+	if (rc) {
+		free_spa(data);
+		kfree(data);
+		return rc;
+	}
+
+	rc = map_xsl_regs(dev, &data->dsisr, &data->dar, &data->tfc,
+			  &data->pe_handle);
+	if (rc) {
+		free_spa(data);
+		kfree(data);
+		return rc;
+	}
+
 	bdfn = (dev->bus->number << 8) | dev->devfn;
-	rc = opal_npu_spa_setup(phb->opal_id, bdfn, virt_to_phys(spa_mem),
+	rc = opal_npu_spa_setup(phb->opal_id, bdfn,
+				virt_to_phys(data->spa->spa_mem),
 				PE_mask);
 	if (rc) {
 		dev_err(&dev->dev, "Can't setup Shared Process Area: %d\n", rc);
+		unmap_xsl_regs(data->dsisr, data->dar, data->tfc,
+			       data->pe_handle);
+		free_spa(data);
 		kfree(data);
 		return rc;
 	}
 	data->phb_opal_id = phb->opal_id;
 	data->bdfn = bdfn;
 	*platform_data = (void *) data;
+
+	*hwirq = xsl_irq;
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pnv_ocxl_spa_setup);
+EXPORT_SYMBOL_GPL(pnv_ocxl_platform_setup);
 
-void pnv_ocxl_spa_release(void *platform_data)
+void pnv_ocxl_get_fault_state(void *platform_data, u64 *dsisr, u64 *dar,
+			      u64 *pe_handle, int *pid)
 {
-	struct spa_data *data = (struct spa_data *) platform_data;
+	struct platform_data *data = (struct platform_data *)platform_data;
+	struct ocxl_process_element *pe;
+
+	*dsisr = in_be64(data->dsisr);
+	*dar = in_be64(data->dar);
+	*pe_handle = in_be64(data->pe_handle) & SPA_PE_MASK;
+
+	pe = data->spa->spa_mem + *pe_handle;
+	*pid = be32_to_cpu(pe->pid);
+}
+EXPORT_SYMBOL_GPL(pnv_ocxl_get_fault_state);
+
+void pnv_ocxl_handle_fault(void *platform_data, u64 tfc)
+{
+	struct platform_data *data = (struct platform_data *)platform_data;
+
+	out_be64(data->tfc, tfc);
+}
+EXPORT_SYMBOL_GPL(pnv_ocxl_handle_fault);
+
+void pnv_ocxl_platform_release(void *platform_data)
+{
+	struct platform_data *data = (struct platform_data *)platform_data;
 	int rc;
 
 	rc = opal_npu_spa_setup(data->phb_opal_id, data->bdfn, 0, 0);
 	WARN_ON(rc);
+	unmap_xsl_regs(data->dsisr, data->dar, data->tfc, data->pe_handle);
+	free_spa(data);
 	kfree(data);
 }
-EXPORT_SYMBOL_GPL(pnv_ocxl_spa_release);
-
-int pnv_ocxl_spa_remove_pe_from_cache(void *platform_data, int pe_handle)
-{
-	struct spa_data *data = (struct spa_data *) platform_data;
-	int rc;
-
-	rc = opal_npu_spa_clear_cache(data->phb_opal_id, data->bdfn, pe_handle);
-	return rc;
-}
-EXPORT_SYMBOL_GPL(pnv_ocxl_spa_remove_pe_from_cache);
+EXPORT_SYMBOL_GPL(pnv_ocxl_platform_release);
 
 int pnv_ocxl_alloc_xive_irq(u32 *irq, u64 *trigger_addr)
 {
@@ -513,3 +627,122 @@ void pnv_ocxl_free_xive_irq(u32 irq)
 	xive_native_free_irq(irq);
 }
 EXPORT_SYMBOL_GPL(pnv_ocxl_free_xive_irq);
+
+static u64 calculate_cfg_state(u32 lpid, bool kernel)
+{
+	u64 state;
+
+	state = SPA_CFG_DR;
+	if (mfspr(SPRN_LPCR) & LPCR_TC)
+		state |= SPA_CFG_TC;
+	if (radix_enabled())
+		state |= SPA_CFG_XLAT_ror;
+	else
+		state |= SPA_CFG_XLAT_hpt;
+	if (lpid == 0)
+		state |= SPA_CFG_HV;
+	if (kernel) {
+		if (mfmsr() & MSR_SF)
+			state |= SPA_CFG_SF;
+	} else {
+		state |= SPA_CFG_PR;
+		if (!test_tsk_thread_flag(current, TIF_32BIT))
+			state |= SPA_CFG_SF;
+	}
+	return state;
+}
+
+int pnv_ocxl_set_pe(void *platform_data, int lpid, int pasid, u32 pidr,
+		    u32 tidr, u64 amr, int *pe_handle)
+{
+	struct platform_data *data = (struct platform_data *)platform_data;
+	struct spa *spa = data->spa;
+	struct ocxl_process_element *pe;
+
+	BUILD_BUG_ON(sizeof(struct ocxl_process_element) != 128);
+	if (pasid > SPA_PASID_MAX)
+		return -EINVAL;
+
+	*pe_handle = pasid & SPA_PE_MASK;
+	pe = spa->spa_mem + *pe_handle;
+
+	if (pe->software_state)
+		return -EBUSY;
+
+	memset(pe, 0, sizeof(struct ocxl_process_element));
+	pe->config_state = cpu_to_be64(calculate_cfg_state(lpid, pidr == 0));
+	pe->lpid = cpu_to_be32(lpid);
+	pe->pid = cpu_to_be32(pidr);
+	pe->tid = cpu_to_be32(tidr);
+	pe->amr = cpu_to_be64(amr);
+	pe->software_state = cpu_to_be32(SPA_PE_VALID);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(pnv_ocxl_set_pe);
+
+static int remove_pe_from_cache(void *platform_data, int pe_handle)
+{
+	struct platform_data *data = (struct platform_data *)platform_data;
+	int rc;
+
+	/*
+	 * The barrier makes sure the PE is updated/removed
+	 * before we clear the NPU context cache below, so that the
+	 * old PE cannot be reloaded erroneously.
+	 */
+	mb();
+
+	/*
+	 * On powerpc, the entry needs to be cleared from the context
+	 * cache of the NPU.
+	 */
+	rc = opal_npu_spa_clear_cache(data->phb_opal_id, data->bdfn,
+				      pe_handle);
+	WARN_ON(rc);
+
+	return rc;
+}
+
+int pnv_ocxl_update_pe(void *platform_data, int pasid, __u16 tid)
+{
+	struct platform_data *data = (struct platform_data *)platform_data;
+	struct spa *spa = data->spa;
+	struct ocxl_process_element *pe;
+	int pe_handle;
+
+	if (pasid > SPA_PASID_MAX)
+		return -EINVAL;
+
+	pe_handle = pasid & SPA_PE_MASK;
+	pe = spa->spa_mem + pe_handle;
+	pe->tid = cpu_to_be32(tid);
+
+	return remove_pe_from_cache(data, pe_handle);
+}
+EXPORT_SYMBOL_GPL(pnv_ocxl_update_pe);
+
+int pnv_ocxl_remove_pe(void *platform_data, int pasid, u32 *pid,
+		       u32 *tid, int *pe_handle)
+{
+	struct platform_data *data = (struct platform_data *)platform_data;
+	struct spa *spa = data->spa;
+	struct ocxl_process_element *pe;
+
+	if (pasid > SPA_PASID_MAX)
+		return -EINVAL;
+
+	*pe_handle = pasid & SPA_PE_MASK;
+	pe = spa->spa_mem + *pe_handle;
+
+	if (!(be32_to_cpu(pe->software_state) & SPA_PE_VALID))
+		return -EINVAL;
+
+	*pid = be32_to_cpu(pe->pid);
+	*tid = be32_to_cpu(pe->tid);
+
+	memset(pe, 0, sizeof(struct ocxl_process_element));
+
+	return remove_pe_from_cache(data, *pe_handle);
+}
+EXPORT_SYMBOL_GPL(pnv_ocxl_remove_pe);
