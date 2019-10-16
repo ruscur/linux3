@@ -13,18 +13,61 @@
  * is handled in the hotpath.
  */
 #define MAX_EA_BITS_PER_CONTEXT		49
-#define REGION_SHIFT		MAX_EA_BITS_PER_CONTEXT
-
-/*
- * We use one context for each MAP area.
- */
-#define H_KERN_MAP_SIZE		(1UL << MAX_EA_BITS_PER_CONTEXT)
 
 /*
  * Define the address range of the kernel non-linear virtual area
  * 2PB
  */
 #define H_KERN_VIRT_START	ASM_CONST(0xc008000000000000)
+
+/*
+ * We use one context for each MAP area.
+ */
+#define REGION_SHIFT		MAX_EA_BITS_PER_CONTEXT
+#define H_KERN_MAP_SIZE		(1UL << MAX_EA_BITS_PER_CONTEXT)
+
+/*
+ * Top 2 bits are ignored in page table walk.
+ */
+#define EA_MASK			(~(0xcUL << 60))
+
+/*
+ * +------------------------------+
+ * |                              |
+ * |                              |
+ * |                              |
+ * +------------------------------+  Kernel virtual map end (0xc00e000000000000)
+ * |                              |
+ * |                              |
+ * |      512TB/16TB of vmemmap   |
+ * |                              |
+ * |                              |
+ * +------------------------------+  Kernel vmemmap  start
+ * |                              |
+ * |      512TB/16TB of IO map    |
+ * |                              |
+ * +------------------------------+  Kernel IO map start
+ * |                              |
+ * |      512TB/16TB of vmap      |
+ * |                              |
+ * +------------------------------+  Kernel virt start (0xc008000000000000)
+ * |                              |
+ * |                              |
+ * |                              |
+ * +------------------------------+  Kernel linear (0xc.....)
+ */
+
+#define H_VMALLOC_START		H_KERN_VIRT_START
+#define H_VMALLOC_SIZE		H_KERN_MAP_SIZE
+#define H_VMALLOC_END		(H_VMALLOC_START + H_VMALLOC_SIZE)
+
+#define H_KERN_IO_START		H_VMALLOC_END
+#define H_KERN_IO_SIZE		H_KERN_MAP_SIZE
+#define H_KERN_IO_END		(H_KERN_IO_START + H_KERN_IO_SIZE)
+
+#define H_VMEMMAP_START		H_KERN_IO_END
+#define H_VMEMMAP_SIZE		H_KERN_MAP_SIZE
+#define H_VMEMMAP_END		(H_VMEMMAP_START + H_VMEMMAP_SIZE)
 
 /*
  * 64k aligned address free up few of the lower bits of RPN for us
@@ -68,6 +111,28 @@
 
 #ifndef __ASSEMBLY__
 #include <asm/errno.h>
+
+#define NON_LINEAR_REGION_ID(ea)	((((unsigned long)(ea) - H_KERN_VIRT_START) >> REGION_SHIFT) + 2)
+
+static inline int get_region_id(unsigned long ea)
+{
+	int region_id;
+	int id = (ea >> 60UL);
+
+	if (id == 0)
+		return USER_REGION_ID;
+
+	if (id != (PAGE_OFFSET >> 60))
+		return INVALID_REGION_ID;
+
+	if (ea < H_KERN_VIRT_START)
+		return LINEAR_MAP_REGION_ID;
+
+	BUILD_BUG_ON(NON_LINEAR_REGION_ID(H_VMALLOC_START) != 2);
+
+	region_id = NON_LINEAR_REGION_ID(ea);
+	return region_id;
+}
 
 /*
  * With 64K pages on hash table, we have a special PTE format that

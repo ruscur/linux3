@@ -12,23 +12,59 @@
  * Hence also limit max EA bits to 64TB.
  */
 #define MAX_EA_BITS_PER_CONTEXT		46
-
-#define REGION_SHIFT		(MAX_EA_BITS_PER_CONTEXT - 2)
+/*
+ * For 4k hash, considering we restricted by a page table sizing that
+ * limit our address range to 64TB, keep the kernel virtual
+ * mapping in 0xd region.
+ */
+#define H_KERN_VIRT_START	ASM_CONST(0xd000000000000000)
 
 /*
- * Our page table limit us to 64TB. Hence for the kernel mapping,
- * each MAP area is limited to 16 TB.
- * The four map areas are:  linear mapping, vmap, IO and vmemmap
+ * Top 4 bits are ignored in page table walk.
  */
-#define H_KERN_MAP_SIZE		(ASM_CONST(1) << REGION_SHIFT)
+#define EA_MASK			(~(0xfUL << 60))
 
 /*
- * Define the address range of the kernel non-linear virtual area
- * 16TB
+ * Place vmalloc and IO in the 64TB range because we map them via linux page
+ * table and table size is limited to 64TB.
  */
-#define H_KERN_VIRT_START	ASM_CONST(0xc000100000000000)
+#define H_VMALLOC_START		H_KERN_VIRT_START
+/*
+ * 56TB vmalloc size. We require large vmalloc space for percpu mapping.
+ */
+#define H_VMALLOC_SIZE		(56UL << 40)
+#define H_VMALLOC_END		(H_VMALLOC_START + H_VMALLOC_SIZE)
+
+#define H_KERN_IO_START		H_VMALLOC_END
+#define H_KERN_IO_SIZE		(8UL << 40)
+#define H_KERN_IO_END		(H_KERN_IO_START + H_KERN_IO_SIZE)
+
+#define H_VMEMMAP_START		ASM_CONST(0xf000000000000000)
+#define H_VMEMMAP_SIZE		(1UL << MAX_EA_BITS_PER_CONTEXT)
+#define H_VMEMMAP_END		(H_VMEMMAP_START + H_VMEMMAP_SIZE)
 
 #ifndef __ASSEMBLY__
+static inline int get_region_id(unsigned long ea)
+{
+	int id = (ea >> 60UL);
+
+	switch (id) {
+	case 0x0:
+		return USER_REGION_ID;
+	case 0xc:
+		return LINEAR_MAP_REGION_ID;
+	case 0xd:
+		if (ea < H_KERN_IO_START)
+			return VMALLOC_REGION_ID;
+		else
+			return IO_REGION_ID;
+	case 0xf:
+		return VMEMMAP_REGION_ID;
+	default:
+		return INVALID_REGION_ID;
+	}
+}
+
 #define H_PTE_TABLE_SIZE	(sizeof(pte_t) << H_PTE_INDEX_SIZE)
 #define H_PMD_TABLE_SIZE	(sizeof(pmd_t) << H_PMD_INDEX_SIZE)
 #define H_PUD_TABLE_SIZE	(sizeof(pud_t) << H_PUD_INDEX_SIZE)

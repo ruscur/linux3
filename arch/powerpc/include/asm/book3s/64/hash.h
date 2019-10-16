@@ -11,6 +11,15 @@
  *
  */
 #define H_PTE_NONE_MASK		_PAGE_HPTEFLAGS
+/*
+ * Region IDs
+ */
+#define USER_REGION_ID		0
+#define LINEAR_MAP_REGION_ID	1
+#define VMALLOC_REGION_ID	2
+#define IO_REGION_ID		3
+#define VMEMMAP_REGION_ID	4
+#define INVALID_REGION_ID	5
 
 #ifdef CONFIG_PPC_64K_PAGES
 #include <asm/book3s/64/hash-64k.h>
@@ -29,10 +38,6 @@
 #define H_PGTABLE_EADDR_SIZE	(H_PTE_INDEX_SIZE + H_PMD_INDEX_SIZE + \
 				 H_PUD_INDEX_SIZE + H_PGD_INDEX_SIZE + PAGE_SHIFT)
 #define H_PGTABLE_RANGE		(ASM_CONST(1) << H_PGTABLE_EADDR_SIZE)
-/*
- * Top 2 bits are ignored in page table walk.
- */
-#define EA_MASK			(~(0xcUL << 60))
 
 /*
  * We store the slot details in the second half of page table.
@@ -44,56 +49,6 @@
 #else
 #define H_PUD_CACHE_INDEX	(H_PUD_INDEX_SIZE)
 #endif
-
-/*
- * +------------------------------+
- * |                              |
- * |                              |
- * |                              |
- * +------------------------------+  Kernel virtual map end (0xc00e000000000000)
- * |                              |
- * |                              |
- * |      512TB/16TB of vmemmap   |
- * |                              |
- * |                              |
- * +------------------------------+  Kernel vmemmap  start
- * |                              |
- * |      512TB/16TB of IO map    |
- * |                              |
- * +------------------------------+  Kernel IO map start
- * |                              |
- * |      512TB/16TB of vmap      |
- * |                              |
- * +------------------------------+  Kernel virt start (0xc008000000000000)
- * |                              |
- * |                              |
- * |                              |
- * +------------------------------+  Kernel linear (0xc.....)
- */
-
-#define H_VMALLOC_START		H_KERN_VIRT_START
-#define H_VMALLOC_SIZE		H_KERN_MAP_SIZE
-#define H_VMALLOC_END		(H_VMALLOC_START + H_VMALLOC_SIZE)
-
-#define H_KERN_IO_START		H_VMALLOC_END
-#define H_KERN_IO_SIZE		H_KERN_MAP_SIZE
-#define H_KERN_IO_END		(H_KERN_IO_START + H_KERN_IO_SIZE)
-
-#define H_VMEMMAP_START		H_KERN_IO_END
-#define H_VMEMMAP_SIZE		H_KERN_MAP_SIZE
-#define H_VMEMMAP_END		(H_VMEMMAP_START + H_VMEMMAP_SIZE)
-
-#define NON_LINEAR_REGION_ID(ea)	((((unsigned long)ea - H_KERN_VIRT_START) >> REGION_SHIFT) + 2)
-
-/*
- * Region IDs
- */
-#define USER_REGION_ID		0
-#define LINEAR_MAP_REGION_ID	1
-#define VMALLOC_REGION_ID	NON_LINEAR_REGION_ID(H_VMALLOC_START)
-#define IO_REGION_ID		NON_LINEAR_REGION_ID(H_KERN_IO_START)
-#define VMEMMAP_REGION_ID	NON_LINEAR_REGION_ID(H_VMEMMAP_START)
-#define INVALID_REGION_ID	(VMEMMAP_REGION_ID + 1)
 
 /*
  * Defines the address of the vmemap area, in its own region on
@@ -112,25 +67,6 @@
 #define H_PUD_BAD_BITS		(PMD_TABLE_SIZE-1)
 
 #ifndef __ASSEMBLY__
-static inline int get_region_id(unsigned long ea)
-{
-	int region_id;
-	int id = (ea >> 60UL);
-
-	if (id == 0)
-		return USER_REGION_ID;
-
-	if (id != (PAGE_OFFSET >> 60))
-		return INVALID_REGION_ID;
-
-	if (ea < H_KERN_VIRT_START)
-		return LINEAR_MAP_REGION_ID;
-
-	BUILD_BUG_ON(NON_LINEAR_REGION_ID(H_VMALLOC_START) != 2);
-
-	region_id = NON_LINEAR_REGION_ID(ea);
-	return region_id;
-}
 
 #define	hash__pmd_bad(pmd)		(pmd_val(pmd) & H_PMD_BAD_BITS)
 #define	hash__pud_bad(pud)		(pud_val(pud) & H_PUD_BAD_BITS)
