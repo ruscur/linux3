@@ -283,14 +283,25 @@ Here is the list of files under kernel sysfs:
     enhanced to use this interface to release the memory reserved for
     dump and continue without 2nd reboot.
 
- /sys/kernel/fadump_release_opalcore
+Note: /sys/kernel/fadump_release_opalcore sysfs has moved to
+      /sys/kernel/fadump/fadump_release_opalcore.
+
+ /sys/kernel/fadump/fadump_release_opalcore
 
     This file is available only on OPAL based machines when FADump is
     active during capture kernel. This is used to release the memory
     used by the kernel to export /sys/firmware/opal/core file. To
     release this memory, echo '1' to it:
 
-    echo 1  > /sys/kernel/fadump_release_opalcore
+    echo 1  > /sys/kernel/fadump/fadump_release_opalcore
+
+Note: The following FADump sysfs files are deprecated.
+
+    Deprecated                       Alternative
+    -------------------------------------------------------------------------------
+    /sys/kernel/fadump_enabled           /sys/kernel/fadump/fadump_enabled
+    /sys/kernel/fadump_registered        /sys/kernel/fadump/fadump_registered
+    /sys/kernel/fadump_release_mem       /sys/kernel/fadump/fadump_release_mem
 
 Here is the list of files under powerpc debugfs:
 (Assuming debugfs is mounted on /sys/kernel/debug directory.)
