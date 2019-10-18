@@ -625,7 +625,11 @@ static int __init opalcore_init(void)
 		return rc;
 	}
 
-	rc = sysfs_create_file(kernel_kobj, &opalcore_rel_attr.attr);
+	/*
+	 * Originally fadump_release_opalcore sysfs was part of kernel_kobj
+	 * later moved to fadump_kobj.
+	 */
+	rc = sysfs_create_file(fadump_kobj, &opalcore_rel_attr.attr);
 	if (rc) {
 		pr_warn("unable to create sysfs file fadump_release_opalcore (%d)\n",
 			rc);
