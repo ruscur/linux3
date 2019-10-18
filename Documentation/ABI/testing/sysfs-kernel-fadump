@@ -39,3 +39,10 @@ Description:	write only
 		The sysfs file is available when the system is booted to
 		collect the dump on OPAL based machine. It used to release
 		the memory used to collect the opalcore.
+
+What:		/sys/kernel/fadump/fadump_mem_reserved
+Date:		Oct 2019
+Contact:	linuxppc-dev@lists.ozlabs.org
+Description:	read only
+		Provide information about the amount of memory reserved by
+		FADump to save the crash dump in bytes.
