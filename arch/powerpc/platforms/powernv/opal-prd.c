@@ -153,19 +153,14 @@ static __poll_t opal_prd_poll(struct file *file,
 static ssize_t opal_prd_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct opal_prd_msg_queue_item *item;
+	struct opal_prd_msg_queue_item *item = NULL;
 	unsigned long flags;
-	ssize_t size, err;
+	ssize_t size;
 	int rc;
 
 	/* we need at least a header's worth of data */
 	if (count < sizeof(item->msg))
 		return -EINVAL;
-
-	if (*ppos)
-		return -ESPIPE;
-
-	item = NULL;
 
 	for (;;) {
 
@@ -190,27 +185,23 @@ static ssize_t opal_prd_read(struct file *file, char __user *buf,
 	}
 
 	size = be16_to_cpu(item->msg.size);
-	if (size > count) {
-		err = -EINVAL;
+	rc = simple_read_from_buffer(buf, count, ppos, &item->msg, size);
+	if (rc < 0)
 		goto err_requeue;
-	}
-
-	rc = copy_to_user(buf, &item->msg, size);
-	if (rc) {
-		err = -EFAULT;
+	if (*ppos < size)
 		goto err_requeue;
-	}
 
+	/* Reset position */
+	*ppos = 0;
 	kfree(item);
-
-	return size;
+	return rc;
 
 err_requeue:
 	/* eep! re-queue at the head of the list */
 	spin_lock_irqsave(&opal_prd_msg_queue_lock, flags);
 	list_add(&item->list, &opal_prd_msg_queue);
 	spin_unlock_irqrestore(&opal_prd_msg_queue_lock, flags);
-	return err;
+	return rc;
 }
 
 static ssize_t opal_prd_write(struct file *file, const char __user *buf,
