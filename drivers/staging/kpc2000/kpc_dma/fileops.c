@@ -212,7 +212,8 @@ void  transfer_complete_cb(struct aio_cb_data *acd, size_t xfr_count, u32 flags)
 	BUG_ON(acd->ldev->pldev == NULL);
 
 	for (i = 0 ; i < acd->page_count ; i++) {
-		if (!PageReserved(acd->user_pages[i])) {
+		if (!PageReserved(acd->user_pages[i]) &&
+		    !is_zone_device_page(acd->user_pages[i])) {
 			set_page_dirty(acd->user_pages[i]);
 		}
 	}
