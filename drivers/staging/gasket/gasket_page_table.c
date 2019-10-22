@@ -447,7 +447,7 @@ static bool gasket_release_page(struct page *page)
 	if (!page)
 		return false;
 
-	if (!PageReserved(page))
+	if (!PageReserved(page) && !is_zone_device_page(page))
 		SetPageDirty(page);
 	put_page(page);
 
