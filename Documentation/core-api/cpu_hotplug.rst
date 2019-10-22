@@ -53,7 +53,7 @@ Command Line Switches
 ``cede_offline={"off","on"}``
   Use this option to disable/enable putting offlined processors to an extended
   ``H_CEDE`` state on supported pseries platforms. If nothing is specified,
-  ``cede_offline`` is set to "on".
+  ``cede_offline`` is set to "off".
 
   This option is limited to the PowerPC architecture.
 

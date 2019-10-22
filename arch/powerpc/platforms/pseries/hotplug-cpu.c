@@ -46,7 +46,17 @@ static DEFINE_PER_CPU(enum cpu_state_vals, current_state) = CPU_STATE_OFFLINE;
 
 static enum cpu_state_vals default_offline_state = CPU_STATE_OFFLINE;
 
-static bool cede_offline_enabled __read_mostly = true;
+/*
+ * Determines whether the offlined CPUs should be put to a long term
+ * processor cede (called extended cede) for power-saving
+ * purposes. The CPUs in extended cede are still with the Linux Guest
+ * and are not returned to the Hypervisor.
+ *
+ * By default, the offlined CPUs are returned to the hypervisor via
+ * RTAS "stop-self". This behaviour can be changed by passing the
+ * kernel commandline parameter "cede_offline=on".
+ */
+static bool cede_offline_enabled __read_mostly;
 
 /*
  * Enable/disable cede_offline when available.
