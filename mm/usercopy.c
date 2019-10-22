@@ -203,14 +203,15 @@ static inline void check_page_span(const void *ptr, unsigned long n,
 	 * device memory), or CMA. Otherwise, reject since the object spans
 	 * several independently allocated pages.
 	 */
-	is_reserved = PageReserved(page);
+	is_reserved = PageReserved(page) || is_zone_device_page(page);
 	is_cma = is_migrate_cma_page(page);
 	if (!is_reserved && !is_cma)
 		usercopy_abort("spans multiple pages", NULL, to_user, 0, n);
 
 	for (ptr += PAGE_SIZE; ptr <= end; ptr += PAGE_SIZE) {
 		page = virt_to_head_page(ptr);
-		if (is_reserved && !PageReserved(page))
+		if (is_reserved && !(PageReserved(page) ||
+				     is_zone_device_page(page)))
 			usercopy_abort("spans Reserved and non-Reserved pages",
 				       NULL, to_user, 0, n);
 		if (is_cma && !is_migrate_cma_page(page))
