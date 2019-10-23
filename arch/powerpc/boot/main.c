@@ -112,6 +112,13 @@ static struct addr_range prep_initrd(struct addr_range vmlinux, void *chosen,
 	} else if (initrd_size > 0) {
 		printf("Using loader supplied ramdisk at 0x%lx-0x%lx\n\r",
 		       initrd_addr, initrd_addr + initrd_size);
+	} else if (chosen) {
+		unsigned long initrd_end;
+
+		dt_read_addr(chosen, "linux,initrd-start", &initrd_addr);
+		dt_read_addr(chosen, "linux,initrd-end", &initrd_end);
+
+		initrd_size = initrd_end - initrd_addr;
 	}
 
 	/* If there's no initrd at all, we're done */

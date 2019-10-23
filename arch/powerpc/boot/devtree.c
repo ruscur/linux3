@@ -13,6 +13,7 @@
 #include "string.h"
 #include "stdio.h"
 #include "ops.h"
+#include "swab.h"
 
 void dt_fixup_memory(u64 start, u64 size)
 {
@@ -316,6 +317,26 @@ int dt_xlate_reg(void *node, int res, unsigned long *addr, unsigned long *size)
 
 	reglen = getprop(node, "reg", prop_buf, sizeof(prop_buf)) / 4;
 	return dt_xlate(node, res, reglen, addr, size);
+}
+
+int dt_read_addr(void *node, const char *prop, unsigned long *out_addr)
+{
+	int reglen;
+
+	*out_addr = 0;
+
+	reglen = getprop(node, prop, prop_buf, sizeof(prop_buf)) / 4;
+	if (reglen == 2) {
+		u64 v0 = be32_to_cpu(prop_buf[0]);
+		u64 v1 = be32_to_cpu(prop_buf[1]);
+		*out_addr = (v0 << 32) | v1;
+	} else if (reglen == 1) {
+		*out_addr = be32_to_cpu(prop_buf[0]);
+	} else {
+		return 0;
+	}
+
+	return 1;
 }
 
 int dt_xlate_addr(void *node, u32 *buf, int buflen, unsigned long *xlated_addr)

@@ -27,4 +27,21 @@ static inline u64 swab64(u64 x)
 		(u64)((x & (u64)0x00ff000000000000ULL) >> 40) |
 		(u64)((x & (u64)0xff00000000000000ULL) >> 56);
 }
+
+#ifdef __LITTLE_ENDIAN__
+#define cpu_to_be16(x) swab16(x)
+#define be16_to_cpu(x) swab16(x)
+#define cpu_to_be32(x) swab32(x)
+#define be32_to_cpu(x) swab32(x)
+#define cpu_to_be64(x) swab64(x)
+#define be64_to_cpu(x) swab64(x)
+#else
+#define cpu_to_be16(x) (x)
+#define be16_to_cpu(x) (x)
+#define cpu_to_be32(x) (x)
+#define be32_to_cpu(x) (x)
+#define cpu_to_be64(x) (x)
+#define be64_to_cpu(x) (x)
+#endif
+
 #endif /* _PPC_BOOT_SWAB_H_ */
