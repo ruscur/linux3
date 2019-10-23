@@ -438,10 +438,8 @@ int __init fadump_reserve_mem(void)
 	if (!fw_dump.fadump_enabled)
 		return 0;
 
-	if (!fw_dump.fadump_supported) {
-		pr_info("Firmware-Assisted Dump is not supported on this hardware\n");
+	if (!fw_dump.fadump_supported)
 		goto error_out;
-	}
 
 	/*
 	 * Initialize boot memory size
