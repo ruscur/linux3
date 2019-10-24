@@ -151,9 +151,15 @@ __weak int kvm_arch_mmu_notifier_invalidate_range(struct kvm *kvm,
 
 bool kvm_is_reserved_pfn(kvm_pfn_t pfn)
 {
-	if (pfn_valid(pfn))
-		return PageReserved(pfn_to_page(pfn));
+	struct page *page = pfn_to_online_page(pfn);
 
+	/*
+	 * We treat any pages that are not online (not managed by the buddy)
+	 * as reserved - this includes ZONE_DEVICE pages and pages without
+	 * a memmap (e.g., mapped via /dev/mem).
+	 */
+	if (page)
+		return PageReserved(page);
 	return true;
 }
 
