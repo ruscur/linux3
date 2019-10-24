@@ -403,6 +403,7 @@ static inline bool pci_dev_is_disconnected(const struct pci_dev *dev)
 
 /* pci_dev priv_flags */
 #define PCI_DEV_ADDED 0
+#define PCI_DEV_DISABLED_BARS 1
 
 static inline void pci_dev_assign_added(struct pci_dev *dev, bool added)
 {
@@ -412,6 +413,16 @@ static inline void pci_dev_assign_added(struct pci_dev *dev, bool added)
 static inline bool pci_dev_is_added(const struct pci_dev *dev)
 {
 	return test_bit(PCI_DEV_ADDED, &dev->priv_flags);
+}
+
+static inline void pci_dev_disable_bars(struct pci_dev *dev)
+{
+	assign_bit(PCI_DEV_DISABLED_BARS, &dev->priv_flags, true);
+}
+
+static inline bool pci_dev_bars_enabled(const struct pci_dev *dev)
+{
+	return !test_bit(PCI_DEV_DISABLED_BARS, &dev->priv_flags);
 }
 
 #ifdef CONFIG_PCIEAER

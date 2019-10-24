@@ -3162,6 +3162,23 @@ bool pci_dev_bar_movable(struct pci_dev *dev, struct resource *res)
 	return pci_dev_movable(dev, res->child);
 }
 
+static unsigned int pci_dev_count_res_mask(struct pci_dev *dev)
+{
+	unsigned int res_mask = 0;
+	int i;
+
+	for (i = 0; i < PCI_BRIDGE_RESOURCES; i++) {
+		struct resource *r = &dev->resource[i];
+
+		if (!r->flags || (r->flags & IORESOURCE_UNSET) || !r->parent)
+			continue;
+
+		res_mask |= (1 << i);
+	}
+
+	return res_mask;
+}
+
 static void pci_bus_rescan_prepare(struct pci_bus *bus)
 {
 	struct pci_dev *dev;
@@ -3171,6 +3188,8 @@ static void pci_bus_rescan_prepare(struct pci_bus *bus)
 
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		struct pci_bus *child = dev->subordinate;
+
+		dev->res_mask = pci_dev_count_res_mask(dev);
 
 		if (child)
 			pci_bus_rescan_prepare(child);
@@ -3207,7 +3226,7 @@ static void pci_setup_bridges(struct pci_bus *bus)
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		struct pci_bus *child;
 
-		if (!pci_dev_is_added(dev))
+		if (!pci_dev_is_added(dev) || !pci_dev_bars_enabled(dev))
 			continue;
 
 		child = dev->subordinate;
@@ -3217,6 +3236,83 @@ static void pci_setup_bridges(struct pci_bus *bus)
 
 	if (bus->self)
 		pci_setup_bridge(bus);
+}
+
+static struct pci_dev *pci_find_next_new_device(struct pci_bus *bus)
+{
+	struct pci_dev *dev;
+
+	if (!bus)
+		return NULL;
+
+	list_for_each_entry(dev, &bus->devices, bus_list) {
+		struct pci_bus *child_bus = dev->subordinate;
+
+		if (!pci_dev_is_added(dev) && pci_dev_bars_enabled(dev))
+			return dev;
+
+		if (child_bus) {
+			struct pci_dev *next_new_dev;
+
+			next_new_dev = pci_find_next_new_device(child_bus);
+			if (next_new_dev)
+				return next_new_dev;
+		}
+	}
+
+	return NULL;
+}
+
+static bool pci_bus_check_all_bars_reassigned(struct pci_bus *bus)
+{
+	struct pci_dev *dev;
+	bool ret = true;
+
+	if (!bus)
+		return false;
+
+	list_for_each_entry(dev, &bus->devices, bus_list) {
+		struct pci_bus *child = dev->subordinate;
+		unsigned int res_mask = pci_dev_count_res_mask(dev);
+
+		if (!pci_dev_bars_enabled(dev))
+			continue;
+
+		if (dev->res_mask & ~res_mask) {
+			pci_err(dev, "Non-re-enabled resources found: 0x%x -> 0x%x\n",
+				dev->res_mask, res_mask);
+			ret = false;
+		}
+
+		if (child && !pci_bus_check_all_bars_reassigned(child))
+			ret = false;
+	}
+
+	return ret;
+}
+
+static void pci_reassign_root_bus_resources(struct pci_bus *root)
+{
+	do {
+		struct pci_dev *next_new_dev;
+
+		pci_assign_unassigned_root_bus_resources(root);
+
+		if (pci_bus_check_all_bars_reassigned(root))
+			break;
+
+		next_new_dev = pci_find_next_new_device(root);
+		if (!next_new_dev) {
+			dev_err(&root->dev, "failed to re-assign resources even after ignoring all the hotplugged devices\n");
+			break;
+		}
+
+		dev_warn(&root->dev, "failed to re-assign resources, disable the next hotplugged device %s and retry\n",
+			 dev_name(&next_new_dev->dev));
+
+		pci_dev_disable_bars(next_new_dev);
+		pci_bus_release_root_bridge_resources(root);
+	} while (true);
 }
 
 /**
@@ -3238,11 +3334,11 @@ unsigned int pci_rescan_bus(struct pci_bus *bus)
 
 	if (pci_can_move_bars) {
 		pci_bus_rescan_prepare(root);
+		pci_bus_release_root_bridge_resources(root);
 
 		max = pci_scan_child_bus(root);
 
-		pci_bus_release_root_bridge_resources(root);
-		pci_assign_unassigned_root_bus_resources(root);
+		pci_reassign_root_bus_resources(root);
 
 		pci_setup_bridges(root);
 		pci_bus_rescan_done(root);
