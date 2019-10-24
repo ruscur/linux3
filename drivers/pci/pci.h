@@ -289,6 +289,8 @@ void pci_bus_put(struct pci_bus *bus);
 
 bool pci_dev_bar_movable(struct pci_dev *dev, struct resource *res);
 
+int assign_fixed_resource_on_bus(struct pci_bus *b, struct resource *r);
+
 /* PCIe link information */
 #define PCIE_SPEED2STR(speed) \
 	((speed) == PCIE_SPEED_16_0GT ? "16 GT/s" : \

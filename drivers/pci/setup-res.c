@@ -351,8 +351,11 @@ int pci_assign_resource(struct pci_dev *dev, int resno)
 	resource_size_t align, size;
 	int ret;
 
-	if (res->flags & IORESOURCE_PCI_FIXED)
-		return 0;
+	if (resno < PCI_BRIDGE_RESOURCES &&
+	    !pci_dev_bar_movable(dev, res) &&
+	    res->start) {
+		return assign_fixed_resource_on_bus(dev->bus, res);
+	}
 
 	res->flags |= IORESOURCE_UNSET;
 	align = pci_resource_alignment(dev, res);

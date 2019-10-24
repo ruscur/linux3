@@ -38,6 +38,15 @@ struct pci_dev_resource {
 	unsigned long flags;
 };
 
+enum assign_step {
+	assign_fixed_resources,
+	assign_float_resources,
+};
+
+static void _assign_requested_resources_sorted(struct list_head *head,
+					       struct list_head *fail_head,
+					       enum assign_step step);
+
 static void free_list(struct list_head *head)
 {
 	struct pci_dev_resource *dev_res, *tmp;
@@ -279,18 +288,46 @@ out:
 static void assign_requested_resources_sorted(struct list_head *head,
 				 struct list_head *fail_head)
 {
+	_assign_requested_resources_sorted(head, fail_head, assign_fixed_resources);
+	_assign_requested_resources_sorted(head, fail_head, assign_float_resources);
+}
+
+static void _assign_requested_resources_sorted(struct list_head *head,
+					       struct list_head *fail_head,
+					       enum assign_step step)
+{
 	struct resource *res;
 	struct pci_dev_resource *dev_res;
 	int idx;
 
 	list_for_each_entry(dev_res, head, list) {
+		bool is_fixed = false;
+
 		if (!pci_dev_bars_enabled(dev_res->dev))
 			continue;
 
 		res = dev_res->res;
+		if (!resource_size(res))
+			continue;
+
 		idx = res - &dev_res->dev->resource[0];
-		if (resource_size(res) &&
-		    pci_assign_resource(dev_res->dev, idx)) {
+
+		if (idx < PCI_BRIDGE_RESOURCES) {
+			is_fixed = !pci_dev_bar_movable(dev_res->dev, res);
+		} else {
+			int b_res_idx = pci_get_bridge_resource_idx(res);
+			struct resource *fixed_res =
+				&dev_res->dev->subordinate->immovable_range[b_res_idx];
+
+			is_fixed = (fixed_res->start < fixed_res->end);
+		}
+
+		if (assign_fixed_resources == step && !is_fixed)
+			continue;
+		else if (assign_float_resources == step && is_fixed)
+			continue;
+
+		if (pci_assign_resource(dev_res->dev, idx)) {
 			if (fail_head) {
 				/*
 				 * If the failed resource is a ROM BAR and
@@ -1335,7 +1372,7 @@ void pci_bus_size_bridges(struct pci_bus *bus)
 }
 EXPORT_SYMBOL(pci_bus_size_bridges);
 
-static void assign_fixed_resource_on_bus(struct pci_bus *b, struct resource *r)
+int assign_fixed_resource_on_bus(struct pci_bus *b, struct resource *r)
 {
 	int i;
 	struct resource *parent_r;
@@ -1352,35 +1389,14 @@ static void assign_fixed_resource_on_bus(struct pci_bus *b, struct resource *r)
 		    !(r->flags & IORESOURCE_PREFETCH))
 			continue;
 
-		if (resource_contains(parent_r, r))
-			request_resource(parent_r, r);
-	}
-}
-
-/*
- * Try to assign any resources marked as IORESOURCE_PCI_FIXED, as they are
- * skipped by pbus_assign_resources_sorted().
- */
-static void pdev_assign_fixed_resources(struct pci_dev *dev)
-{
-	int i;
-
-	for (i = 0; i <  PCI_NUM_RESOURCES; i++) {
-		struct pci_bus *b;
-		struct resource *r = &dev->resource[i];
-
-		if (r->parent || !(r->flags & IORESOURCE_PCI_FIXED) ||
-		    !(r->flags & (IORESOURCE_IO | IORESOURCE_MEM)))
-			continue;
-
-		b = dev->bus;
-		while (b && !r->parent) {
-			assign_fixed_resource_on_bus(b, r);
-			b = b->parent;
-			if (!r->parent && pci_can_move_bars)
-				break;
+		if (resource_contains(parent_r, r)) {
+			if (!request_resource(parent_r, r))
+				return 0;
 		}
 	}
+
+	dev_err(&b->dev, "failed to assign immovable %pR\n", r);
+	return -EBUSY;
 }
 
 void __pci_bus_assign_resources(const struct pci_bus *bus,
@@ -1395,8 +1411,6 @@ void __pci_bus_assign_resources(const struct pci_bus *bus,
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		if (!pci_dev_bars_enabled(dev))
 			continue;
-
-		pdev_assign_fixed_resources(dev);
 
 		b = dev->subordinate;
 		if (!b)
