@@ -3133,6 +3133,73 @@ unsigned int pci_rescan_bus_bridge_resize(struct pci_dev *bridge)
 	return max;
 }
 
+static bool pci_dev_movable(struct pci_dev *dev, bool res_has_children)
+{
+	if (!pci_can_move_bars)
+		return false;
+
+	if (dev->driver && dev->driver->rescan_prepare)
+		return true;
+
+	if (!dev->driver && !res_has_children)
+		return true;
+
+	return false;
+}
+
+bool pci_dev_bar_movable(struct pci_dev *dev, struct resource *res)
+{
+	struct pci_bus_region region;
+
+	if (res->flags & IORESOURCE_PCI_FIXED)
+		return false;
+
+	/* Workaround for the legacy VGA memory 0xa0000-0xbffff */
+	pcibios_resource_to_bus(dev->bus, &region, res);
+	if (region.start == 0xa0000)
+		return false;
+
+	return pci_dev_movable(dev, res->child);
+}
+
+static void pci_bus_rescan_prepare(struct pci_bus *bus)
+{
+	struct pci_dev *dev;
+
+	if (bus->self)
+		pci_config_pm_runtime_get(bus->self);
+
+	list_for_each_entry(dev, &bus->devices, bus_list) {
+		struct pci_bus *child = dev->subordinate;
+
+		if (child)
+			pci_bus_rescan_prepare(child);
+
+		if (dev->driver &&
+		    dev->driver->rescan_prepare)
+			dev->driver->rescan_prepare(dev);
+	}
+}
+
+static void pci_bus_rescan_done(struct pci_bus *bus)
+{
+	struct pci_dev *dev;
+
+	list_for_each_entry(dev, &bus->devices, bus_list) {
+		struct pci_bus *child = dev->subordinate;
+
+		if (dev->driver &&
+		    dev->driver->rescan_done)
+			dev->driver->rescan_done(dev);
+
+		if (child)
+			pci_bus_rescan_done(child);
+	}
+
+	if (bus->self)
+		pci_config_pm_runtime_put(bus->self);
+}
+
 /**
  * pci_rescan_bus - Scan a PCI bus for devices
  * @bus: PCI bus to scan
@@ -3145,9 +3212,23 @@ unsigned int pci_rescan_bus_bridge_resize(struct pci_dev *bridge)
 unsigned int pci_rescan_bus(struct pci_bus *bus)
 {
 	unsigned int max;
+	struct pci_bus *root = bus;
 
-	max = pci_scan_child_bus(bus);
-	pci_assign_unassigned_bus_resources(bus);
+	while (!pci_is_root_bus(root))
+		root = root->parent;
+
+	if (pci_can_move_bars) {
+		pci_bus_rescan_prepare(root);
+
+		max = pci_scan_child_bus(root);
+		pci_assign_unassigned_root_bus_resources(root);
+
+		pci_bus_rescan_done(root);
+	} else {
+		max = pci_scan_child_bus(bus);
+		pci_assign_unassigned_bus_resources(bus);
+	}
+
 	pci_bus_add_devices(bus);
 
 	return max;
