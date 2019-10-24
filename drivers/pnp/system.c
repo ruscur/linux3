@@ -12,6 +12,7 @@
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/pci.h>
 #include <linux/kernel.h>
 #include <linux/ioport.h>
 
@@ -57,6 +58,9 @@ static void reserve_resources_of_dev(struct pnp_dev *dev)
 {
 	struct resource *res;
 	int i;
+
+	if (pci_can_move_bars)
+		return;
 
 	for (i = 0; (res = pnp_get_resource(dev, IORESOURCE_IO, i)); i++) {
 		if (res->flags & IORESOURCE_DISABLED)
