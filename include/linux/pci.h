@@ -587,6 +587,12 @@ struct pci_bus {
 	 */
 	struct resource immovable_range[PCI_BRIDGE_RESOURCE_NUM];
 
+	/*
+	 * Acceptable address range, where the bridge window may reside, considering its
+	 * size, so it will cover all the fixed and immovable BARs below.
+	 */
+	struct resource realloc_range[PCI_BRIDGE_RESOURCE_NUM];
+
 	struct pci_ops	*ops;		/* Configuration access functions */
 	struct msi_controller *msi;	/* MSI controller */
 	void		*sysdata;	/* Hook for sys-specific extension */
