@@ -305,6 +305,16 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 			 pos, (unsigned long long)region.start);
 	}
 
+	if (pci_can_move_bars &&
+	    !(res->flags & IORESOURCE_IO) &&
+	    (dev->class >> 8) != PCI_CLASS_DISPLAY_VGA) {
+		pci_warn(dev, "ignore the current offset of BAR %llx-%llx\n",
+			 l64, l64 + sz64 - 1);
+		res->start = 0;
+		res->end = sz64 - 1;
+		res->flags |= IORESOURCE_SIZEALIGN;
+	}
+
 	goto out;
 
 
