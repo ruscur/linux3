@@ -1447,10 +1447,19 @@ static void node_states_clear_node(int node, struct memory_notify *arg)
 		node_clear_state(node, N_MEMORY);
 }
 
+static int count_system_ram_pages_cb(unsigned long start_pfn,
+				     unsigned long nr_pages, void *data)
+{
+	unsigned long *nr_system_ram_pages = data;
+
+	*nr_system_ram_pages += nr_pages;
+	return 0;
+}
+
 static int __ref __offline_pages(unsigned long start_pfn,
 		  unsigned long end_pfn)
 {
-	unsigned long pfn, nr_pages;
+	unsigned long pfn, nr_pages = 0;
 	unsigned long offlined_pages = 0;
 	int ret, node, nr_isolate_pageblock;
 	unsigned long flags;
@@ -1460,6 +1469,20 @@ static int __ref __offline_pages(unsigned long start_pfn,
 	char *reason;
 
 	mem_hotplug_begin();
+
+	/*
+	 * Don't allow to offline memory blocks that contain holes.
+	 * Consecuently, memory blocks with holes can never get onlined
+	 * (hotplugged memory has no holes and all boot memory is online).
+	 * This allows to simplify the onlining/offlining code quite a lot.
+	 */
+	walk_system_ram_range(start_pfn, end_pfn - start_pfn, &nr_pages,
+			      count_system_ram_pages_cb);
+	if (nr_pages != end_pfn - start_pfn) {
+		ret = -EINVAL;
+		reason = "memory holes";
+		goto failed_removal;
+	}
 
 	/* This makes hotplug much easier...and readable.
 	   we assume this for now. .*/
@@ -1472,7 +1495,6 @@ static int __ref __offline_pages(unsigned long start_pfn,
 
 	zone = page_zone(pfn_to_page(valid_start));
 	node = zone_to_nid(zone);
-	nr_pages = end_pfn - start_pfn;
 
 	/* set above range as isolated */
 	ret = start_isolate_page_range(start_pfn, end_pfn,
