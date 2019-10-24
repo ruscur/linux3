@@ -545,6 +545,7 @@ void pci_read_bridge_bases(struct pci_bus *child)
 static struct pci_bus *pci_alloc_bus(struct pci_bus *parent)
 {
 	struct pci_bus *b;
+	int idx;
 
 	b = kzalloc(sizeof(*b), GFP_KERNEL);
 	if (!b)
@@ -561,6 +562,11 @@ static struct pci_bus *pci_alloc_bus(struct pci_bus *parent)
 	if (parent)
 		b->domain_nr = parent->domain_nr;
 #endif
+	for (idx = 0; idx < PCI_BRIDGE_RESOURCE_NUM; ++idx) {
+		b->immovable_range[idx].start = 0;
+		b->immovable_range[idx].end = 0;
+	}
+
 	return b;
 }
 
@@ -3238,6 +3244,87 @@ static void pci_setup_bridges(struct pci_bus *bus)
 		pci_setup_bridge(bus);
 }
 
+static void pci_bus_update_immovable_range(struct pci_bus *bus)
+{
+	struct pci_dev *dev;
+	int idx;
+	resource_size_t start, end;
+
+	for (idx = 0; idx < PCI_BRIDGE_RESOURCE_NUM; ++idx) {
+		bus->immovable_range[idx].start = 0;
+		bus->immovable_range[idx].end = 0;
+	}
+
+	list_for_each_entry(dev, &bus->devices, bus_list)
+		if (dev->subordinate)
+			pci_bus_update_immovable_range(dev->subordinate);
+
+	list_for_each_entry(dev, &bus->devices, bus_list) {
+		int i;
+		struct pci_bus *child = dev->subordinate;
+
+		for (i = 0; i < PCI_BRIDGE_RESOURCES; ++i) {
+			struct resource *r = &dev->resource[i];
+
+			if (!r->flags || (r->flags & IORESOURCE_UNSET) || !r->parent)
+				continue;
+
+			if (!pci_dev_bar_movable(dev, r)) {
+				idx = pci_get_bridge_resource_idx(r);
+				start = bus->immovable_range[idx].start;
+				end = bus->immovable_range[idx].end;
+
+				if (!start || start > r->start)
+					start = r->start;
+				if (end < r->end)
+					end = r->end;
+
+				if (bus->immovable_range[idx].start != start ||
+				    bus->immovable_range[idx].end != end) {
+					dev_dbg(&bus->dev, "Found fixed BAR%d 0x%llx-0x%llx in %s, expand the fixed bridge window %d to 0x%llx-0x%llx\n",
+						i,
+						(unsigned long long)r->start,
+						(unsigned long long)r->end,
+						dev_name(&dev->dev), idx,
+						(unsigned long long)start,
+						(unsigned long long)end);
+					bus->immovable_range[idx].start = start;
+					bus->immovable_range[idx].end = end;
+				}
+			}
+		}
+
+		if (child) {
+			for (idx = 0; idx < PCI_BRIDGE_RESOURCE_NUM; ++idx) {
+				struct resource *child_immovable_range =
+					&child->immovable_range[idx];
+
+				if (child_immovable_range->start >=
+				    child_immovable_range->end)
+					continue;
+
+				start = bus->immovable_range[idx].start;
+				end = bus->immovable_range[idx].end;
+
+				if (!start || start > child_immovable_range->start)
+					start = child_immovable_range->start;
+				if (end < child_immovable_range->end)
+					end = child_immovable_range->end;
+
+				if (start < bus->immovable_range[idx].start ||
+				    end > bus->immovable_range[idx].end) {
+					dev_dbg(&bus->dev, "Expand the fixed bridge window %d from %s to 0x%llx-0x%llx\n",
+						idx, dev_name(&child->dev),
+						(unsigned long long)start,
+						(unsigned long long)end);
+					bus->immovable_range[idx].start = start;
+					bus->immovable_range[idx].end = end;
+				}
+			}
+		}
+	}
+}
+
 static struct pci_dev *pci_find_next_new_device(struct pci_bus *bus)
 {
 	struct pci_dev *dev;
@@ -3334,6 +3421,7 @@ unsigned int pci_rescan_bus(struct pci_bus *bus)
 
 	if (pci_can_move_bars) {
 		pci_bus_rescan_prepare(root);
+		pci_bus_update_immovable_range(root);
 		pci_bus_release_root_bridge_resources(root);
 
 		max = pci_scan_child_bus(root);
