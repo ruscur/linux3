@@ -288,8 +288,8 @@ static void __init mpc85xx_mds_qeic_init(void)
 	}
 
 	if (machine_is(p1021_mds))
-		qe_ic_init(np, 0, qe_ic_cascade_low_mpic,
-				qe_ic_cascade_high_mpic);
+		qe_ic_init(np, 0, qe_ic_cascade_low,
+				qe_ic_cascade_high);
 	else
 		qe_ic_init(np, 0, qe_ic_cascade_muxed_mpic, NULL);
 	of_node_put(np);

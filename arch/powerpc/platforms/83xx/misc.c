@@ -100,7 +100,7 @@ void __init mpc83xx_qe_init_IRQ(void)
 		if (!np)
 			return;
 	}
-	qe_ic_init(np, 0, qe_ic_cascade_low_mpic, qe_ic_cascade_high_mpic);
+	qe_ic_init(np, 0, qe_ic_cascade_low, qe_ic_cascade_high);
 	of_node_put(np);
 }
 

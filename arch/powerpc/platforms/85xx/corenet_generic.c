@@ -50,8 +50,8 @@ void __init corenet_gen_pic_init(void)
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,qe-ic");
 	if (np) {
-		qe_ic_init(np, 0, qe_ic_cascade_low_mpic,
-				qe_ic_cascade_high_mpic);
+		qe_ic_init(np, 0, qe_ic_cascade_low,
+				qe_ic_cascade_high);
 		of_node_put(np);
 	}
 }
