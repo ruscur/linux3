@@ -173,13 +173,13 @@ static struct qe_ic_info qe_ic_info[] = {
 
 static inline u32 qe_ic_read(__be32  __iomem *base, unsigned int reg)
 {
-	return in_be32(base + (reg >> 2));
+	return ioread32be(base + (reg >> 2));
 }
 
 static inline void qe_ic_write(__be32  __iomem *base, unsigned int reg,
 			       u32 value)
 {
-	out_be32(base + (reg >> 2), value);
+	iowrite32be(value, base + (reg >> 2));
 }
 
 static inline struct qe_ic *qe_ic_from_irq(unsigned int virq)
