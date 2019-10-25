@@ -67,8 +67,4 @@ void qe_ic_set_highest_priority(unsigned int virq, int high);
 int qe_ic_set_priority(unsigned int virq, unsigned int priority);
 int qe_ic_set_high_priority(unsigned int virq, unsigned int priority, int high);
 
-void qe_ic_cascade_low(struct irq_desc *desc);
-void qe_ic_cascade_high(struct irq_desc *desc);
-void qe_ic_cascade_muxed_mpic(struct irq_desc *desc);
-
 #endif /* _ASM_POWERPC_QE_IC_H */
