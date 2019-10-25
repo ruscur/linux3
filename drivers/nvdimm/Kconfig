@@ -130,4 +130,21 @@ config NVDIMM_TEST_BUILD
 	  core devm_memremap_pages() implementation and other
 	  infrastructure.
 
+config OCXL_SCM
+	tristate "OpenCAPI Storage Class Memory"
+	depends on LIBNVDIMM
+	select ZONE_DEVICE
+	select OCXL
+	help
+	  Exposes devices that implement the OpenCAPI Storage Class Memory
+	  specification as persistent memory regions.
+
+	  Select N if unsure.
+
+config OCXL_SCM_DEBUG
+	bool "OpenCAPI Storage Class Memory debugging"
+	depends on OCXL_SCM
+	help
+	  Enables low level IOCTLs for OpenCAPI SCM firmware development
+
 endif
