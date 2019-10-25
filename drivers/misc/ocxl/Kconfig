@@ -29,3 +29,10 @@ config OCXL
 	  dedicated OpenCAPI link, and don't follow the same protocol.
 
 	  If unsure, say N.
+
+config OCXL_SCM_GENERIC
+	bool "Treat OpenCAPI Storage Class Memory as a generic OpenCAPI device"
+	default n
+	help
+	  Select this option to treat OpenCAPI Storage Class Memory
+	  devices an generic OpenCAPI devices.

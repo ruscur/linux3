@@ -10,6 +10,9 @@
  */
 static const struct pci_device_id ocxl_pci_tbl[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x062B), },
+#ifdef CONFIG_OCXL_SCM_GENERIC
+	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0625), },
+#endif
 	{ }
 };
 MODULE_DEVICE_TABLE(pci, ocxl_pci_tbl);
