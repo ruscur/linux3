@@ -17,14 +17,31 @@ void arch_wb_cache_pmem(void *addr, size_t size)
 	unsigned long start = (unsigned long) addr;
 	flush_dcache_range(start, start + size);
 }
-EXPORT_SYMBOL(arch_wb_cache_pmem);
+EXPORT_SYMBOL_GPL(arch_wb_cache_pmem);
 
 void arch_invalidate_pmem(void *addr, size_t size)
 {
 	unsigned long start = (unsigned long) addr;
 	flush_dcache_range(start, start + size);
 }
-EXPORT_SYMBOL(arch_invalidate_pmem);
+EXPORT_SYMBOL_GPL(arch_invalidate_pmem);
+
+unsigned long arch_validate_namespace_size(unsigned int ndr_mappings, unsigned long size)
+{
+	u32 remainder;
+	unsigned long linear_map_size;
+
+	if (radix_enabled())
+		linear_map_size = PAGE_SIZE;
+	else
+		linear_map_size = (1UL << mmu_psize_defs[mmu_linear_psize].shift);
+
+	div_u64_rem(size, linear_map_size * ndr_mappings, &remainder);
+	if (remainder)
+		return linear_map_size * ndr_mappings;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(arch_validate_namespace_size);
 
 /*
  * CONFIG_ARCH_HAS_UACCESS_FLUSHCACHE symbols

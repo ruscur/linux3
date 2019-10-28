@@ -291,4 +291,5 @@ static inline void arch_invalidate_pmem(void *addr, size_t size)
 }
 #endif
 
+unsigned long arch_validate_namespace_size(unsigned int ndr_mappings, unsigned long size);
 #endif /* __LIBNVDIMM_H__ */

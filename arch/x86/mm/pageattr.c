@@ -310,6 +310,18 @@ void arch_invalidate_pmem(void *addr, size_t size)
 }
 EXPORT_SYMBOL_GPL(arch_invalidate_pmem);
 
+unsigned long arch_validate_namespace_size(unsigned int ndr_mappings, unsigned long size)
+{
+	u32 remainder;
+
+	div_u64_rem(size, PAGE_SIZE * ndr_mappings, &remainder);
+	if (remainder)
+		return PAGE_SIZE * ndr_mappings;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(arch_validate_namespace_size);
+
+
 static void __cpa_flush_all(void *arg)
 {
 	unsigned long cache = (unsigned long)arg;
