@@ -18,6 +18,7 @@ powerpc
     elfnote
     firmware-assisted-dump
     hvcs
+    imc
     isa-versions
     mpc52xx
     pci_iov_resource_on_powernv
