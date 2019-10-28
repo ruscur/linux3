@@ -1912,6 +1912,7 @@ static struct device *create_namespace_pmem(struct nd_region *nd_region,
 	struct nd_label_ent *label_ent;
 	struct nd_namespace_pmem *nspm;
 	struct nd_mapping *nd_mapping;
+	unsigned long map_align_size;
 	resource_size_t size = 0;
 	struct resource *res;
 	struct device *dev;
@@ -2008,6 +2009,20 @@ static struct device *create_namespace_pmem(struct nd_region *nd_region,
 			nspm->nsio.common.claim_class
 				= to_nvdimm_cclass(&label0->abstraction_guid);
 
+	}
+
+	map_align_size = arch_validate_namespace_size(nd_region->ndr_mappings, size);
+	if (map_align_size) {
+		dev_err(&nd_region->dev, "%llu is not %ldK aligned\n", size,
+				map_align_size/ SZ_1K);
+		/*
+		 * Disable this region completely. A wrongly sized namespace
+		 * size implies the start address of other namespace would also
+		 * be wrong and we would find confusing crashes w.r.t
+		 * direct-map address.
+		 */
+		rc = -EINVAL;
+		goto err;
 	}
 
 	if (!nspm->alt_name || !nspm->uuid) {
