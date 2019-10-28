@@ -157,7 +157,6 @@ static void pnv_smp_cpu_kill_self(void)
 	 * This hard disables local interurpts, ensuring we have no lazy
 	 * irqs pending.
 	 */
-	WARN_ON(irqs_disabled());
 	hard_irq_disable();
 	WARN_ON(lazy_irq_pending());
 
