@@ -975,7 +975,8 @@ static ssize_t __size_store(struct device *dev, unsigned long long val)
 	struct nd_mapping *nd_mapping;
 	struct nvdimm_drvdata *ndd;
 	struct nd_label_id label_id;
-	u32 flags = 0, remainder;
+	unsigned long map_size;
+	u32 flags = 0;
 	int rc, i, id = -1;
 	u8 *uuid = NULL;
 
@@ -1006,10 +1007,9 @@ static ssize_t __size_store(struct device *dev, unsigned long long val)
 		return -ENXIO;
 	}
 
-	div_u64_rem(val, PAGE_SIZE * nd_region->ndr_mappings, &remainder);
-	if (remainder) {
-		dev_dbg(dev, "%llu is not %ldK aligned\n", val,
-				(PAGE_SIZE * nd_region->ndr_mappings) / SZ_1K);
+	map_size = arch_validate_namespace_size(nd_region->ndr_mappings, val);
+	if (map_size) {
+		dev_err(dev, "%llu is not %ldK aligned\n", val, map_size / SZ_1K);
 		return -EINVAL;
 	}
 
