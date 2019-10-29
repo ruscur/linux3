@@ -201,19 +201,40 @@ static int fsl_asrc_dma_hw_params(struct snd_pcm_substream *substream,
 
 	/* Get DMA request of Back-End */
 	tmp_chan = dma_request_slave_channel(dev_be, tx ? "tx" : "rx");
-	tmp_data = tmp_chan->private;
-	pair->dma_data.dma_request = tmp_data->dma_request;
-	dma_release_channel(tmp_chan);
+	/* tmp_chan may be NULL for it is already allocated by Back-End */
+	if (tmp_chan) {
+		tmp_data = tmp_chan->private;
+		if (tmp_data)
+			pair->dma_data.dma_request = tmp_data->dma_request;
+		dma_release_channel(tmp_chan);
+	}
 
 	/* Get DMA request of Front-End */
 	tmp_chan = fsl_asrc_get_dma_channel(pair, dir);
-	tmp_data = tmp_chan->private;
-	pair->dma_data.dma_request2 = tmp_data->dma_request;
-	pair->dma_data.peripheral_type = tmp_data->peripheral_type;
-	pair->dma_data.priority = tmp_data->priority;
-	dma_release_channel(tmp_chan);
+	if (tmp_chan) {
+		tmp_data = tmp_chan->private;
+		if (tmp_data) {
+			pair->dma_data.dma_request2 = tmp_data->dma_request;
+			pair->dma_data.peripheral_type =
+				 tmp_data->peripheral_type;
+			pair->dma_data.priority = tmp_data->priority;
+		}
+		dma_release_channel(tmp_chan);
+	}
 
-	pair->dma_chan[dir] = dma_request_channel(mask, filter, &pair->dma_data);
+	/*
+	 * For SDMA DEV_TO_DEV channel, we need to configure two dma requests,
+	 * one is from Front-End, another is from Back-End.
+	 * But for EDMA DEV_TO_DEV channel, only one dma request is needed.
+	 * The EDMA channel of Back-End is already allocated, we can only
+	 * get EDMA channel from Front-End.
+	 */
+	if (asrc_priv->soc->use_edma)
+		pair->dma_chan[dir] =
+			fsl_asrc_get_dma_channel(pair, dir);
+	else
+		pair->dma_chan[dir] =
+			dma_request_channel(mask, filter, &pair->dma_data);
 	if (!pair->dma_chan[dir]) {
 		dev_err(dev, "failed to request DMA channel for Back-End\n");
 		return -EINVAL;
