@@ -1838,11 +1838,9 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 		return false;
 
 	pe = &phb->ioda.pe_array[pdn->pe_number];
-	if (pe->tce_bypass_enabled) {
-		u64 top = pe->tce_bypass_base + memblock_end_of_DRAM() - 1;
-		if (dma_mask >= top)
-			return true;
-	}
+
+	if (pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask))
+		return true;
 
 	/*
 	 * If the device can't set the TCE bypass bit but still wants

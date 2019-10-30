@@ -4,6 +4,7 @@
 
 #include <linux/compiler.h>		/* for __printf */
 #include <linux/iommu.h>
+#include <linux/memblock.h>
 #include <asm/iommu.h>
 #include <asm/msi_bitmap.h>
 
@@ -246,5 +247,12 @@ extern void pnv_pci_unlink_table_and_group(struct iommu_table *tbl,
 extern void pnv_pci_setup_iommu_table(struct iommu_table *tbl,
 		void *tce_mem, u64 tce_size,
 		u64 dma_offset, unsigned int page_shift);
+
+static inline bool pnv_ioda_pe_iommu_bypass_supported(struct pnv_ioda_pe *pe,
+						      u64 mask)
+{
+	return pe->tce_bypass_enabled &&
+	       mask >= pe->tce_bypass_base + memblock_end_of_DRAM() - 1;
+}
 
 #endif /* __POWERNV_PCI_H */
