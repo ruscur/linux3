@@ -199,21 +199,37 @@ static int fsl_asrc_dma_hw_params(struct snd_pcm_substream *substream,
 	dma_cap_set(DMA_SLAVE, mask);
 	dma_cap_set(DMA_CYCLIC, mask);
 
-	/* Get DMA request of Back-End */
-	tmp_chan = dma_request_slave_channel(dev_be, tx ? "tx" : "rx");
-	tmp_data = tmp_chan->private;
-	pair->dma_data.dma_request = tmp_data->dma_request;
-	dma_release_channel(tmp_chan);
+	/*
+	 * For EDMA DEV_TO_DEV channel, we don't need to configure
+	 * dma_request and dma_request2, we can get dma channel through
+	 * dma_request_slave_channel directly.
+	 * Compare with SDMA channel, EDMA channel is bound with dma
+	 * request event of each peripheral, and it is fixed. Not like SDMA,
+	 * the channel is allocated dynamically. So when DMA is EDMA, we
+	 * can only get EDMA channel through dma-names of Front-End device.
+	 */
+	if (!asrc_priv->soc->use_edma) {
+		/* Get DMA request of Back-End */
+		tmp_chan = dma_request_slave_channel(dev_be, tx ? "tx" : "rx");
+		tmp_data = tmp_chan->private;
+		pair->dma_data.dma_request = tmp_data->dma_request;
+		dma_release_channel(tmp_chan);
 
-	/* Get DMA request of Front-End */
-	tmp_chan = fsl_asrc_get_dma_channel(pair, dir);
-	tmp_data = tmp_chan->private;
-	pair->dma_data.dma_request2 = tmp_data->dma_request;
-	pair->dma_data.peripheral_type = tmp_data->peripheral_type;
-	pair->dma_data.priority = tmp_data->priority;
-	dma_release_channel(tmp_chan);
+		/* Get DMA request of Front-End */
+		tmp_chan = fsl_asrc_get_dma_channel(pair, dir);
+		tmp_data = tmp_chan->private;
+		pair->dma_data.dma_request2 = tmp_data->dma_request;
+		pair->dma_data.peripheral_type = tmp_data->peripheral_type;
+		pair->dma_data.priority = tmp_data->priority;
+		dma_release_channel(tmp_chan);
 
-	pair->dma_chan[dir] = dma_request_channel(mask, filter, &pair->dma_data);
+		pair->dma_chan[dir] =
+			dma_request_channel(mask, filter, &pair->dma_data);
+	} else {
+		pair->dma_chan[dir] =
+			fsl_asrc_get_dma_channel(pair, dir);
+	}
+
 	if (!pair->dma_chan[dir]) {
 		dev_err(dev, "failed to request DMA channel for Back-End\n");
 		return -EINVAL;
