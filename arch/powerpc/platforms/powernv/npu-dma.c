@@ -97,23 +97,16 @@ EXPORT_SYMBOL(pnv_pci_get_npu_dev);
 static struct pnv_ioda_pe *get_gpu_pci_dev_and_pe(struct pnv_ioda_pe *npe,
 						  struct pci_dev **gpdev)
 {
-	struct pnv_phb *phb;
-	struct pci_controller *hose;
 	struct pci_dev *pdev;
 	struct pnv_ioda_pe *pe;
-	struct pci_dn *pdn;
 
 	pdev = pnv_pci_get_gpu_dev(npe->pdev);
 	if (!pdev)
 		return NULL;
 
-	pdn = pci_get_pdn(pdev);
-	if (WARN_ON(!pdn || pdn->pe_number == IODA_INVALID_PE))
+	pe = pnv_ioda_get_pe(pdev);
+	if (WARN_ON(!pe))
 		return NULL;
-
-	hose = pci_bus_to_host(pdev->bus);
-	phb = hose->private_data;
-	pe = &phb->ioda.pe_array[pdn->pe_number];
 
 	if (gpdev)
 		*gpdev = pdev;
@@ -261,9 +254,6 @@ static int pnv_npu_dma_set_bypass(struct pnv_ioda_pe *npe)
 void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, u64 mask)
 {
 	struct pnv_ioda_pe *gpe = pnv_ioda_get_pe(gpdev);
-	struct pnv_phb *phb;
-	struct pci_dn *pdn;
-	struct pnv_ioda_pe *npe;
 	struct pci_dev *npdev;
 	bool bypass;
 	int i = 0;
@@ -275,12 +265,10 @@ void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, u64 mask)
 	bypass = pnv_ioda_pe_iommu_bypass_supported(gpe, mask);
 
 	while ((npdev = pnv_pci_get_npu_dev(gpdev, i++))) {
-		pdn = pci_get_pdn(npdev);
-		if (WARN_ON(!pdn || pdn->pe_number == IODA_INVALID_PE))
-			return;
+		struct pnv_ioda_pe *npe = pnv_ioda_get_pe(npdev);
 
-		phb = pci_bus_to_host(npdev->bus)->private_data;
-		npe = &phb->ioda.pe_array[pdn->pe_number];
+		if (WARN_ON(!npe))
+			return;
 
 		if (bypass) {
 			dev_info(&npdev->dev,

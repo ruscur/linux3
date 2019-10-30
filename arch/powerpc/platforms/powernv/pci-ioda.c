@@ -1829,16 +1829,12 @@ err:
 static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 		u64 dma_mask)
 {
-	struct pci_controller *hose = pci_bus_to_host(pdev->bus);
-	struct pnv_phb *phb = hose->private_data;
-	struct pci_dn *pdn = pci_get_pdn(pdev);
-	struct pnv_ioda_pe *pe;
+	struct pnv_ioda_pe *pe = pnv_ioda_get_pe(pdev);
 	bool bypass;
 
-	if (WARN_ON(!pdn || pdn->pe_number == IODA_INVALID_PE))
+	if (WARN_ON(!pe))
 		return false;
 
-	pe = &phb->ioda.pe_array[pdn->pe_number];
 	bypass = pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask);
 
 	/*
@@ -1852,7 +1848,7 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 	    dma_mask > (memory_hotplug_max() + (1ULL << 32)) &&
 	    /* pe->pdev should be set if it's a single device, pe->pbus if not */
 	    (pe->device_count == 1 || !pe->pbus) &&
-	    phb->model == PNV_PHB_MODEL_PHB3) {
+	    pe->phb->model == PNV_PHB_MODEL_PHB3) {
 		/* Configure the bypass mode */
 		if (pnv_pci_ioda_dma_64bit_bypass(pe))
 			return false;
