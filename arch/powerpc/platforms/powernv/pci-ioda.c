@@ -1854,32 +1854,33 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 		u64 dma_mask)
 {
 	struct pnv_ioda_pe *pe = pnv_ioda_get_pe(pdev);
-	bool bypass;
 
 	if (WARN_ON(!pe))
 		return false;
 
-	bypass = pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask);
+	return pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask) ||
+	       pnv_phb3_iommu_bypass_supported(pe, dma_mask);
+}
 
-	if (!bypass && pnv_phb3_iommu_bypass_supported(pe, dma_mask)) {
+static void pnv_pci_ioda_dma_set_mask(struct pci_dev *pdev, u64 mask)
+{
+	struct pnv_ioda_pe *pe = pnv_ioda_get_pe(pdev);
+
+	if (!pe)
+		return;
+
+	if (!pnv_ioda_pe_iommu_bypass_supported(pe, mask) &&
+	    pnv_phb3_iommu_bypass_supported(pe, mask)) {
 		/* Configure the bypass mode */
 		if (pnv_pci_ioda_dma_64bit_bypass(pe))
-			return false;
+			return;
 
 		/* 4GB offset bypasses 32-bit space */
 		pdev->dev.archdata.dma_offset = (1ULL << 32);
-
-		bypass = true;
 	}
 
-	/*
-	 * Update peer npu devices. We also do this for the special case where
-	 * a 64-bit dma mask can't be fulfilled and falls back to default.
-	 */
-	if (bypass || !(dma_mask >> 32) || dma_mask == DMA_BIT_MASK(64))
-		pnv_npu_try_dma_set_bypass(pdev, dma_mask);
-
-	return bypass;
+	/* Update peer npu devices */
+	pnv_npu_try_dma_set_bypass(pdev, mask);
 }
 
 static void pnv_ioda_setup_bus_dma(struct pnv_ioda_pe *pe, struct pci_bus *bus)
@@ -3612,6 +3613,7 @@ static void pnv_pci_ioda_shutdown(struct pci_controller *hose)
 static const struct pci_controller_ops pnv_pci_ioda_controller_ops = {
 	.dma_dev_setup		= pnv_pci_dma_dev_setup,
 	.dma_bus_setup		= pnv_pci_dma_bus_setup,
+	.dma_set_mask		= pnv_pci_ioda_dma_set_mask,
 	.iommu_bypass_supported	= pnv_pci_ioda_iommu_bypass_supported,
 	.setup_msi_irqs		= pnv_setup_msi_irqs,
 	.teardown_msi_irqs	= pnv_teardown_msi_irqs,
