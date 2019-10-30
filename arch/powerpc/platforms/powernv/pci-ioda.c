@@ -1826,6 +1826,30 @@ err:
 	return -EIO;
 }
 
+/*
+ * If the device can't set the TCE bypass bit but still wants
+ * to access 4GB or more, on PHB3 we can reconfigure TVE#0 to
+ * bypass the 32-bit region and be usable for 64-bit DMAs.
+ */
+static bool pnv_phb3_iommu_bypass_supported(struct pnv_ioda_pe *pe, u64 mask)
+{
+	if (pe->phb->model != PNV_PHB_MODEL_PHB3)
+		return false;
+
+	/* pe->pdev should be set if it's a single device, pe->pbus if not */
+	if (pe->pbus && pe->device_count != 1)
+		return false;
+
+	if (!(mask >> 32))
+		return false;
+
+	/* The device needs to be able to address all of this space. */
+	if (mask <= memory_hotplug_max() + (1ULL << 32))
+		return false;
+
+	return true;
+}
+
 static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 		u64 dma_mask)
 {
@@ -1837,18 +1861,7 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 
 	bypass = pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask);
 
-	/*
-	 * If the device can't set the TCE bypass bit but still wants
-	 * to access 4GB or more, on PHB3 we can reconfigure TVE#0 to
-	 * bypass the 32-bit region and be usable for 64-bit DMAs.
-	 * The device needs to be able to address all of this space.
-	 */
-	if (!bypass &&
-	    dma_mask >> 32 &&
-	    dma_mask > (memory_hotplug_max() + (1ULL << 32)) &&
-	    /* pe->pdev should be set if it's a single device, pe->pbus if not */
-	    (pe->device_count == 1 || !pe->pbus) &&
-	    pe->phb->model == PNV_PHB_MODEL_PHB3) {
+	if (!bypass && pnv_phb3_iommu_bypass_supported(pe, dma_mask)) {
 		/* Configure the bypass mode */
 		if (pnv_pci_ioda_dma_64bit_bypass(pe))
 			return false;
