@@ -258,13 +258,21 @@ static int pnv_npu_dma_set_bypass(struct pnv_ioda_pe *npe)
 	return rc;
 }
 
-void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, bool bypass)
+void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, u64 mask)
 {
+	struct pnv_ioda_pe *gpe = pnv_ioda_get_pe(gpdev);
 	int i;
 	struct pnv_phb *phb;
 	struct pci_dn *pdn;
 	struct pnv_ioda_pe *npe;
 	struct pci_dev *npdev;
+	bool bypass;
+
+	if (!gpe)
+		return;
+
+	/* We only do bypass if it's enabled on the linked device */
+	bypass = pnv_ioda_pe_iommu_bypass_supported(gpe, mask);
 
 	for (i = 0; ; ++i) {
 		npdev = pnv_pci_get_npu_dev(gpdev, i);
@@ -277,8 +285,6 @@ void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, bool bypass)
 			return;
 
 		phb = pci_bus_to_host(npdev->bus)->private_data;
-
-		/* We only do bypass if it's enabled on the linked device */
 		npe = &phb->ioda.pe_array[pdn->pe_number];
 
 		if (bypass) {

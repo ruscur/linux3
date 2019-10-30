@@ -211,7 +211,7 @@ extern void pe_level_printk(const struct pnv_ioda_pe *pe, const char *level,
 	pe_level_printk(pe, KERN_INFO, fmt, ##__VA_ARGS__)
 
 /* Nvlink functions */
-extern void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, bool bypass);
+extern void pnv_npu_try_dma_set_bypass(struct pci_dev *gpdev, u64 mask);
 extern void pnv_pci_ioda2_tce_invalidate_entire(struct pnv_phb *phb, bool rm);
 extern struct pnv_ioda_pe *pnv_pci_npu_setup_iommu(struct pnv_ioda_pe *npe);
 extern struct iommu_table_group *pnv_try_setup_npu_table_group(
