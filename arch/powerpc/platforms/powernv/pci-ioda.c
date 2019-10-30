@@ -1854,9 +1854,9 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 	    (pe->device_count == 1 || !pe->pbus) &&
 	    phb->model == PNV_PHB_MODEL_PHB3) {
 		/* Configure the bypass mode */
-		s64 rc = pnv_pci_ioda_dma_64bit_bypass(pe);
-		if (rc)
+		if (pnv_pci_ioda_dma_64bit_bypass(pe))
 			return false;
+
 		/* 4GB offset bypasses 32-bit space */
 		pdev->dev.archdata.dma_offset = (1ULL << 32);
 
