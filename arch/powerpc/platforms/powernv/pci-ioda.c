@@ -1833,14 +1833,13 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 	struct pnv_phb *phb = hose->private_data;
 	struct pci_dn *pdn = pci_get_pdn(pdev);
 	struct pnv_ioda_pe *pe;
+	bool bypass;
 
 	if (WARN_ON(!pdn || pdn->pe_number == IODA_INVALID_PE))
 		return false;
 
 	pe = &phb->ioda.pe_array[pdn->pe_number];
-
-	if (pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask))
-		return true;
+	bypass = pnv_ioda_pe_iommu_bypass_supported(pe, dma_mask);
 
 	/*
 	 * If the device can't set the TCE bypass bit but still wants
@@ -1848,7 +1847,8 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 	 * bypass the 32-bit region and be usable for 64-bit DMAs.
 	 * The device needs to be able to address all of this space.
 	 */
-	if (dma_mask >> 32 &&
+	if (!bypass &&
+	    dma_mask >> 32 &&
 	    dma_mask > (memory_hotplug_max() + (1ULL << 32)) &&
 	    /* pe->pdev should be set if it's a single device, pe->pbus if not */
 	    (pe->device_count == 1 || !pe->pbus) &&
@@ -1859,10 +1859,14 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 			return false;
 		/* 4GB offset bypasses 32-bit space */
 		pdev->dev.archdata.dma_offset = (1ULL << 32);
-		return true;
+
+		bypass = true;
 	}
 
-	return false;
+	/* Update peer npu devices */
+	pnv_npu_try_dma_set_bypass(pdev, dma_mask);
+
+	return bypass;
 }
 
 static void pnv_ioda_setup_bus_dma(struct pnv_ioda_pe *pe, struct pci_bus *bus)
