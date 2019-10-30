@@ -122,10 +122,21 @@ int dma_iommu_dma_supported(struct device *dev, u64 mask)
 {
 	struct iommu_table *tbl = get_iommu_table_base(dev);
 
-	if (dev_is_pci(dev) && dma_iommu_bypass_supported(dev, mask)) {
-		dev->archdata.iommu_bypass = true;
-		dev_dbg(dev, "iommu: 64-bit OK, using fixed ops\n");
-		return 1;
+	if (dev_is_pci(dev)) {
+		if (dma_iommu_bypass_supported(dev, mask)) {
+			dev->archdata.iommu_bypass = true;
+			dev_dbg(dev, "iommu: 64-bit OK, using fixed ops\n");
+			return 1;
+		}
+
+		if (mask >> 32) {
+			dev_err(dev, "Warning: IOMMU dma bypass not supported: mask 0x%016llx\n",
+				mask);
+
+			/* A 64-bit request falls back to default ops */
+			if (mask != DMA_BIT_MASK(64))
+				return 0;
+		}
 	}
 
 	if (!tbl) {

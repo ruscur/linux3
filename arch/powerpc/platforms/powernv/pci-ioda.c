@@ -1863,8 +1863,12 @@ static bool pnv_pci_ioda_iommu_bypass_supported(struct pci_dev *pdev,
 		bypass = true;
 	}
 
-	/* Update peer npu devices */
-	pnv_npu_try_dma_set_bypass(pdev, dma_mask);
+	/*
+	 * Update peer npu devices. We also do this for the special case where
+	 * a 64-bit dma mask can't be fulfilled and falls back to default.
+	 */
+	if (bypass || !(dma_mask >> 32) || dma_mask == DMA_BIT_MASK(64))
+		pnv_npu_try_dma_set_bypass(pdev, dma_mask);
 
 	return bypass;
 }
