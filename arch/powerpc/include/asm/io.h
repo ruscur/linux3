@@ -638,6 +638,178 @@ static inline void name at					\
 #define writel_relaxed(v, addr)	writel(v, addr)
 #define writeq_relaxed(v, addr)	writeq(v, addr)
 
+#if !defined(CONFIG_PPC_INDIRECT_PIO) && !defined(CONFIG_PPC_INDIRECT_MMIO)
+
+#define ioread8 ioread8
+static inline unsigned int ioread8(void __iomem *addr)
+{
+	return readb(addr);
+}
+#define ioread16 ioread16
+static inline unsigned int ioread16(void __iomem *addr)
+{
+	return readw(addr);
+}
+#define ioread16be ioread16be
+static inline unsigned int ioread16be(void __iomem *addr)
+{
+	return readw_be(addr);
+}
+#define ioread32 ioread32
+static inline unsigned int ioread32(void __iomem *addr)
+{
+	return readl(addr);
+}
+#define ioread32be ioread32be
+static inline unsigned int ioread32be(void __iomem *addr)
+{
+	return readl_be(addr);
+}
+#ifdef __powerpc64__
+#define ioread64 ioread64
+static inline u64 ioread64(void __iomem *addr)
+{
+	return readq(addr);
+}
+#define ioread64_lo_hi ioread64_lo_hi
+static inline u64 ioread64_lo_hi(void __iomem *addr)
+{
+	return readq(addr);
+}
+#define ioread64_hi_lo ioread64_hi_lo
+static inline u64 ioread64_hi_lo(void __iomem *addr)
+{
+	return readq(addr);
+}
+#define ioread64be ioread64be
+static inline u64 ioread64be(void __iomem *addr)
+{
+	return readq_be(addr);
+}
+#define ioread64be_lo_hi ioread64be_lo_hi
+static inline u64 ioread64be_lo_hi(void __iomem *addr)
+{
+	return readq_be(addr);
+}
+#define ioread64be_hi_lo ioread64be_hi_lo
+static inline u64 ioread64be_hi_lo(void __iomem *addr)
+{
+	return readq_be(addr);
+}
+#endif /* __powerpc64__ */
+
+#define iowrite8 iowrite8
+static inline void iowrite8(u8 val, void __iomem *addr)
+{
+	writeb(val, addr);
+}
+#define iowrite16 iowrite16
+static inline void iowrite16(u16 val, void __iomem *addr)
+{
+	writew(val, addr);
+}
+#define iowrite16be iowrite16be
+static inline void iowrite16be(u16 val, void __iomem *addr)
+{
+	writew_be(val, addr);
+}
+#define iowrite32 iowrite32
+static inline void iowrite32(u32 val, void __iomem *addr)
+{
+	writel(val, addr);
+}
+#define iowrite32be iowrite32be
+static inline void iowrite32be(u32 val, void __iomem *addr)
+{
+	writel_be(val, addr);
+}
+#ifdef __powerpc64__
+#define iowrite64 iowrite64
+static inline void iowrite64(u64 val, void __iomem *addr)
+{
+	writeq(val, addr);
+}
+#define iowrite64_lo_hi iowrite64_lo_hi
+static inline void iowrite64_lo_hi(u64 val, void __iomem *addr)
+{
+	writeq(val, addr);
+}
+#define iowrite64_hi_lo iowrite64_hi_lo
+static inline void iowrite64_hi_lo(u64 val, void __iomem *addr)
+{
+	writeq(val, addr);
+}
+#define iowrite64be iowrite64be
+static inline void iowrite64be(u64 val, void __iomem *addr)
+{
+	writeq_be(val, addr);
+}
+#define iowrite64be_lo_hi iowrite64be_lo_hi
+static inline void iowrite64be_lo_hi(u64 val, void __iomem *addr)
+{
+	writeq_be(val, addr);
+}
+#define iowrite64be_hi_lo iowrite64be_hi_lo
+static inline void iowrite64be_hi_lo(u64 val, void __iomem *addr)
+{
+	writeq_be(val, addr);
+}
+#endif /* __powerpc64__ */
+
+/*
+ * These are the "repeat read/write" functions. Note the
+ * non-CPU byte order. We do things in "IO byteorder"
+ * here.
+ *
+ * FIXME! We could make these do EEH handling if we really
+ * wanted. Not clear if we do.
+ */
+#define ioread8_rep ioread8_rep
+static inline void ioread8_rep(void __iomem *addr, void *dst, unsigned long count)
+{
+	readsb(addr, dst, count);
+}
+#define ioread16_rep ioread16_rep
+static inline void ioread16_rep(void __iomem *addr, void *dst, unsigned long count)
+{
+	readsw(addr, dst, count);
+}
+#define ioread32_rep ioread32_rep
+static inline void ioread32_rep(void __iomem *addr, void *dst, unsigned long count)
+{
+	readsl(addr, dst, count);
+}
+
+#define iowrite8_rep iowrite8_rep
+static inline void iowrite8_rep(void __iomem *addr, const void *src, unsigned long count)
+{
+	writesb(addr, src, count);
+}
+#define iowrite16_rep iowrite16_rep
+static inline void iowrite16_rep(void __iomem *addr, const void *src, unsigned long count)
+{
+	writesw(addr, src, count);
+}
+#define iowrite32_rep iowrite32_rep
+static inline void iowrite32_rep(void __iomem *addr, const void *src, unsigned long count)
+{
+	writesl(addr, src, count);
+}
+
+#define ioport_map ioport_map
+static inline void __iomem *ioport_map(unsigned long port, unsigned int len)
+{
+	return (void __iomem *) (port + _IO_BASE);
+}
+
+#define ioport_unmap ioport_unmap
+static inline void ioport_unmap(void __iomem *addr)
+{
+	/* Nothing to do */
+}
+
+#endif /* !defined(CONFIG_PPC_INDIRECT_PIO) && !defined(CONFIG_PPC_INDIRECT_MMIO) */
+
 #include <asm-generic/iomap.h>
 
 static inline void iosync(void)
