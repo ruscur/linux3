@@ -6,6 +6,8 @@
 #include <string.h>
 
 #define INT_MAX			((int)(~0U>>1))
+#define INT32_MAX		((u32)~0U)
+#define UINT32_MAX		((s32)(INT_MAX >> 1))
 
 #include "of.h"
 
