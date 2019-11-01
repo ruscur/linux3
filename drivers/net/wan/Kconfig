@@ -270,7 +270,7 @@ config FARSYNC
 config FSL_UCC_HDLC
 	tristate "Freescale QUICC Engine HDLC support"
 	depends on HDLC
-	depends on QUICC_ENGINE
+	depends on QUICC_ENGINE && PPC32
 	help
 	  Driver for Freescale QUICC Engine HDLC controller. The driver
 	  supports HDLC in NMSI and TDM mode.
