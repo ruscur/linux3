@@ -534,7 +534,7 @@ static int ib_umem_odp_map_dma_single_page(
 	} else if (umem_odp->page_list[page_index] == page) {
 		umem_odp->dma_list[page_index] |= access_mask;
 	} else {
-		pr_err("error: got different pages in IB device and from get_user_pages. IB device page: %p, gup page: %p\n",
+		pr_err("error: got different pages in IB device and from pin_longterm_pages. IB device page: %p, gup page: %p\n",
 		       umem_odp->page_list[page_index], page);
 		/* Better remove the mapping now, to prevent any further
 		 * damage. */
@@ -639,11 +639,11 @@ int ib_umem_odp_map_dma_pages(struct ib_umem_odp *umem_odp, u64 user_virt,
 		/*
 		 * Note: this might result in redundent page getting. We can
 		 * avoid this by checking dma_list to be 0 before calling
-		 * get_user_pages. However, this make the code much more
-		 * complex (and doesn't gain us much performance in most use
-		 * cases).
+		 * pin_longterm_pages. However, this makes the code much
+		 * more complex (and doesn't gain us much performance in most
+		 * use cases).
 		 */
-		npages = get_user_pages_remote(owning_process, owning_mm,
+		npages = pin_longterm_pages_remote(owning_process, owning_mm,
 				user_virt, gup_num_pages,
 				flags, local_page_list, NULL, NULL);
 		up_read(&owning_mm->mmap_sem);
