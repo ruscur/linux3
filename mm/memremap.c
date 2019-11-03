@@ -410,10 +410,8 @@ struct dev_pagemap *get_dev_pagemap(unsigned long pfn,
 EXPORT_SYMBOL_GPL(get_dev_pagemap);
 
 #ifdef CONFIG_DEV_PAGEMAP_OPS
-void __put_devmap_managed_page(struct page *page)
+void __put_devmap_managed_page(struct page *page, int count)
 {
-	int count = page_ref_dec_return(page);
-
 	/*
 	 * If refcount is 1 then page is freed and refcount is stable as nobody
 	 * holds a reference on the page.
