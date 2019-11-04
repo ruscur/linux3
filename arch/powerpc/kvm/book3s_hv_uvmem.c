@@ -93,6 +93,7 @@
 #include <linux/ksm.h>
 #include <asm/ultravisor.h>
 #include <asm/mman.h>
+#include <asm/kvm_ppc.h>
 
 static struct dev_pagemap kvmppc_uvmem_pgmap;
 static unsigned long *kvmppc_uvmem_bitmap;
@@ -237,6 +238,11 @@ unsigned long kvmppc_h_svm_init_done(struct kvm *kvm)
 	if (!(kvm->arch.secure_guest & KVMPPC_SECURE_INIT_START))
 		return H_UNSUPPORTED;
 
+	if (kvm_is_radix(kvm)) {
+		kvmppc_free_radix(kvm);
+		pr_info("LPID %d went secure, freed HV side radix pgtables\n",
+			kvm->arch.lpid);
+	}
 	kvm->arch.secure_guest |= KVMPPC_SECURE_INIT_DONE;
 	return H_SUCCESS;
 }
