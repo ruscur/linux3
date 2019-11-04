@@ -1112,10 +1112,10 @@ END_FTR_SECTION_IFSET(CPU_FTR_ARCH_300)
 	ld	r6, VCPU_KVM(r4)
 	lbz	r7, KVM_SECURE_GUEST(r6)
 	cmpdi	r7, 0
+	bne	check_svm_abort
+
 	ld	r6, VCPU_GPR(R6)(r4)
 	ld	r7, VCPU_GPR(R7)(r4)
-	bne	ret_to_ultra
-
 	lwz	r0, VCPU_CR(r4)
 	mtcr	r0
 
@@ -1125,6 +1125,21 @@ END_FTR_SECTION_IFSET(CPU_FTR_ARCH_300)
 	ld	r4, VCPU_GPR(R4)(r4)
 	HRFI_TO_GUEST
 	b	.
+
+/*
+ * If SVM is about to abort, return to UV one last time but clear the
+ * secure_guest state so future fast_guest_returns return to the normal
+ * VM. We expect following state and we will restore the state.
+ *   R6 = kvm
+ *   R7 = kvm->secure_guest
+ */
+check_svm_abort:
+
+	cmpdi	r7, 4	/* KVMPPC_SECURE_INIT_ABORT */
+	bne	ret_to_ultra
+	li	r7, 0
+	stb	r7, KVM_SECURE_GUEST(r6)
+
 /*
  * Use UV_RETURN ultracall to return control back to the Ultravisor after
  * processing an hypercall or interrupt that was forwarded (a.k.a. reflected)
@@ -1134,8 +1149,12 @@ END_FTR_SECTION_IFSET(CPU_FTR_ARCH_300)
  *   R0 = hcall result
  *   R2 = SRR1, so UV can detect a synthesized interrupt (if any)
  *   R3 = UV_RETURN
+ *   R6 = kvm (to be restored)
+ *   R7 = kvm->secure_guest (to be restored)
  */
 ret_to_ultra:
+	ld	r6, VCPU_GPR(R6)(r4)
+	ld	r7, VCPU_GPR(R7)(r4)
 	lwz	r0, VCPU_CR(r4)
 	mtcr	r0
 

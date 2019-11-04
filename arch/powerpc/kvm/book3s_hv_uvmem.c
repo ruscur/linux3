@@ -284,6 +284,35 @@ void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
 	}
 }
 
+unsigned long kvmppc_h_svm_init_abort(struct kvm *kvm)
+{
+	int i;
+	int srcu_idx;
+
+	if (!(kvm->arch.secure_guest & KVMPPC_SECURE_INIT_START))
+		return H_UNSUPPORTED;
+
+	srcu_idx = srcu_read_lock(&kvm->srcu);
+	for (i = 0; i < KVM_ADDRESS_SPACE_NUM; i++) {
+		struct kvm_memory_slot *memslot;
+		struct kvm_memslots *slots = __kvm_memslots(kvm, i);
+
+		if (!slots)
+			continue;
+
+		kvm_for_each_memslot(memslot, slots) {
+			kvmppc_uvmem_drop_pages(memslot, kvm, false);
+			uv_unregister_mem_slot(kvm->arch.lpid, memslot->id);
+			kvmppc_uvmem_slot_free(kvm, memslot);
+		}
+	}
+	srcu_read_unlock(&kvm->srcu, srcu_idx);
+
+	kvm->arch.secure_guest = KVMPPC_SECURE_INIT_ABORT;
+	pr_info("LPID %d: Switching to secure aborted\n", kvm->arch.lpid);
+	return H_SUCCESS;
+}
+
 /*
  * Get a free device PFN from the pool
  *

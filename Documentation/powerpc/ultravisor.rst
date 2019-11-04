@@ -948,6 +948,45 @@ Use cases
     up its internal state for this virtual machine.
 
 
+H_SVM_INIT_ABORT
+----------------
+
+    Abort the process of securing an SVM.
+
+Syntax
+~~~~~~
+
+.. code-block:: c
+
+	uint64_t hypercall(const uint64_t H_SVM_INIT_ABORT)
+
+Return values
+~~~~~~~~~~~~~
+
+    One of the following values:
+
+	* H_SUCCESS 		on success.
+	* H_UNSUPPORTED		if called from the wrong context (e.g.
+				from an SVM or before an H_SVM_INIT_START
+				hypercall).
+
+Description
+~~~~~~~~~~~
+
+    Abort the process of securing a virtual machine. This call must
+    be made after a prior call to ``H_SVM_INIT_START`` hypercall.
+
+Use cases
+~~~~~~~~~
+
+
+    On successfully securing a virtual machine, the Ultravisor informs
+    If the Ultravisor is unable to secure a virtual machine either due
+    to lack of resources or because the VM's security information could
+    not be validated, Ultravisor informs the Hypervisor about it.
+    Hypervisor can use this call to clean up any internal state for this
+    virtual machine.
+
 H_SVM_PAGE_IN
 -------------
 
