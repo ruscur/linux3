@@ -407,17 +407,58 @@ static bool dlpar_cpu_exists(struct device_node *parent, u32 drc_index)
 	return found;
 }
 
+static bool drc_info_valid_index(struct device_node *parent, u32 drc_index)
+{
+	struct property *info;
+	struct of_drc_info drc;
+	const __be32 *value;
+	int count, i, j;
+
+	info = of_find_property(parent, "ibm,drc-info", NULL);
+	if (!info)
+		return false;
+
+	value = of_prop_next_u32(info, NULL, &count);
+
+	/* First value of ibm,drc-info is number of drc-info records */
+	if (value)
+		value++;
+	else
+		return false;
+
+	for (i = 0; i < count; i++) {
+		if (of_read_drc_info_cell(&info, &value, &drc))
+			return false;
+
+		if (strncmp(drc.drc_type, "CPU", 3))
+			break;
+
+		if (drc_index > drc.last_drc_index)
+			continue;
+
+		for (j = 0; j < drc.num_sequential_elems; j++)
+			if (drc_index == (drc.drc_index_start + (drc.sequential_inc * j)))
+					return true;
+	}
+
+	return false;
+}
+
 static bool valid_cpu_drc_index(struct device_node *parent, u32 drc_index)
 {
 	bool found = false;
 	int rc, index;
 
-	index = 0;
+	if (of_find_property(parent, "ibm,drc-info", NULL))
+		return drc_info_valid_index(parent, drc_index);
+
+	index = 1;
 	while (!found) {
 		u32 drc;
 
 		rc = of_property_read_u32_index(parent, "ibm,drc-indexes",
 						index++, &drc);
+
 		if (rc)
 			break;
 
@@ -720,8 +761,11 @@ static int dlpar_cpu_remove_by_count(u32 cpus_to_remove)
 static int find_dlpar_cpus_to_add(u32 *cpu_drcs, u32 cpus_to_add)
 {
 	struct device_node *parent;
+	struct property *info;
 	int cpus_found = 0;
 	int index, rc;
+	int i, j;
+	u32 drc_index;
 
 	parent = of_find_node_by_path("/cpus");
 	if (!parent) {
@@ -730,24 +774,49 @@ static int find_dlpar_cpus_to_add(u32 *cpu_drcs, u32 cpus_to_add)
 		return -1;
 	}
 
-	/* Search the ibm,drc-indexes array for possible CPU drcs to
-	 * add. Note that the format of the ibm,drc-indexes array is
-	 * the number of entries in the array followed by the array
-	 * of drc values so we start looking at index = 1.
-	 */
-	index = 1;
-	while (cpus_found < cpus_to_add) {
-		u32 drc;
+	info = of_find_property(parent, "ibm,drc-info", NULL);
+	if (info) {
+		struct of_drc_info drc;
+		const __be32 *value;
+		int count;
 
-		rc = of_property_read_u32_index(parent, "ibm,drc-indexes",
-						index++, &drc);
-		if (rc)
-			break;
+		value = of_prop_next_u32(info, NULL, &count);
+		if (value)
+			value++;
 
-		if (dlpar_cpu_exists(parent, drc))
-			continue;
+		for (i = 0; i < count; i++) {
+			of_read_drc_info_cell(&info, &value, &drc);
+			if (strncmp(drc.drc_type, "CPU", 3))
+				break;
 
-		cpu_drcs[cpus_found++] = drc;
+			for (j = 0; j < drc.num_sequential_elems && cpus_found < cpus_to_add; j++) {
+				drc_index = drc.drc_index_start + (drc.sequential_inc * j);
+
+				if (dlpar_cpu_exists(parent, drc_index))
+					continue;
+
+				cpu_drcs[cpus_found++] = drc_index;
+			}
+		}
+	} else {
+		/* Search the ibm,drc-indexes array for possible CPU drcs to
+		 * add. Note that the format of the ibm,drc-indexes array is
+		 * the number of entries in the array followed by the array
+		 * of drc values so we start looking at index = 1.
+		 */
+		index = 1;
+		while (cpus_found < cpus_to_add) {
+			rc = of_property_read_u32_index(parent, "ibm,drc-indexes",
+							index++, &drc_index);
+
+			if (rc)
+				break;
+
+			if (dlpar_cpu_exists(parent, drc_index))
+				continue;
+
+			cpu_drcs[cpus_found++] = drc_index;
+		}
 	}
 
 	of_node_put(parent);
