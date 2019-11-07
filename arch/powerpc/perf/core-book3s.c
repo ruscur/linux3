@@ -816,6 +816,15 @@ void perf_event_print_debug(void)
 	if (!ppmu->n_counter)
 		return;
 
+	/*
+	 * Check pmu_inuse flag. As per PAPR spec, hypersivor
+	 * will save/restore the PMU regs only if pmu_inuse is
+	 * set. If its not enable, values dumped from these SPRs
+	 * may not be valid or useful.
+	 */
+	if (!ppc_get_pmu_inuse())
+		return;
+
 	local_irq_save(flags);
 
 	pr_info("CPU: %d PMU registers, ppmu = %s n_counters = %d",

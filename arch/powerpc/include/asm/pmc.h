@@ -34,11 +34,26 @@ static inline void ppc_set_pmu_inuse(int inuse)
 #endif
 }
 
+static inline u8 ppc_get_pmu_inuse(void)
+{
+#if defined(CONFIG_PPC_PSERIES) || defined(CONFIG_KVM_BOOK3S_HV_POSSIBLE)
+	if (firmware_has_feature(FW_FEATURE_LPAR)) {
+#ifdef CONFIG_PPC_PSERIES
+		return get_lppaca()->pmcregs_in_use;
+#endif
+	}
+#ifdef CONFIG_KVM_BOOK3S_HV_POSSIBLE
+	return get_paca()->pmcregs_in_use;
+#endif
+#endif
+}
+
 extern void power4_enable_pmcs(void);
 
 #else /* CONFIG_PPC64 */
 
 static inline void ppc_set_pmu_inuse(int inuse) { }
+static inline u8 ppc_get_pmu_inuse(void) { }
 
 #endif
 
