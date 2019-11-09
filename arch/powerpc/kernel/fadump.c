@@ -1418,6 +1418,9 @@ static int fadump_region_show(struct seq_file *m, void *private)
 	return 0;
 }
 
+struct kobject *fadump_kobj;
+EXPORT_SYMBOL_GPL(fadump_kobj);
+
 static struct kobj_attribute fadump_release_attr = __ATTR(fadump_release_mem,
 						0200, NULL,
 						fadump_release_memory_store);
@@ -1428,6 +1431,16 @@ static struct kobj_attribute fadump_register_attr = __ATTR(fadump_registered,
 						0644, fadump_register_show,
 						fadump_register_store);
 
+static struct kobj_attribute release_attr = __ATTR(release_mem,
+						0200, NULL,
+						fadump_release_memory_store);
+static struct kobj_attribute enable_attr = __ATTR(enabled,
+						0444, fadump_enabled_show,
+						NULL);
+static struct kobj_attribute register_attr = __ATTR(registered,
+						0644, fadump_register_show,
+						fadump_register_store);
+
 DEFINE_SHOW_ATTRIBUTE(fadump_region);
 
 static void fadump_init_files(void)
@@ -1435,6 +1448,11 @@ static void fadump_init_files(void)
 	struct dentry *debugfs_file;
 	int rc = 0;
 
+	fadump_kobj = kobject_create_and_add("fadump", kernel_kobj);
+	if (!fadump_kobj) {
+		pr_err("failed to create fadump kobject\n");
+		return;
+	}
 	rc = sysfs_create_file(kernel_kobj, &fadump_attr.attr);
 	if (rc)
 		printk(KERN_ERR "fadump: unable to create sysfs file"
@@ -1457,6 +1475,26 @@ static void fadump_init_files(void)
 		if (rc)
 			printk(KERN_ERR "fadump: unable to create sysfs file"
 				" fadump_release_mem (%d)\n", rc);
+	}
+	/* Replicating the following sysfs attributes under FADump kobject.
+	 *
+	 *	- fadump_enabled -> enabled
+	 *	- fadump_registered -> registered
+	 *	- fadump_release_mem -> release_mem
+	 */
+	rc = sysfs_create_file(fadump_kobj, &enable_attr.attr);
+	if (rc)
+		pr_err("unable to create enabled sysfs file (%d)\n",
+		       rc);
+	rc = sysfs_create_file(fadump_kobj, &register_attr.attr);
+	if (rc)
+		pr_err("unable to create registered sysfs file (%d)\n",
+		       rc);
+	if (fw_dump.dump_active) {
+		rc = sysfs_create_file(fadump_kobj, &release_attr.attr);
+		if (rc)
+			pr_err("unable to create release_mem sysfs file (%d)\n",
+			       rc);
 	}
 	return;
 }

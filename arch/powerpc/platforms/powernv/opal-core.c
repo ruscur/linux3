@@ -589,7 +589,7 @@ static ssize_t fadump_release_opalcore_store(struct kobject *kobj,
 	return count;
 }
 
-static struct kobj_attribute opalcore_rel_attr = __ATTR(fadump_release_opalcore,
+static struct kobj_attribute opalcore_rel_attr = __ATTR(release_opalcore,
 						0200, NULL,
 						fadump_release_opalcore_store);
 
@@ -625,9 +625,13 @@ static int __init opalcore_init(void)
 		return rc;
 	}
 
-	rc = sysfs_create_file(kernel_kobj, &opalcore_rel_attr.attr);
+	/*
+	 * Originally fadump_release_opalcore sysfs was part of kernel_kobj
+	 * later moved to fadump_kobj and renamed to release_opalcore.
+	 */
+	rc = sysfs_create_file(fadump_kobj, &opalcore_rel_attr.attr);
 	if (rc) {
-		pr_warn("unable to create sysfs file fadump_release_opalcore (%d)\n",
+		pr_warn("unable to create sysfs file release_opalcore (%d)\n",
 			rc);
 	}
 
