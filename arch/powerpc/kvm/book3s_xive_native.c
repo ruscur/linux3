@@ -577,10 +577,12 @@ static int kvmppc_xive_native_set_queue_config(struct kvmppc_xive *xive,
 		 __func__, server, priority, kvm_eq.flags,
 		 kvm_eq.qshift, kvm_eq.qaddr, kvm_eq.qtoggle, kvm_eq.qindex);
 
-	/* reset queue and disable queueing */
-	if (!kvm_eq.qshift) {
-		q->guest_qaddr  = 0;
-		q->guest_qshift = 0;
+	/*
+	 * Reset queue and disable queueing. It will be re-enabled
+	 * later on if the guest is configuring a new EQ page.
+	 */
+	if (q->guest_qshift) {
+		page = virt_to_page(q->qpage);
 
 		rc = xive_native_configure_queue(xc->vp_id, q, priority,
 						 NULL, 0, true);
@@ -590,12 +592,13 @@ static int kvmppc_xive_native_set_queue_config(struct kvmppc_xive *xive,
 			return rc;
 		}
 
-		if (q->qpage) {
-			put_page(virt_to_page(q->qpage));
-			q->qpage = NULL;
-		}
+		put_page(page);
 
-		return 0;
+		if (!kvm_eq.qshift) {
+			q->guest_qaddr  = 0;
+			q->guest_qshift = 0;
+			return 0;
+		}
 	}
 
 	/*
