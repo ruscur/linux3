@@ -275,16 +275,6 @@ static void perf_callchain_user_64(struct perf_callchain_entry_ctx *entry,
 	}
 }
 
-static inline int current_is_64bit(void)
-{
-	/*
-	 * We can't use test_thread_flag() here because we may be on an
-	 * interrupt stack, and the thread flags don't get copied over
-	 * from the thread_info on the main stack to the interrupt stack.
-	 */
-	return !test_ti_thread_flag(task_thread_info(current), TIF_32BIT);
-}
-
 #else  /* CONFIG_PPC64 */
 static int read_user_stack_slow(void __user *ptr, void *buf, int nb)
 {
@@ -294,11 +284,6 @@ static int read_user_stack_slow(void __user *ptr, void *buf, int nb)
 static inline void perf_callchain_user_64(struct perf_callchain_entry_ctx *entry,
 					  struct pt_regs *regs)
 {
-}
-
-static inline int current_is_64bit(void)
-{
-	return 0;
 }
 
 #define __SIGNAL_FRAMESIZE32	__SIGNAL_FRAMESIZE
@@ -477,7 +462,7 @@ static void perf_callchain_user_32(struct perf_callchain_entry_ctx *entry,
 void
 perf_callchain_user(struct perf_callchain_entry_ctx *entry, struct pt_regs *regs)
 {
-	if (current_is_64bit())
+	if (!is_32bit_task())
 		perf_callchain_user_64(entry, regs);
 	else
 		perf_callchain_user_32(entry, regs);
