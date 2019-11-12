@@ -102,6 +102,20 @@ perf_callchain_kernel(struct perf_callchain_entry_ctx *entry, struct pt_regs *re
 	}
 }
 
+static inline int valid_user_sp(unsigned long sp, int is_64)
+{
+	unsigned long stack_top;
+
+	if (IS_ENABLED(CONFIG_PPC32))
+		stack_top = STACK_TOP;
+	else    /* STACK_TOP uses is_32bit_task() but we want is_64 */
+		stack_top = is_64 ? STACK_TOP_USER64 : STACK_TOP_USER32;
+
+	if (!sp || (sp & (is_64 ? 7 : 3)) || sp > stack_top - (is_64 ? 32 : 16))
+		return 0;
+	return 1;
+}
+
 #ifdef CONFIG_PPC64
 /*
  * On 64-bit we don't want to invoke hash_page on user addresses from
@@ -163,13 +177,6 @@ static int read_user_stack_64(unsigned long __user *ptr, unsigned long *ret)
 	pagefault_enable();
 
 	return read_user_stack_slow(ptr, ret, 8);
-}
-
-static inline int valid_user_sp(unsigned long sp, int is_64)
-{
-	if (!sp || (sp & 7) || sp > (is_64 ? TASK_SIZE : 0x100000000UL) - 32)
-		return 0;
-	return 1;
 }
 
 /*
@@ -292,13 +299,6 @@ static inline void perf_callchain_user_64(struct perf_callchain_entry_ctx *entry
 static inline int current_is_64bit(void)
 {
 	return 0;
-}
-
-static inline int valid_user_sp(unsigned long sp, int is_64)
-{
-	if (!sp || (sp & 7) || sp > TASK_SIZE - 32)
-		return 0;
-	return 1;
 }
 
 #define __SIGNAL_FRAMESIZE32	__SIGNAL_FRAMESIZE
