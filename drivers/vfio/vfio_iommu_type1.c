@@ -348,24 +348,20 @@ static int vaddr_get_pfn(struct mm_struct *mm, unsigned long vaddr,
 		flags |= FOLL_WRITE;
 
 	down_read(&mm->mmap_sem);
-	if (mm == current->mm) {
-		ret = get_user_pages(vaddr, 1, flags | FOLL_LONGTERM, page,
-				     vmas);
-	} else {
-		ret = get_user_pages_remote(NULL, mm, vaddr, 1, flags, page,
-					    vmas, NULL);
-		/*
-		 * The lifetime of a vaddr_get_pfn() page pin is
-		 * userspace-controlled. In the fs-dax case this could
-		 * lead to indefinite stalls in filesystem operations.
-		 * Disallow attempts to pin fs-dax pages via this
-		 * interface.
-		 */
-		if (ret > 0 && vma_is_fsdax(vmas[0])) {
-			ret = -EOPNOTSUPP;
-			put_page(page[0]);
-		}
+	ret = get_user_pages_remote(NULL, mm, vaddr, 1, flags | FOLL_LONGTERM,
+				    page, vmas, NULL);
+	/*
+	 * The lifetime of a vaddr_get_pfn() page pin is
+	 * userspace-controlled. In the fs-dax case this could
+	 * lead to indefinite stalls in filesystem operations.
+	 * Disallow attempts to pin fs-dax pages via this
+	 * interface.
+	 */
+	if (ret > 0 && vma_is_fsdax(vmas[0])) {
+		ret = -EOPNOTSUPP;
+		put_page(page[0]);
 	}
+
 	up_read(&mm->mmap_sem);
 
 	if (ret == 1) {
