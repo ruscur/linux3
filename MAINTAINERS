@@ -12772,6 +12772,8 @@ F:	arch/*/kernel/*/perf_event*.c
 F:	arch/*/kernel/*/*/perf_event*.c
 F:	arch/*/include/asm/perf_event.h
 F:	arch/*/kernel/perf_callchain.c
+F:	arch/*/perf/*
+F:	arch/*/perf/*/*
 F:	arch/*/events/*
 F:	arch/*/events/*/*
 F:	tools/perf/
