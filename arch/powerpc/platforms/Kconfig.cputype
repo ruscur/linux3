@@ -417,6 +417,14 @@ config PPC_MM_SLICES
 config PPC_HAVE_PMU_SUPPORT
        bool
 
+config PMU_SYSFS
+	bool
+	default y if !PERF_EVENTS
+	help
+	  This option enables PMU SPR sysfs file creation. Since PMU SPRs are
+	  intended to be used via "perf" interface, config option is enabled
+	  only when CONFIG_PERF_EVENTS is disabled.
+
 config PPC_PERF_CTRS
        def_bool y
        depends on PERF_EVENTS && PPC_HAVE_PMU_SUPPORT
