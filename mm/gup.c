@@ -51,6 +51,94 @@ static inline struct page *try_get_compound_head(struct page *page, int refs)
 	return head;
 }
 
+#ifdef CONFIG_DEBUG_VM
+static inline void __update_proc_vmstat(struct page *page,
+					enum node_stat_item item, int count)
+{
+	mod_node_page_state(page_pgdat(page), item, count);
+}
+#else
+static inline void __update_proc_vmstat(struct page *page,
+					enum node_stat_item item, int count)
+{
+}
+#endif
+
+/**
+ * user_page_ref_inc() - mark a page as being used by get_user_pages(FOLL_PIN).
+ *
+ * @page:	pointer to page to be marked
+ * @Return:	true for success, false for failure
+ */
+__must_check bool user_page_ref_inc(struct page *page)
+{
+	page = try_get_compound_head(page, GUP_PIN_COUNTING_BIAS);
+	if (!page)
+		return false;
+
+	__update_proc_vmstat(page, NR_FOLL_PIN_REQUESTED, 1);
+	return true;
+}
+
+#ifdef CONFIG_DEV_PAGEMAP_OPS
+static bool __put_devmap_managed_user_page(struct page *page)
+{
+	bool is_devmap = page_is_devmap_managed(page);
+
+	if (is_devmap) {
+		int count = page_ref_sub_return(page, GUP_PIN_COUNTING_BIAS);
+
+		__update_proc_vmstat(page, NR_FOLL_PIN_RETURNED, 1);
+		/*
+		 * devmap page refcounts are 1-based, rather than 0-based: if
+		 * refcount is 1, then the page is free and the refcount is
+		 * stable because nobody holds a reference on the page.
+		 */
+		if (count == 1)
+			free_devmap_managed_page(page);
+		else if (!count)
+			__put_page(page);
+	}
+
+	return is_devmap;
+}
+#else
+static bool __put_devmap_managed_user_page(struct page *page)
+{
+	return false;
+}
+#endif /* CONFIG_DEV_PAGEMAP_OPS */
+
+/**
+ * put_user_page() - release a dma-pinned page
+ * @page:            pointer to page to be released
+ *
+ * Pages that were pinned via either pin_user_pages*() or pin_longterm_pages*()
+ * must be released via either put_user_page(), or one of the put_user_pages*()
+ * routines. This is so that such pages can be separately tracked and uniquely
+ * handled. In particular, interactions with RDMA and filesystems need special
+ * handling.
+ */
+void put_user_page(struct page *page)
+{
+	page = compound_head(page);
+
+	/*
+	 * For devmap managed pages we need to catch refcount transition from
+	 * GUP_PIN_COUNTING_BIAS to 1, when refcount reach one it means the
+	 * page is free and we need to inform the device driver through
+	 * callback. See include/linux/memremap.h and HMM for details.
+	 */
+	if (__put_devmap_managed_user_page(page))
+		return;
+
+	if (page_ref_sub_and_test(page, GUP_PIN_COUNTING_BIAS))
+		__put_page(page);
+
+	__update_proc_vmstat(page, NR_FOLL_PIN_RETURNED, 1);
+}
+EXPORT_SYMBOL(put_user_page);
+
 /**
  * put_user_pages_dirty_lock() - release and optionally dirty gup-pinned pages
  * @pages:  array of pages to be maybe marked dirty, and definitely released.
@@ -237,10 +325,11 @@ retry:
 	}
 
 	page = vm_normal_page(vma, address, pte);
-	if (!page && pte_devmap(pte) && (flags & FOLL_GET)) {
+	if (!page && pte_devmap(pte) && (flags & (FOLL_GET | FOLL_PIN))) {
 		/*
-		 * Only return device mapping pages in the FOLL_GET case since
-		 * they are only valid while holding the pgmap reference.
+		 * Only return device mapping pages in the FOLL_GET or FOLL_PIN
+		 * case since they are only valid while holding the pgmap
+		 * reference.
 		 */
 		*pgmap = get_dev_pagemap(pte_pfn(pte), *pgmap);
 		if (*pgmap)
@@ -280,6 +369,11 @@ retry:
 
 	if (flags & FOLL_GET) {
 		if (unlikely(!try_get_page(page))) {
+			page = ERR_PTR(-ENOMEM);
+			goto out;
+		}
+	} else if (flags & FOLL_PIN) {
+		if (unlikely(!user_page_ref_inc(page))) {
 			page = ERR_PTR(-ENOMEM);
 			goto out;
 		}
@@ -544,8 +638,8 @@ static struct page *follow_page_mask(struct vm_area_struct *vma,
 	/* make this handle hugepd */
 	page = follow_huge_addr(mm, address, flags & FOLL_WRITE);
 	if (!IS_ERR(page)) {
-		BUG_ON(flags & FOLL_GET);
-		return page;
+		WARN_ON_ONCE(flags & (FOLL_GET | FOLL_PIN));
+		return NULL;
 	}
 
 	pgd = pgd_offset(mm, address);
@@ -1844,13 +1938,17 @@ static inline pte_t gup_get_pte(pte_t *ptep)
 #endif /* CONFIG_GUP_GET_PTE_LOW_HIGH */
 
 static void __maybe_unused undo_dev_pagemap(int *nr, int nr_start,
+					    unsigned int flags,
 					    struct page **pages)
 {
 	while ((*nr) - nr_start) {
 		struct page *page = pages[--(*nr)];
 
 		ClearPageReferenced(page);
-		put_page(page);
+		if (flags & FOLL_PIN)
+			put_user_page(page);
+		else
+			put_page(page);
 	}
 }
 
@@ -1883,7 +1981,7 @@ static int gup_pte_range(pmd_t pmd, unsigned long addr, unsigned long end,
 
 			pgmap = get_dev_pagemap(pte_pfn(pte), pgmap);
 			if (unlikely(!pgmap)) {
-				undo_dev_pagemap(nr, nr_start, pages);
+				undo_dev_pagemap(nr, nr_start, flags, pages);
 				goto pte_unmap;
 			}
 		} else if (pte_special(pte))
@@ -1892,9 +1990,15 @@ static int gup_pte_range(pmd_t pmd, unsigned long addr, unsigned long end,
 		VM_BUG_ON(!pfn_valid(pte_pfn(pte)));
 		page = pte_page(pte);
 
-		head = try_get_compound_head(page, 1);
-		if (!head)
-			goto pte_unmap;
+		if (flags & FOLL_PIN) {
+			head = page;
+			if (unlikely(!user_page_ref_inc(head)))
+				goto pte_unmap;
+		} else {
+			head = try_get_compound_head(page, 1);
+			if (!head)
+				goto pte_unmap;
+		}
 
 		if (unlikely(pte_val(pte) != pte_val(*ptep))) {
 			put_page(head);
@@ -1948,12 +2052,20 @@ static int __gup_device_huge(unsigned long pfn, unsigned long addr,
 
 		pgmap = get_dev_pagemap(pfn, pgmap);
 		if (unlikely(!pgmap)) {
-			undo_dev_pagemap(nr, nr_start, pages);
+			undo_dev_pagemap(nr, nr_start, flags, pages);
 			return 0;
 		}
 		SetPageReferenced(page);
 		pages[*nr] = page;
-		get_page(page);
+
+		if (flags & FOLL_PIN) {
+			if (unlikely(!user_page_ref_inc(page))) {
+				undo_dev_pagemap(nr, nr_start, flags, pages);
+				return 0;
+			}
+		} else
+			get_page(page);
+
 		(*nr)++;
 		pfn++;
 	} while (addr += PAGE_SIZE, addr != end);
@@ -1975,7 +2087,7 @@ static int __gup_device_huge_pmd(pmd_t orig, pmd_t *pmdp, unsigned long addr,
 		return 0;
 
 	if (unlikely(pmd_val(orig) != pmd_val(*pmdp))) {
-		undo_dev_pagemap(nr, nr_start, pages);
+		undo_dev_pagemap(nr, nr_start, flags, pages);
 		return 0;
 	}
 	return 1;
@@ -1993,7 +2105,7 @@ static int __gup_device_huge_pud(pud_t orig, pud_t *pudp, unsigned long addr,
 		return 0;
 
 	if (unlikely(pud_val(orig) != pud_val(*pudp))) {
-		undo_dev_pagemap(nr, nr_start, pages);
+		undo_dev_pagemap(nr, nr_start, flags, pages);
 		return 0;
 	}
 	return 1;
@@ -2077,9 +2189,16 @@ static int gup_hugepte(pte_t *ptep, unsigned long sz, unsigned long addr,
 	page = head + ((addr & (sz-1)) >> PAGE_SHIFT);
 	refs = __record_subpages(page, addr, end, pages, *nr);
 
-	head = try_get_compound_head(head, refs);
-	if (!head)
-		return 0;
+	if (flags & FOLL_PIN) {
+		head = page;
+		if (unlikely(!user_page_ref_inc(head)))
+			return 0;
+		head = page;
+	} else {
+		head = try_get_compound_head(head, refs);
+		if (!head)
+			return 0;
+	}
 
 	if (unlikely(pte_val(pte) != pte_val(*ptep))) {
 		put_compound_head(head, refs);
@@ -2136,9 +2255,15 @@ static int gup_huge_pmd(pmd_t orig, pmd_t *pmdp, unsigned long addr,
 	page = pmd_page(orig) + ((addr & ~PMD_MASK) >> PAGE_SHIFT);
 	refs = __record_subpages(page, addr, end, pages, *nr);
 
-	head = try_get_compound_head(pmd_page(orig), refs);
-	if (!head)
-		return 0;
+	if (flags & FOLL_PIN) {
+		head = page;
+		if (unlikely(!user_page_ref_inc(head)))
+			return 0;
+	} else {
+		head = try_get_compound_head(pmd_page(orig), refs);
+		if (!head)
+			return 0;
+	}
 
 	if (unlikely(pmd_val(orig) != pmd_val(*pmdp))) {
 		put_compound_head(head, refs);
@@ -2169,9 +2294,15 @@ static int gup_huge_pud(pud_t orig, pud_t *pudp, unsigned long addr,
 	page = pud_page(orig) + ((addr & ~PUD_MASK) >> PAGE_SHIFT);
 	refs = __record_subpages(page, addr, end, pages, *nr);
 
-	head = try_get_compound_head(pud_page(orig), refs);
-	if (!head)
-		return 0;
+	if (flags & FOLL_PIN) {
+		head = page;
+		if (unlikely(!user_page_ref_inc(head)))
+			return 0;
+	} else {
+		head = try_get_compound_head(pud_page(orig), refs);
+		if (!head)
+			return 0;
+	}
 
 	if (unlikely(pud_val(orig) != pud_val(*pudp))) {
 		put_compound_head(head, refs);
@@ -2197,9 +2328,15 @@ static int gup_huge_pgd(pgd_t orig, pgd_t *pgdp, unsigned long addr,
 	page = pgd_page(orig) + ((addr & ~PGDIR_MASK) >> PAGE_SHIFT);
 	refs = __record_subpages(page, addr, end, pages, *nr);
 
-	head = try_get_compound_head(pgd_page(orig), refs);
-	if (!head)
-		return 0;
+	if (flags & FOLL_PIN) {
+		head = page;
+		if (unlikely(!user_page_ref_inc(head)))
+			return 0;
+	} else {
+		head = try_get_compound_head(pgd_page(orig), refs);
+		if (!head)
+			return 0;
+	}
 
 	if (unlikely(pgd_val(orig) != pgd_val(*pgdp))) {
 		put_compound_head(head, refs);
