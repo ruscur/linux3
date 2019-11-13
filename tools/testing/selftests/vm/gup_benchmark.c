@@ -18,6 +18,15 @@
 #define GUP_LONGTERM_BENCHMARK	_IOWR('g', 2, struct gup_benchmark)
 #define GUP_BENCHMARK		_IOWR('g', 3, struct gup_benchmark)
 
+/*
+ * Similar to above, but use FOLL_PIN instead of FOLL_GET. This is done
+ * by calling pin_user_pages_fast(), pin_longterm_pages(), and pin_user_pages(),
+ * respectively.
+ */
+#define PIN_FAST_BENCHMARK	_IOWR('g', 4, struct gup_benchmark)
+#define PIN_LONGTERM_BENCHMARK	_IOWR('g', 5, struct gup_benchmark)
+#define PIN_BENCHMARK		_IOWR('g', 6, struct gup_benchmark)
+
 /* Just the flags we need, copied from mm.h: */
 #define FOLL_WRITE	0x01	/* check pte is writable */
 
@@ -40,8 +49,17 @@ int main(int argc, char **argv)
 	char *file = "/dev/zero";
 	char *p;
 
-	while ((opt = getopt(argc, argv, "m:r:n:f:tTLUwSH")) != -1) {
+	while ((opt = getopt(argc, argv, "m:r:n:f:abctTLUuwSH")) != -1) {
 		switch (opt) {
+		case 'a':
+			cmd = PIN_FAST_BENCHMARK;
+			break;
+		case 'b':
+			cmd = PIN_LONGTERM_BENCHMARK;
+			break;
+		case 'c':
+			cmd = PIN_BENCHMARK;
+			break;
 		case 'm':
 			size = atoi(optarg) * MB;
 			break;
@@ -62,6 +80,9 @@ int main(int argc, char **argv)
 			break;
 		case 'U':
 			cmd = GUP_BENCHMARK;
+			break;
+		case 'u':
+			cmd = GUP_FAST_BENCHMARK;
 			break;
 		case 'w':
 			write = 1;
