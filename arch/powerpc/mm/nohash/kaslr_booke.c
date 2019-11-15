@@ -377,8 +377,10 @@ notrace void __init kaslr_early_init(void *dt_ptr, phys_addr_t size)
 #ifdef CONFIG_PPC64
 	unsigned int *__run_at_load = (unsigned int *)(KERNELBASE + 0x5c);
 
-	if (*__run_at_load == 1)
+	if (*__run_at_load == 1) {
+		kaslr_late_init();
 		return;
+	}
 
 	*__run_at_load = 1;
 
