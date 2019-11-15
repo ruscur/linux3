@@ -265,14 +265,14 @@ static unsigned long __init kaslr_legal_offset(void *dt_ptr, unsigned long rando
 {
 	unsigned long koffset = 0;
 	unsigned long start;
-	unsigned long index;
 	unsigned long offset;
 
+#ifdef CONFIG_PPC32
 	/*
 	 * Decide which 64M we want to start
 	 * Only use the low 8 bits of the random seed
 	 */
-	index = random & 0xFF;
+	unsigned long index = random & 0xFF;
 	index %= regions.linear_sz / SZ_64M;
 
 	/* Decide offset inside 64M */
@@ -287,6 +287,15 @@ static unsigned long __init kaslr_legal_offset(void *dt_ptr, unsigned long rando
 			break;
 		index--;
 	}
+#else
+	/* Decide kernel offset inside 1G */
+	offset = random % (SZ_1G - regions.kernel_size);
+	offset = round_down(offset, SZ_64K);
+
+	start = memstart_addr;
+	offset = memstart_addr + offset;
+	koffset = get_usable_address(dt_ptr, start, offset);
+#endif
 
 	if (koffset != 0)
 		koffset -= memstart_addr;
@@ -325,6 +334,7 @@ static unsigned long __init kaslr_choose_location(void *dt_ptr, phys_addr_t size
 	else
 		pr_warn("KASLR: No safe seed for randomizing the kernel base.\n");
 
+#ifdef CONFIG_PPC32
 	ram = min_t(phys_addr_t, __max_low_memory, size);
 	ram = map_mem_in_cams(ram, CONFIG_LOWMEM_CAM_NUM, true);
 	linear_sz = min_t(unsigned long, ram, SZ_512M);
@@ -332,6 +342,7 @@ static unsigned long __init kaslr_choose_location(void *dt_ptr, phys_addr_t size
 	/* If the linear size is smaller than 64M, do not randmize */
 	if (linear_sz < SZ_64M)
 		return 0;
+#endif
 
 	/* check for a reserved-memory node and record its cell sizes */
 	regions.reserved_mem = fdt_path_offset(dt_ptr, "/reserved-memory");
@@ -363,6 +374,18 @@ notrace void __init kaslr_early_init(void *dt_ptr, phys_addr_t size)
 	unsigned long offset;
 	unsigned long kernel_sz;
 
+#ifdef CONFIG_PPC64
+	unsigned int *__run_at_load = (unsigned int *)(KERNELBASE + 0x5c);
+
+	if (*__run_at_load == 1)
+		return;
+
+	*__run_at_load = 1;
+
+	/* Setup flat device-tree pointer */
+	initial_boot_params = dt_ptr;
+#endif
+
 	kernel_sz = (unsigned long)_end - (unsigned long)_stext;
 
 	offset = kaslr_choose_location(dt_ptr, size, kernel_sz);
@@ -372,6 +395,7 @@ notrace void __init kaslr_early_init(void *dt_ptr, phys_addr_t size)
 	kernstart_virt_addr += offset;
 	kernstart_addr += offset;
 
+#ifdef CONFIG_PPC32
 	is_second_reloc = 1;
 
 	if (offset >= SZ_64M) {
@@ -381,6 +405,7 @@ notrace void __init kaslr_early_init(void *dt_ptr, phys_addr_t size)
 		/* Create kernel map to relocate in */
 		create_kaslr_tlb_entry(1, tlb_virt, tlb_phys);
 	}
+#endif
 
 	/* Copy the kernel to it's new location and run */
 	memcpy((void *)kernstart_virt_addr, (void *)_stext, kernel_sz);
