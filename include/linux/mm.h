@@ -1080,18 +1080,18 @@ static inline void put_page(struct page *page)
  * made against the page. ("gup-pinned" is another term for the latter).
  *
  * With this scheme, get_user_pages() becomes special: such pages are marked
- * as distinct from normal pages. As such, the put_user_page() call (and its
+ * as distinct from normal pages. As such, the unpin_user_page() call (and its
  * variants) must be used in order to release gup-pinned pages.
  *
  * Choice of value:
  *
  * By making GUP_PIN_COUNTING_BIAS a power of two, debugging of page reference
- * counts with respect to get_user_pages() and put_user_page() becomes simpler,
- * due to the fact that adding an even power of two to the page refcount has
- * the effect of using only the upper N bits, for the code that counts up using
- * the bias value. This means that the lower bits are left for the exclusive
- * use of the original code that increments and decrements by one (or at least,
- * by much smaller values than the bias value).
+ * counts with respect to get_user_pages() and unpin_user_page() becomes
+ * simpler, due to the fact that adding an even power of two to the page
+ * refcount has the effect of using only the upper N bits, for the code that
+ * counts up using the bias value. This means that the lower bits are left for
+ * the exclusive use of the original code that increments and decrements by one
+ * (or at least, by much smaller values than the bias value).
  *
  * Of course, once the lower bits overflow into the upper bits (and this is
  * OK, because subtraction recovers the original values), then visual inspection
@@ -1106,10 +1106,10 @@ static inline void put_page(struct page *page)
  */
 #define GUP_PIN_COUNTING_BIAS (1UL << 10)
 
-void put_user_page(struct page *page);
-void put_user_pages_dirty_lock(struct page **pages, unsigned long npages,
-			       bool make_dirty);
-void put_user_pages(struct page **pages, unsigned long npages);
+void unpin_user_page(struct page *page);
+void unpin_user_pages_dirty_lock(struct page **pages, unsigned long npages,
+				 bool make_dirty);
+void unpin_user_pages(struct page **pages, unsigned long npages);
 
 /**
  * page_dma_pinned() - report if a page is pinned for DMA.
@@ -2660,7 +2660,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 #define FOLL_ANON	0x8000	/* don't do file mappings */
 #define FOLL_LONGTERM	0x10000	/* mapping lifetime is indefinite: see below */
 #define FOLL_SPLIT_PMD	0x20000	/* split huge pmd before returning */
-#define FOLL_PIN	0x40000	/* pages must be released via put_user_page() */
+#define FOLL_PIN	0x40000	/* pages must be released via unpin_user_page */
 
 /*
  * FOLL_PIN and FOLL_LONGTERM may be used in various combinations with each
@@ -2695,7 +2695,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
  * Direct IO). This lets the filesystem know that some non-file-system entity is
  * potentially changing the pages' data. In contrast to FOLL_GET (whose pages
  * are released via put_page()), FOLL_PIN pages must be released, ultimately, by
- * a call to put_user_page().
+ * a call to unpin_user_page().
  *
  * FOLL_PIN is similar to FOLL_GET: both of these pin pages. They use different
  * and separate refcounting mechanisms, however, and that means that each has
@@ -2703,7 +2703,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
  *
  *     FOLL_GET: get_user_pages*() to acquire, and put_page() to release.
  *
- *     FOLL_PIN: pin_user_pages*() to acquire, and put_user_pages to release.
+ *     FOLL_PIN: pin_user_pages*() to acquire, and unpin_user_pages to release.
  *
  * FOLL_PIN and FOLL_GET are mutually exclusive for a given function call.
  * (The underlying pages may experience both FOLL_GET-based and FOLL_PIN-based
@@ -2713,7 +2713,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
  * FOLL_PIN should be set internally by the pin_user_pages*() APIs, never
  * directly by the caller. That's in order to help avoid mismatches when
  * releasing pages: get_user_pages*() pages must be released via put_page(),
- * while pin_user_pages*() pages must be released via put_user_page().
+ * while pin_user_pages*() pages must be released via unpin_user_page().
  *
  * Please see Documentation/vm/pin_user_pages.rst for more information.
  */
