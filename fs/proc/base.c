@@ -1626,8 +1626,9 @@ static const char *proc_pid_get_link(struct dentry *dentry,
 	if (error)
 		goto out;
 
-	nd_jump_link(&path);
-	return NULL;
+	error = nd_jump_link(&path);
+	if (error)
+		path_put(&path);
 out:
 	return ERR_PTR(error);
 }
