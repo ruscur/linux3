@@ -868,8 +868,11 @@ static int nd_jump_root(struct nameidata *nd)
 int nd_jump_link(struct path *path)
 {
 	struct nameidata *nd = current->nameidata;
-	path_put(&nd->path);
 
+	if (unlikely(nd->flags & LOOKUP_NO_MAGICLINKS))
+		return -ELOOP;
+
+	path_put(&nd->path);
 	nd->path = *path;
 	nd->inode = nd->path.dentry->d_inode;
 	nd->flags |= LOOKUP_JUMPED;
