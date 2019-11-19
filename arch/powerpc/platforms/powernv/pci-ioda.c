@@ -1341,7 +1341,6 @@ static int pnv_pci_vf_assign_m64(struct pci_dev *pdev, u16 num_vfs)
 	struct resource       *res;
 	int                    i, j;
 	int64_t                rc;
-	int                    total_vfs;
 	resource_size_t        size, start;
 	int                    pe_num;
 	int                    m64_bars;
@@ -1350,7 +1349,6 @@ static int pnv_pci_vf_assign_m64(struct pci_dev *pdev, u16 num_vfs)
 	hose = pci_bus_to_host(bus);
 	phb = hose->private_data;
 	pdn = pci_get_pdn(pdev);
-	total_vfs = pci_sriov_get_totalvfs(pdev);
 
 	if (pdn->m64_single_mode)
 		m64_bars = num_vfs;
