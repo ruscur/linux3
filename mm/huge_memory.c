@@ -945,6 +945,11 @@ struct page *follow_devmap_pmd(struct vm_area_struct *vma, unsigned long addr,
 	 */
 	WARN_ONCE(flags & FOLL_COW, "mm: In follow_devmap_pmd with FOLL_COW set");
 
+	/* FOLL_GET and FOLL_PIN are mutually exclusive. */
+	if (WARN_ON_ONCE((flags & (FOLL_PIN | FOLL_GET)) ==
+			 (FOLL_PIN | FOLL_GET)))
+		return NULL;
+
 	if (flags & FOLL_WRITE && !pmd_write(*pmd))
 		return NULL;
 
@@ -960,7 +965,7 @@ struct page *follow_devmap_pmd(struct vm_area_struct *vma, unsigned long addr,
 	 * device mapped pages can only be returned if the
 	 * caller will manage the page reference count.
 	 */
-	if (!(flags & FOLL_GET))
+	if (!(flags & (FOLL_GET | FOLL_PIN)))
 		return ERR_PTR(-EEXIST);
 
 	pfn += (addr & ~PMD_MASK) >> PAGE_SHIFT;
@@ -968,7 +973,18 @@ struct page *follow_devmap_pmd(struct vm_area_struct *vma, unsigned long addr,
 	if (!*pgmap)
 		return ERR_PTR(-EFAULT);
 	page = pfn_to_page(pfn);
-	get_page(page);
+
+	if (flags & FOLL_GET)
+		get_page(page);
+	else if (flags & FOLL_PIN) {
+		/*
+		 * try_pin_page() is not actually expected to fail here because
+		 * we hold the pmd lock so no one can unmap the pmd and free the
+		 * page that it points to.
+		 */
+		if (unlikely(!try_pin_page(page)))
+			page = ERR_PTR(-EFAULT);
+	}
 
 	return page;
 }
@@ -1088,6 +1104,11 @@ struct page *follow_devmap_pud(struct vm_area_struct *vma, unsigned long addr,
 	if (flags & FOLL_WRITE && !pud_write(*pud))
 		return NULL;
 
+	/* FOLL_GET and FOLL_PIN are mutually exclusive. */
+	if (WARN_ON_ONCE((flags & (FOLL_PIN | FOLL_GET)) ==
+			 (FOLL_PIN | FOLL_GET)))
+		return NULL;
+
 	if (pud_present(*pud) && pud_devmap(*pud))
 		/* pass */;
 	else
@@ -1099,8 +1120,10 @@ struct page *follow_devmap_pud(struct vm_area_struct *vma, unsigned long addr,
 	/*
 	 * device mapped pages can only be returned if the
 	 * caller will manage the page reference count.
+	 *
+	 * At least one of FOLL_GET | FOLL_PIN must be set, so assert that here:
 	 */
-	if (!(flags & FOLL_GET))
+	if (!(flags & (FOLL_GET | FOLL_PIN)))
 		return ERR_PTR(-EEXIST);
 
 	pfn += (addr & ~PUD_MASK) >> PAGE_SHIFT;
@@ -1108,7 +1131,18 @@ struct page *follow_devmap_pud(struct vm_area_struct *vma, unsigned long addr,
 	if (!*pgmap)
 		return ERR_PTR(-EFAULT);
 	page = pfn_to_page(pfn);
-	get_page(page);
+
+	if (flags & FOLL_GET)
+		get_page(page);
+	else if (flags & FOLL_PIN) {
+		/*
+		 * try_pin_page() is not actually expected to fail here because
+		 * we hold the pud lock so no one can unmap the pud and free the
+		 * page that it points to.
+		 */
+		if (unlikely(!try_pin_page(page)))
+			page = ERR_PTR(-EFAULT);
+	}
 
 	return page;
 }
@@ -1522,8 +1556,20 @@ struct page *follow_trans_huge_pmd(struct vm_area_struct *vma,
 skip_mlock:
 	page += (addr & ~HPAGE_PMD_MASK) >> PAGE_SHIFT;
 	VM_BUG_ON_PAGE(!PageCompound(page) && !is_zone_device_page(page), page);
+
 	if (flags & FOLL_GET)
 		get_page(page);
+	else if (flags & FOLL_PIN) {
+		/*
+		 * try_pin_page() is not actually expected to fail here because
+		 * we hold the pmd lock so no one can unmap the pmd and free the
+		 * page that it points to.
+		 */
+		if (unlikely(!try_pin_page(page))) {
+			WARN_ON_ONCE(1);
+			page = NULL;
+		}
+	}
 
 out:
 	return page;

@@ -1167,6 +1167,8 @@ const char * const vmstat_text[] = {
 	"nr_dirtied",
 	"nr_written",
 	"nr_kernel_misc_reclaimable",
+	"nr_foll_pin_requested",
+	"nr_foll_pin_returned",
 
 	/* enum writeback_stat_item counters */
 	"nr_dirty_threshold",
