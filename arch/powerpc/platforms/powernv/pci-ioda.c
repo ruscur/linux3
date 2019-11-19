@@ -1461,12 +1461,10 @@ static void pnv_ioda_release_vf_PE(struct pci_dev *pdev)
 	struct pci_controller *hose;
 	struct pnv_phb        *phb;
 	struct pnv_ioda_pe    *pe, *pe_n;
-	struct pci_dn         *pdn;
 
 	bus = pdev->bus;
 	hose = pci_bus_to_host(bus);
 	phb = hose->private_data;
-	pdn = pci_get_pdn(pdev);
 
 	if (!pdev->is_physfn)
 		return;
