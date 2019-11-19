@@ -168,7 +168,7 @@ good_exit:
 
 free_exit:
 	/* free the references taken */
-	put_user_pages(mem->hpages, pinned);
+	unpin_user_pages(mem->hpages, pinned);
 
 	vfree(mem->hpas);
 	kfree(mem);
@@ -211,8 +211,8 @@ static void mm_iommu_unpin(struct mm_iommu_table_group_mem_t *mem)
 		if (!page)
 			continue;
 
-		put_user_pages_dirty_lock(&mem->hpages[i], 1,
-					  MM_IOMMU_TABLE_GROUP_PAGE_DIRTY);
+		unpin_user_pages_dirty_lock(&mem->hpages[i], 1,
+					    MM_IOMMU_TABLE_GROUP_PAGE_DIRTY);
 
 		mem->hpas[i] = 0;
 	}
