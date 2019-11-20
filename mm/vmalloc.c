@@ -3434,11 +3434,14 @@ retry:
 
 		setup_vmalloc_vm_locked(vms[area], vas[area], VM_ALLOC,
 				 pcpu_get_vm_areas);
+	}
+	spin_unlock(&vmap_area_lock);
 
+	/* populate the shadow space outside of the lock */
+	for (area = 0; area < nr_vms; area++) {
 		/* assume success here */
 		kasan_populate_vmalloc(sizes[area], vms[area]);
 	}
-	spin_unlock(&vmap_area_lock);
 
 	kfree(vas);
 	return vms;

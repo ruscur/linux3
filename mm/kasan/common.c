@@ -794,6 +794,8 @@ int kasan_populate_vmalloc(unsigned long requested_size, struct vm_struct *area)
 	if (ret)
 		return ret;
 
+	flush_cache_vmap(shadow_start, shadow_end);
+
 	kasan_unpoison_shadow(area->addr, requested_size);
 
 	area->flags |= VM_KASAN;
