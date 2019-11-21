@@ -35,7 +35,7 @@ static void put_back_pages(int cmd, struct page **pages, unsigned long nr_pages)
 
 	case PIN_FAST_BENCHMARK:
 	case PIN_BENCHMARK:
-		put_user_pages(pages, nr_pages);
+		unpin_user_pages(pages, nr_pages);
 		break;
 	}
 }
