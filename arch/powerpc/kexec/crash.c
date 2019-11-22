@@ -24,6 +24,7 @@
 #include <asm/smp.h>
 #include <asm/setjmp.h>
 #include <asm/debug.h>
+#include <asm/cacheflush.h>
 
 /*
  * The primary CPU waits a while for all secondary CPUs to enter. This is to
@@ -75,8 +76,21 @@ void crash_ipi_callback(struct pt_regs *regs)
 
 	hard_irq_disable();
 	if (!cpumask_test_cpu(cpu, &cpus_state_saved)) {
+		char *buf;
+
 		crash_save_cpu(regs, cpu);
 		cpumask_set_cpu(cpu, &cpus_state_saved);
+
+		/*
+		 * Flush the crash note region data, otherwise the
+		 * data gets left in the CPU cache and then
+		 * invalidated, so the crashing cpu will never see it
+		 * in the new kernel.
+		 */
+		buf = (char *) per_cpu_ptr(crash_notes, cpu);
+		if (buf)
+			flush_dcache_range((unsigned long) buf,
+				(unsigned long) buf + sizeof(note_buf_t));
 	}
 
 	atomic_inc(&cpus_in_crash);
