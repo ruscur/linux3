@@ -1026,6 +1026,7 @@ struct ibmvnic_adapter {
 	int init_done_rc;
 
 	struct completion fw_done;
+	struct mutex fw_lock;
 	int fw_done_rc;
 
 	struct completion reset_done;
