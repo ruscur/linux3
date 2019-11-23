@@ -14,7 +14,7 @@
 #include <asm/debugfs.h>
 #include <asm/security_features.h>
 #include <asm/setup.h>
-
+#include <linux/prctl.h>
 
 u64 powerpc_security_features __read_mostly = SEC_FTR_DEFAULT;
 
@@ -342,6 +342,29 @@ ssize_t cpu_show_spec_store_bypass(struct device *dev, struct device_attribute *
 		return sprintf(buf, "Not affected\n");
 
 	return sprintf(buf, "Vulnerable\n");
+}
+
+static int ssb_prctl_get(struct task_struct *task)
+{
+	if (stf_barrier) {
+		if (stf_enabled_flush_types == STF_BARRIER_NONE)
+			return PR_SPEC_NOT_AFFECTED;
+		else
+			return PR_SPEC_DISABLE;
+	} else
+		return PR_SPEC_DISABLE_NOEXEC;
+
+	return -EINVAL;
+}
+
+int arch_prctl_spec_ctrl_get(struct task_struct *task, unsigned long which)
+{
+	switch (which) {
+	case PR_SPEC_STORE_BYPASS:
+		return ssb_prctl_get(task);
+	default:
+		return -ENODEV;
+	}
 }
 
 #ifdef CONFIG_DEBUG_FS
