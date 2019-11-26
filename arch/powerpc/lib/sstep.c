@@ -188,6 +188,43 @@ static nokprobe_inline unsigned long xform_ea(unsigned int instr,
 }
 
 /*
+ * Calculate effective address for a MLS:D-form / 8LS:D-form prefixed instruction
+ */
+static nokprobe_inline unsigned long mlsd_8lsd_ea(unsigned int instr,
+						  unsigned int sufx,
+						  const struct pt_regs *regs)
+{
+	int ra, prefix_r;
+	unsigned int  dd;
+	unsigned long ea, d0, d1, d;
+
+	prefix_r = instr & (1ul << 20);
+	ra = (sufx >> 16) & 0x1f;
+
+	d0 = instr & 0x3ffff;
+	d1 = sufx & 0xffff;
+	d = (d0 << 16) | d1;
+
+	/*
+	 * sign extend a 34 bit number
+	 */
+	dd = (unsigned int) (d >> 2);
+	ea = (signed int) dd;
+	ea = (ea << 2) | (d & 0x3);
+
+	if (!prefix_r && ra)
+		ea += regs->gpr[ra];
+	else if (!prefix_r && !ra)
+		; /* Leave ea as is */
+	else if (prefix_r && !ra)
+		ea += regs->nip;
+	else if (prefix_r && ra)
+		; /* Invalid form. Should already be checked for by caller! */
+
+	return ea;
+}
+
+/*
  * Return the largest power of 2, not greater than sizeof(unsigned long),
  * such that x is a multiple of it.
  */
@@ -1166,6 +1203,7 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 		  unsigned int instr, unsigned int sufx)
 {
 	unsigned int opcode, ra, rb, rc, rd, spr, u;
+	unsigned int sufxopcode, prefixtype, prefix_r;
 	unsigned long int imm;
 	unsigned long int val, val2;
 	unsigned int mb, me, sh;
@@ -2650,6 +2688,78 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 		break;
 #endif /* __powerpc64__ */
 
+	}
+
+/*
+ * Prefixed instructions
+ */
+	switch (opcode) {
+	case 1:
+		prefix_r = instr & (1ul << 20);
+		ra = (sufx >> 16) & 0x1f;
+		op->update_reg = ra;
+		rd = (sufx >> 21) & 0x1f;
+		op->reg = rd;
+		op->val = regs->gpr[rd];
+
+		sufxopcode = sufx >> 26;
+		prefixtype = (instr >> 24) & 0x3;
+		switch (prefixtype) {
+		case 0: /* Type 00  Eight-Byte Load/Store */
+			if (prefix_r && ra)
+				break;
+			op->ea = mlsd_8lsd_ea(instr, sufx, regs);
+			switch (sufxopcode) {
+			case 41:	/* plwa */
+				op->type = MKOP(LOAD, PREFIXED | SIGNEXT, 4);
+				break;
+			case 56:        /* plq */
+				op->type = MKOP(LOAD, PREFIXED, 16);
+				break;
+			case 57:	/* pld */
+				op->type = MKOP(LOAD, PREFIXED | SIGNEXT, 8);
+				break;
+			case 60:        /* stq */
+				op->type = MKOP(STORE, PREFIXED, 16);
+				break;
+			case 61:	/* pstd */
+				op->type = MKOP(STORE, PREFIXED | SIGNEXT, 8);
+				break;
+			}
+			break;
+		case 1: /* Type 01 Modified Register-to-Register */
+			break;
+		case 2: /* Type 10 Modified Load/Store */
+			if (prefix_r && ra)
+				break;
+			op->ea = mlsd_8lsd_ea(instr, sufx, regs);
+			switch (sufxopcode) {
+			case 32:	/* plwz */
+				op->type = MKOP(LOAD, PREFIXED, 4);
+				break;
+			case 34:	/* plbz */
+				op->type = MKOP(LOAD, PREFIXED, 1);
+				break;
+			case 36:	/* pstw */
+				op->type = MKOP(STORE, PREFIXED, 4);
+				break;
+			case 38:	/* pstb */
+				op->type = MKOP(STORE, PREFIXED, 1);
+				break;
+			case 40:	/* plhz */
+				op->type = MKOP(LOAD, PREFIXED, 2);
+				break;
+			case 42:	/* plha */
+				op->type = MKOP(LOAD, PREFIXED | SIGNEXT, 2);
+				break;
+			case 44:	/* psth */
+				op->type = MKOP(STORE, PREFIXED, 2);
+				break;
+			}
+			break;
+		case 3: /* Type 11 Modified Register-to-Register */
+			break;
+		}
 	}
 
 #ifdef CONFIG_VSX
