@@ -2744,10 +2744,8 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 	/* Now it's all set up, let userspace reach it */
 	kvm_get_kvm(kvm);
 	r = create_vcpu_fd(vcpu);
-	if (r < 0) {
-		kvm_put_kvm(kvm);
+	if (r < 0)
 		goto unlock_vcpu_destroy;
-	}
 
 	kvm->vcpus[atomic_read(&kvm->online_vcpus)] = vcpu;
 
@@ -2771,6 +2769,8 @@ vcpu_decrement:
 	mutex_lock(&kvm->lock);
 	kvm->created_vcpus--;
 	mutex_unlock(&kvm->lock);
+	if (r < 0)
+		kvm_put_kvm(kvm);
 	return r;
 }
 
@@ -3183,10 +3183,10 @@ static int kvm_ioctl_create_device(struct kvm *kvm,
 	kvm_get_kvm(kvm);
 	ret = anon_inode_getfd(ops->name, &kvm_device_fops, dev, O_RDWR | O_CLOEXEC);
 	if (ret < 0) {
-		kvm_put_kvm(kvm);
 		mutex_lock(&kvm->lock);
 		list_del(&dev->vm_node);
 		mutex_unlock(&kvm->lock);
+		kvm_put_kvm(kvm);
 		ops->destroy(dev);
 		return ret;
 	}
