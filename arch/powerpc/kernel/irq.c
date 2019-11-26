@@ -678,6 +678,7 @@ void *mcheckirq_ctx[NR_CPUS] __read_mostly;
 
 void *softirq_ctx[NR_CPUS] __read_mostly;
 void *hardirq_ctx[NR_CPUS] __read_mostly;
+void *stackovf_ctx[NR_CPUS] __read_mostly;
 
 void do_softirq_own_stack(void)
 {

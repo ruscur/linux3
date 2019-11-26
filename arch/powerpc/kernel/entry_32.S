@@ -184,9 +184,11 @@ transfer_to_handler:
          */
 	kuap_save_and_lock r11, r12, r9, r2, r0
 	addi	r2, r12, -THREAD
+#ifndef CONFIG_VMAP_STACK
 	lwz	r9,KSP_LIMIT(r12)
 	cmplw	r1,r9			/* if r1 <= ksp_limit */
 	ble-	stack_ovf		/* then the kernel stack overflowed */
+#endif
 5:
 #if defined(CONFIG_PPC_BOOK3S_32) || defined(CONFIG_E500)
 	lwz	r12,TI_LOCAL_FLAGS(r2)
@@ -298,6 +300,28 @@ reenable_mmu:
  * On kernel stack overflow, load up an initial stack pointer
  * and call StackOverflow(regs), which should not return.
  */
+#ifdef CONFIG_VMAP_STACK
+_GLOBAL(stack_ovf)
+	li	r11, 0
+#ifdef CONFIG_SMP
+	mfspr	r11, SPRN_SPRG_THREAD
+	tovirt(r11, r11)
+	lwz	r11, TASK_CPU - THREAD(r11)
+	slwi	r11, r11, 3
+#endif
+	addis	r11, r11, stackovf_ctx@ha
+	addi	r11, r11, stackovf_ctx@l
+	lwz	r11, 0(r11)
+	cmpwi	cr1, r11, 0
+	addi	r11, r11, THREAD_SIZE - INT_FRAME_SIZE
+	bne	cr1, 1f
+	lis	r11, init_thread_union + THREAD_SIZE - INT_FRAME_SIZE@ha
+	addi	r11, r11, init_thread_union + THREAD_SIZE - INT_FRAME_SIZE@l
+1:	EXCEPTION_PROLOG_2
+	SAVE_NVGPRS(r11)
+	addi	r3, r1, STACK_FRAME_OVERHEAD
+	EXC_XFER_STD(0, StackOverflow)
+#else
 stack_ovf:
 	/* sometimes we use a statically-allocated stack, which is OK. */
 	lis	r12,_end@h
@@ -319,6 +343,7 @@ stack_ovf:
 	mtspr	SPRN_SRR1,r10
 	SYNC
 	RFI
+#endif
 
 #ifdef CONFIG_TRACE_IRQFLAGS
 trace_syscall_entry_irq_off:

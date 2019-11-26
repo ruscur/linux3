@@ -58,6 +58,10 @@
 	tophys(r11,r11)
 #endif
 1:
+#ifdef CONFIG_VMAP_STACK
+	mtcrf	0x7f, r11
+	bt	32 - THREAD_ALIGN_SHIFT, stack_ovf_trampoline
+#endif
 .endm
 
 .macro EXCEPTION_PROLOG_2 ext

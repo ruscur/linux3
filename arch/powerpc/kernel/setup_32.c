@@ -158,6 +158,7 @@ void __init irqstack_early_init(void)
 	for_each_possible_cpu(i) {
 		softirq_ctx[i] = alloc_stack();
 		hardirq_ctx[i] = alloc_stack();
+		stackovf_ctx[i] = alloc_stack();
 	}
 }
 

@@ -55,6 +55,7 @@ extern void *mcheckirq_ctx[NR_CPUS];
  */
 extern void *hardirq_ctx[NR_CPUS];
 extern void *softirq_ctx[NR_CPUS];
+extern void *stackovf_ctx[NR_CPUS];
 
 void call_do_softirq(void *sp);
 void call_do_irq(struct pt_regs *regs, void *sp);

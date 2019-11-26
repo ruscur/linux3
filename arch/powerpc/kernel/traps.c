@@ -1630,11 +1630,20 @@ bail:
 
 void StackOverflow(struct pt_regs *regs)
 {
+	enum ctx_state prev_state = exception_enter();
+
 	pr_crit("Kernel stack overflow in process %s[%d], r1=%lx\n",
 		current->comm, task_pid_nr(current), regs->gpr[1]);
-	debugger(regs);
-	show_regs(regs);
-	panic("kernel stack overflow");
+
+	if (IS_ENABLED(CONFIG_VMAP_STACK)) {
+		die("Kernel stack overflow", regs, SIGSEGV);
+	} else {
+		debugger(regs);
+		show_regs(regs);
+		panic("kernel stack overflow");
+	}
+
+	exception_exit(prev_state);
 }
 
 void kernel_fp_unavailable_exception(struct pt_regs *regs)
