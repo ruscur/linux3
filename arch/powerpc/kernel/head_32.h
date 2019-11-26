@@ -10,31 +10,57 @@
  * We assume sprg3 has the physical address of the current
  * task's thread_struct.
  */
-.macro EXCEPTION_PROLOG
-	EXCEPTION_PROLOG_0
+.macro EXCEPTION_PROLOG ext
+	EXCEPTION_PROLOG_0	\ext
 	EXCEPTION_PROLOG_1
-	EXCEPTION_PROLOG_2
+	EXCEPTION_PROLOG_2	\ext
 .endm
 
-.macro EXCEPTION_PROLOG_0
+.macro EXCEPTION_PROLOG_0 ext
 	mtspr	SPRN_SPRG_SCRATCH0,r10
 	mtspr	SPRN_SPRG_SCRATCH1,r11
+#ifdef CONFIG_VMAP_STACK
+	mfspr	r10, SPRN_SPRG_THREAD
+	.ifnb	\ext
+	mfspr	r11, SPRN_DAR
+	stw	r11, DAR(r10)
+	mfspr	r11, SPRN_DSISR
+	stw	r11, DSISR(r10)
+	.endif
+	mfspr	r11, SPRN_SRR0
+	stw	r11, SRR0(r10)
+#endif
 	mfspr	r11, SPRN_SRR1		/* check whether user or kernel */
+#ifdef CONFIG_VMAP_STACK
+	stw	r11, SRR1(r10)
+#endif
 	mfcr	r10
 	andi.	r11, r11, MSR_PR
 .endm
 
 .macro EXCEPTION_PROLOG_1
+#ifdef CONFIG_VMAP_STACK
+	li	r11, MSR_KERNEL & ~(MSR_IR | MSR_RI) /* can take DTLB miss */
+	mtmsr	r11
+	subi	r11, r1, INT_FRAME_SIZE		/* use r1 if kernel */
+#else
 	tophys(r11,r1)			/* use tophys(r1) if kernel */
+	subi	r11, r11, INT_FRAME_SIZE	/* alloc exc. frame */
+#endif
 	beq	1f
 	mfspr	r11,SPRN_SPRG_THREAD
+#ifdef CONFIG_VMAP_STACK
+	tovirt(r11, r11)
+#endif
 	lwz	r11,TASK_STACK-THREAD(r11)
-	addi	r11,r11,THREAD_SIZE
+	addi	r11, r11, THREAD_SIZE - INT_FRAME_SIZE
+#ifndef CONFIG_VMAP_STACK
 	tophys(r11,r11)
-1:	subi	r11,r11,INT_FRAME_SIZE	/* alloc exc. frame */
+#endif
+1:
 .endm
 
-.macro EXCEPTION_PROLOG_2
+.macro EXCEPTION_PROLOG_2 ext
 	stw	r10,_CCR(r11)		/* save registers */
 	stw	r12,GPR12(r11)
 	stw	r9,GPR9(r11)
@@ -44,15 +70,36 @@
 	stw	r12,GPR11(r11)
 	mflr	r10
 	stw	r10,_LINK(r11)
+#ifdef CONFIG_VMAP_STACK
+	mfspr	r12, SPRN_SPRG_THREAD
+	tovirt(r12, r12)
+	.ifnb	\ext
+	lwz	r10, DAR(r12)
+	stw	r10, _DAR(r11)
+	lwz	r10, DSISR(r12)
+	stw	r10, _DSISR(r11)
+	.endif
+	lwz	r9, SRR1(r12)
+	lwz	r12, SRR0(r12)
+#else
 	mfspr	r12,SPRN_SRR0
 	mfspr	r9,SPRN_SRR1
+#endif
 	stw	r1,GPR1(r11)
 	stw	r1,0(r11)
+#ifdef CONFIG_VMAP_STACK
+	mr	r1, r11			/* set new kernel sp */
+#else
 	tovirt(r1,r11)			/* set new kernel sp */
+#endif
 #ifdef CONFIG_40x
 	rlwinm	r9,r9,0,14,12		/* clear MSR_WE (necessary?) */
 #else
+#ifdef CONFIG_VMAP_STACK
+	li	r10, MSR_KERNEL & ~MSR_IR /* can take exceptions */
+#else
 	li	r10,MSR_KERNEL & ~(MSR_IR|MSR_DR) /* can take exceptions */
+#endif
 	mtmsr	r10			/* (except for mach check in rtas) */
 #endif
 	stw	r0,GPR0(r11)
@@ -65,24 +112,49 @@
 
 .macro SYSCALL_ENTRY trapno
 	mfspr	r12,SPRN_SPRG_THREAD
+#ifdef CONFIG_VMAP_STACK
+	mfspr	r9, SPRN_SRR0
+	mfspr	r11, SPRN_SRR1
+	stw	r9, SRR0(r12)
+	stw	r11, SRR1(r12)
+#endif
 	mfcr	r10
 	lwz	r11,TASK_STACK-THREAD(r12)
-	mflr	r9
-	addi	r11,r11,THREAD_SIZE - INT_FRAME_SIZE
 	rlwinm	r10,r10,0,4,2	/* Clear SO bit in CR */
+	addi	r11, r11, THREAD_SIZE - INT_FRAME_SIZE
+#ifdef CONFIG_VMAP_STACK
+	li	r9, MSR_KERNEL & ~(MSR_IR | MSR_RI) /* can take DTLB miss */
+	tovirt(r12, r12)
+	mtmsr	r9
+#else
 	tophys(r11,r11)
+#endif
+	mflr	r9
 	stw	r10,_CCR(r11)		/* save registers */
+	stw	r9, _LINK(r11)
+#ifdef CONFIG_VMAP_STACK
+	lwz	r10, SRR0(r12)
+	lwz	r9, SRR1(r12)
+#else
 	mfspr	r10,SPRN_SRR0
-	stw	r9,_LINK(r11)
 	mfspr	r9,SPRN_SRR1
+#endif
 	stw	r1,GPR1(r11)
 	stw	r1,0(r11)
+#ifdef CONFIG_VMAP_STACK
+	mr	r1, r11
+#else
 	tovirt(r1,r11)			/* set new kernel sp */
+#endif
 	stw	r10,_NIP(r11)
 #ifdef CONFIG_40x
 	rlwinm	r9,r9,0,14,12		/* clear MSR_WE (necessary?) */
 #else
+#ifdef CONFIG_VMAP_STACK
+	LOAD_REG_IMMEDIATE(r10, MSR_KERNEL & ~MSR_IR) /* can take exceptions */
+#else
 	LOAD_REG_IMMEDIATE(r10, MSR_KERNEL & ~(MSR_IR|MSR_DR)) /* can take exceptions */
+#endif
 	mtmsr	r10			/* (except for mach check in rtas) */
 #endif
 	lis	r10,STACK_FRAME_REGS_MARKER@ha /* exception frame marker */
@@ -121,7 +193,9 @@
 #endif
 
 3:
+#ifndef CONFIG_VMAP_STACK
 	tovirt(r2, r2)			/* set r2 to current */
+#endif
 	lis	r11, transfer_to_syscall@h
 	ori	r11, r11, transfer_to_syscall@l
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -145,14 +219,21 @@
 .endm
 
 .macro save_dar_dsisr_on_stack reg1, reg2, sp
+#ifndef CONFIG_VMAP_STACK
 	mfspr	\reg1, SPRN_DAR
 	mfspr	\reg2, SPRN_DSISR
 	stw	\reg1, _DAR(\sp)
 	stw	\reg2, _DSISR(\sp)
+#endif
 .endm
 
 .macro get_and_save_dar_dsisr_on_stack reg1, reg2, sp
+#ifdef CONFIG_VMAP_STACK
+	lwz	\reg1, _DAR(\sp)
+	lwz	\reg2, _DSISR(\sp)
+#else
 	save_dar_dsisr_on_stack \reg1, \reg2, \sp
+#endif
 .endm
 
 /*
