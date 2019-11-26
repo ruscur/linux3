@@ -95,6 +95,12 @@ optprobe_template_insn:
 	nop
 	nop
 
+	.global optprobe_template_sufx
+optprobe_template_sufx:
+	/* Pass suffix to be emulated in r5 */
+	nop
+	nop
+
 	.global optprobe_template_call_emulate
 optprobe_template_call_emulate:
 	/* Branch to emulate_step()  */
