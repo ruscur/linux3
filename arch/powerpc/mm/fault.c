@@ -41,37 +41,17 @@
 #include <asm/siginfo.h>
 #include <asm/debug.h>
 #include <asm/kup.h>
+#include <asm/sstep.h>
 
 /*
  * Check whether the instruction inst is a store using
  * an update addressing form which will update r1.
  */
-static bool store_updates_sp(unsigned int inst)
+static bool store_updates_sp(struct instruction_op *op)
 {
-	/* check for 1 in the rA field */
-	if (((inst >> 16) & 0x1f) != 1)
-		return false;
-	/* check major opcode */
-	switch (inst >> 26) {
-	case OP_STWU:
-	case OP_STBU:
-	case OP_STHU:
-	case OP_STFSU:
-	case OP_STFDU:
-		return true;
-	case OP_STD:	/* std or stdu */
-		return (inst & 3) == 1;
-	case OP_31:
-		/* check minor opcode */
-		switch ((inst >> 1) & 0x3ff) {
-		case OP_31_XOP_STDUX:
-		case OP_31_XOP_STWUX:
-		case OP_31_XOP_STBUX:
-		case OP_31_XOP_STHUX:
-		case OP_31_XOP_STFSUX:
-		case OP_31_XOP_STFDUX:
+	if (GETTYPE(op->type) == STORE) {
+		if ((op->type & UPDATE) && (op->update_reg == 1))
 			return true;
-		}
 	}
 	return false;
 }
@@ -278,14 +258,17 @@ static bool bad_stack_expansion(struct pt_regs *regs, unsigned long address,
 
 		if ((flags & FAULT_FLAG_WRITE) && (flags & FAULT_FLAG_USER) &&
 		    access_ok(nip, sizeof(*nip))) {
-			unsigned int inst;
+			unsigned int inst, sufx;
+			struct instruction_op op;
 			int res;
 
 			pagefault_disable();
-			res = __get_user_inatomic(inst, nip);
+			res = __get_user_instr_inatomic(inst, sufx, nip);
 			pagefault_enable();
-			if (!res)
-				return !store_updates_sp(inst);
+			if (!res) {
+				analyse_instr(&op, uregs, inst, sufx);
+				return !store_updates_sp(&op);
+			}
 			*must_retry = true;
 		}
 		return true;
