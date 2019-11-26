@@ -423,4 +423,34 @@ extern long __copy_from_user_flushcache(void *dst, const void __user *src,
 extern void memcpy_page_flushcache(char *to, struct page *page, size_t offset,
 			   size_t len);
 
+/*
+ * When reading an instruction iff it is a prefix, the suffix needs to be also
+ * loaded.
+ */
+#define __get_user_instr(x, y, ptr)			\
+({							\
+	long __gui_ret = 0;				\
+	y = 0;						\
+	__gui_ret = __get_user(x, ptr);			\
+	if (!__gui_ret) {				\
+		if (IS_PREFIX(x))			\
+			__gui_ret = __get_user(y, ptr + 1);	\
+	}						\
+							\
+	__gui_ret;					\
+})
+
+#define __get_user_instr_inatomic(x, y, ptr)		\
+({							\
+	long __gui_ret = 0;				\
+	y = 0;						\
+	__gui_ret = __get_user_inatomic(x, ptr);	\
+	if (!__gui_ret) {				\
+		if (IS_PREFIX(x))			\
+			__gui_ret = __get_user_inatomic(y, ptr + 1);	\
+	}						\
+							\
+	__gui_ret;					\
+})
+
 #endif	/* _ARCH_POWERPC_UACCESS_H */
