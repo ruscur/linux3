@@ -1365,7 +1365,11 @@ _GLOBAL(enter_rtas)
 	lis	r6,1f@ha	/* physical return address for rtas */
 	addi	r6,r6,1f@l
 	tophys(r6,r6)
+#ifdef CONFIG_VMAP_STACK
+	mr	r7, r1
+#else
 	tophys(r7,r1)
+#endif
 	lwz	r8,RTASENTRY(r4)
 	lwz	r4,RTASBASE(r4)
 	mfmsr	r9
