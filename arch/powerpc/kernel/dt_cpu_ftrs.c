@@ -553,6 +553,28 @@ static int __init feat_enable_large_ci(struct dt_cpu_feature *f)
 	return 1;
 }
 
+static int __init feat_enable_prefix(struct dt_cpu_feature *f)
+{
+	u64 fscr, hfscr;
+
+	if (f->usable_privilege & USABLE_HV) {
+		hfscr = mfspr(SPRN_HFSCR);
+		hfscr |= HFSCR_PREFIX;
+		mtspr(SPRN_HFSCR, hfscr);
+	}
+
+	if (f->usable_privilege & USABLE_OS) {
+		fscr = mfspr(SPRN_FSCR);
+		fscr |= FSCR_PREFIX;
+		mtspr(SPRN_FSCR, fscr);
+
+		if (f->usable_privilege & USABLE_PR)
+			current->thread.fscr |= FSCR_PREFIX;
+	}
+
+	return 1;
+}
+
 struct dt_cpu_feature_match {
 	const char *name;
 	int (*enable)(struct dt_cpu_feature *f);
@@ -626,6 +648,7 @@ static struct dt_cpu_feature_match __initdata
 	{"vector-binary128", feat_enable, 0},
 	{"vector-binary16", feat_enable, 0},
 	{"wait-v3", feat_enable, 0},
+	{"prefix-instructions", feat_enable_prefix, 0},
 };
 
 static bool __initdata using_dt_cpu_ftrs;
