@@ -2755,6 +2755,18 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 			case 44:	/* psth */
 				op->type = MKOP(STORE, PREFIXED, 2);
 				break;
+			case 48:        /* plfs */
+				op->type = MKOP(LOAD_FP, PREFIXED | FPCONV, 4);
+				break;
+			case 50:        /* plfd */
+				op->type = MKOP(LOAD_FP, PREFIXED, 8);
+				break;
+			case 52:        /* pstfs */
+				op->type = MKOP(STORE_FP, PREFIXED | FPCONV, 4);
+				break;
+			case 54:        /* pstfd */
+				op->type = MKOP(STORE_FP, PREFIXED, 8);
+				break;
 			}
 			break;
 		case 3: /* Type 11 Modified Register-to-Register */
