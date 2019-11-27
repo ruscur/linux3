@@ -452,10 +452,6 @@ _GLOBAL(fast_interrupt_return)
 
 	.balign IFETCH_ALIGN_BYTES
 _GLOBAL(interrupt_return)
-	REST_NVGPRS(r1)
-
-	.balign IFETCH_ALIGN_BYTES
-_GLOBAL(interrupt_return_lite)
 	ld	r4,_MSR(r1)
 	andi.	r0,r4,MSR_PR
 	beq	kernel_interrupt_return
