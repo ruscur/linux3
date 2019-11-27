@@ -70,12 +70,12 @@ int multi_counter(void)
 	ebb_global_disable();
 	ebb_freeze_pmcs();
 
-	count_pmc(1, sample_period);
-	count_pmc(2, sample_period);
-	count_pmc(3, sample_period);
-	count_pmc(4, sample_period);
-	count_pmc(5, sample_period);
-	count_pmc(6, sample_period);
+	write_pmc(1, pmc_sample_period(sample_period));
+	write_pmc(2, pmc_sample_period(sample_period));
+	write_pmc(3, pmc_sample_period(sample_period));
+	write_pmc(4, pmc_sample_period(sample_period));
+	write_pmc(5, pmc_sample_period(sample_period));
+	write_pmc(6, pmc_sample_period(sample_period));
 
 	dump_ebb_state();
 
