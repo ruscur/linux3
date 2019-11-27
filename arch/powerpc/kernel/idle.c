@@ -33,6 +33,8 @@
 unsigned long cpuidle_disable = IDLE_NO_OVERRIDE;
 EXPORT_SYMBOL(cpuidle_disable);
 
+DEFINE_PER_CPU(u64, idle_spurr_cycles);
+
 static int __init powersave_off(char *arg)
 {
 	ppc_md.power_save = NULL;
