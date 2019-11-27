@@ -60,6 +60,12 @@
 #include <asm/mmu.h>
 #include <asm/ptrace.h>
 
+static inline void kuap_restore_amr(struct pt_regs *regs)
+{
+	if (mmu_has_feature(MMU_FTR_RADIX_KUAP))
+		mtspr(SPRN_AMR, regs->kuap);
+}
+
 static inline void kuap_check_amr(void)
 {
 	if (IS_ENABLED(CONFIG_PPC_KUAP_DEBUG) && mmu_has_feature(MMU_FTR_RADIX_KUAP))
@@ -110,6 +116,10 @@ static inline bool bad_kuap_fault(struct pt_regs *regs, bool is_write)
 		    "Bug: %s fault blocked by AMR!", is_write ? "Write" : "Read");
 }
 #else /* CONFIG_PPC_KUAP */
+static inline void kuap_restore_amr(struct pt_regs *regs)
+{
+}
+
 static inline void kuap_check_amr(void)
 {
 }
