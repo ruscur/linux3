@@ -1044,6 +1044,36 @@ static ssize_t show_physical_id(struct device *dev,
 }
 static DEVICE_ATTR(physical_id, 0444, show_physical_id, NULL);
 
+static ssize_t idle_purr_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	struct cpu *cpu = container_of(dev, struct cpu, dev);
+	unsigned int cpuid = cpu->dev.id;
+	struct lppaca *cpu_lppaca_ptr = paca_ptrs[cpuid]->lppaca_ptr;
+	u64 idle_purr_cycles = be64_to_cpu(cpu_lppaca_ptr->wait_state_cycles);
+
+	return sprintf(buf, "%llx\n", idle_purr_cycles);
+}
+static DEVICE_ATTR_RO(idle_purr);
+
+DECLARE_PER_CPU(u64, idle_spurr_cycles);
+static ssize_t idle_spurr_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct cpu *cpu = container_of(dev, struct cpu, dev);
+	unsigned int cpuid = cpu->dev.id;
+	u64 *idle_spurr_cycles_ptr = per_cpu_ptr(&idle_spurr_cycles, cpuid);
+
+	return sprintf(buf, "%llx\n", *idle_spurr_cycles_ptr);
+}
+static DEVICE_ATTR_RO(idle_spurr);
+
+static void create_idle_purr_spurr_sysfs_entry(struct device *cpudev)
+{
+	device_create_file(cpudev, &dev_attr_idle_purr);
+	device_create_file(cpudev, &dev_attr_idle_spurr);
+}
+
 static int __init topology_init(void)
 {
 	int cpu, r;
@@ -1067,6 +1097,8 @@ static int __init topology_init(void)
 			register_cpu(c, cpu);
 
 			device_create_file(&c->dev, &dev_attr_physical_id);
+			if (firmware_has_feature(FW_FEATURE_SPLPAR))
+				create_idle_purr_spurr_sysfs_entry(&c->dev);
 		}
 	}
 	r = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "powerpc/topology:online",
