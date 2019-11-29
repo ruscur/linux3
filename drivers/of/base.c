@@ -197,6 +197,7 @@ void of_populate_phandle_cache(void)
 	u32 cache_entries;
 	struct device_node *np;
 	u32 phandles = 0;
+	struct device_node **cache2;
 
 	raw_spin_lock_irqsave(&devtree_lock, flags);
 
@@ -214,14 +215,32 @@ void of_populate_phandle_cache(void)
 
 	phandle_cache = kcalloc(cache_entries, sizeof(*phandle_cache),
 				GFP_ATOMIC);
+	cache2 = kcalloc(cache_entries, sizeof(*phandle_cache), GFP_ATOMIC);
 	if (!phandle_cache)
 		goto out;
 
+	pr_err("%s(%d) entries: %d\n", __func__, __LINE__, cache_entries);
 	for_each_of_allnodes(np)
 		if (np->phandle && np->phandle != OF_PHANDLE_ILLEGAL) {
+			int slot;
 			of_node_get(np);
 			phandle_cache[np->phandle & phandle_cache_mask] = np;
+			slot = hash_32(np->phandle, __ffs(cache_entries));
+			cache2[slot] = np;
+			pr_err("%s(%d) phandle %x slot %x hash %x\n", __func__, __LINE__,
+			       np->phandle, np->phandle & phandle_cache_mask, slot);
 		}
+	{
+		int i, filled = 0, filled_hash = 0;
+
+		for (i = 0; i < cache_entries; i++) {
+			if (phandle_cache[i])
+				filled++;
+			if (cache2[i])
+				filled_hash++;
+		}
+		pr_err("%s(%d) Used entries: %d, hashed: %d\n", __func__, __LINE__, filled, filled_hash);
+	}
 
 out:
 	raw_spin_unlock_irqrestore(&devtree_lock, flags);
