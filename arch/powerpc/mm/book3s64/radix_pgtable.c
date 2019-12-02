@@ -312,6 +312,7 @@ static void __init radix_init_pgtable(void)
 {
 	unsigned long rts_field;
 	struct memblock_region *reg;
+	unsigned int pvr;
 
 	/* We don't support slb for radix */
 	mmu_slb_size = 0;
@@ -336,24 +337,29 @@ static void __init radix_init_pgtable(void)
 	}
 
 	/* Find out how many PID bits are supported */
+	pvr = mfspr(SPRN_PVR);
 	if (cpu_has_feature(CPU_FTR_HVMODE)) {
 		if (!mmu_pid_bits)
 			mmu_pid_bits = 20;
 #ifdef CONFIG_KVM_BOOK3S_HV_POSSIBLE
 		/*
-		 * When KVM is possible, we only use the top half of the
-		 * PID space to avoid collisions between host and guest PIDs
-		 * which can cause problems due to prefetch when exiting the
-		 * guest with AIL=3
+		 * Before Power9 DD2.2, when KVM is possible, we only use the
+		 * top half of the PID space to avoid collisions between host
+		 * and guest PIDs which can cause problems due to prefetch when
+		 * exiting the guest with AIL=3
 		 */
-		mmu_base_pid = 1 << (mmu_pid_bits - 1);
+		if (PVR_VER(pvr) == PVR_POWER9 && ((0xfff & pvr) < 0x202))
+			mmu_base_pid = 1;
+		else
+			mmu_base_pid = 1 << (mmu_pid_bits - 1);
 #else
 		mmu_base_pid = 1;
 #endif
 	} else {
 		/* The guest uses the bottom half of the PID space */
 		if (!mmu_pid_bits)
-			mmu_pid_bits = 19;
+			mmu_pid_bits = (PVR_VER(pvr) == PVR_POWER9 &&
+					((0xfff & pvr) < 0x202)) ? 19 : 20;
 		mmu_base_pid = 1;
 	}
 

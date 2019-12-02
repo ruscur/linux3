@@ -1801,6 +1801,15 @@ END_FTR_SECTION_IFSET(CPU_FTR_ARCH_300)
 	tlbsync
 	ptesync
 
+	/* We do not need this work around from POWER9 DD2.2 and onwards */
+	mfspr	r3, SPRN_PVR
+	srwi	r6, r3, 16
+	cmpwi	cr0, r6, PVR_POWER9
+	bne	cr0, 2f
+	andi.	r3, r3, 0xfff
+	cmpwi	cr0, r3, 0x202
+	bge	cr0, 2f
+
 	/* Radix: Handle the case where the guest used an illegal PID */
 	LOAD_REG_ADDR(r4, mmu_base_pid)
 	lwz	r3, VCPU_GUEST_PID(r9)

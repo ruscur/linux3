@@ -1157,8 +1157,13 @@ void radix__flush_tlb_all(void)
 extern void radix_kvm_prefetch_workaround(struct mm_struct *mm)
 {
 	unsigned long pid = mm->context.id;
+	unsigned int pvr;
 
 	if (unlikely(pid == MMU_NO_CONTEXT))
+		return;
+
+	pvr = mfspr(SPRN_PVR);
+	if (PVR_VER(pvr) != PVR_POWER9 || ((0xfff & pvr) >= 0x202))
 		return;
 
 	/*
