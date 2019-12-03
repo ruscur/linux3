@@ -259,10 +259,11 @@ void ocxl_context_detach_all(struct ocxl_afu *afu)
 {
 	struct ocxl_context *ctx;
 	int tmp;
+	int rc;
 
 	mutex_lock(&afu->contexts_lock);
 	idr_for_each_entry(&afu->contexts_idr, ctx, tmp) {
-		ocxl_context_detach(ctx);
+		rc = ocxl_context_detach(ctx);
 		/*
 		 * We are force detaching - remove any active mmio
 		 * mappings so userspace cannot interfere with the
@@ -274,6 +275,9 @@ void ocxl_context_detach_all(struct ocxl_afu *afu)
 		if (ctx->mapping)
 			unmap_mapping_range(ctx->mapping, 0, 0, 1);
 		mutex_unlock(&ctx->mapping_lock);
+
+		if (rc != -EBUSY)
+			ocxl_context_free(ctx);
 	}
 	mutex_unlock(&afu->contexts_lock);
 }
