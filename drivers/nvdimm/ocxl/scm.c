@@ -1048,6 +1048,18 @@ static int scm_ioctl_event_check(struct scm_data *scm_data, u64 __user *uarg)
 	return rc;
 }
 
+/**
+ * scm_req_controller_health_perf() - Request controller health & performance data
+ * @scm_data: the SCM metadata
+ * Return: 0 on success, negative on failure
+ */
+int scm_req_controller_health_perf(struct scm_data *scm_data)
+{
+	return ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_HCI,
+				      OCXL_LITTLE_ENDIAN,
+				      GLOBAL_MMIO_HCI_REQ_HEALTH_PERF);
+}
+
 static long scm_file_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long args)
 {
@@ -1085,6 +1097,10 @@ static long scm_file_ioctl(struct file *file, unsigned int cmd,
 
 	case SCM_IOCTL_EVENT_CHECK:
 		rc = scm_ioctl_event_check(scm_data, (u64 __user *)args);
+		break;
+
+	case SCM_IOCTL_REQUEST_HEALTH:
+		rc = scm_req_controller_health_perf(scm_data);
 		break;
 	}
 

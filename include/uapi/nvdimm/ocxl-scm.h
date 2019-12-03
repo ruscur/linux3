@@ -90,5 +90,6 @@ struct scm_ioctl_eventfd {
 #define SCM_IOCTL_CONTROLLER_STATS _IO(SCM_MAGIC, 0x05)
 #define SCM_IOCTL_EVENTFD	_IOW(SCM_MAGIC, 0x06, struct scm_ioctl_eventfd)
 #define SCM_IOCTL_EVENT_CHECK	_IOR(SCM_MAGIC, 0x07, __u64)
+#define SCM_IOCTL_REQUEST_HEALTH _IO(SCM_MAGIC, 0x08)
 
 #endif /* _UAPI_OCXL_SCM_H */
