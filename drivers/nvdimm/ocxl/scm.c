@@ -9,6 +9,7 @@
 #include <misc/ocxl.h>
 #include <linux/delay.h>
 #include <linux/ndctl.h>
+#include <linux/eventfd.h>
 #include <linux/fs.h>
 #include <linux/mm_types.h>
 #include <linux/memory_hotplug.h>
@@ -382,10 +383,21 @@ static void free_scm(struct scm_data *scm_data)
 {
 	int rc;
 
+	// Disable doorbells
+	(void)ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_CHIEC,
+				     OCXL_LITTLE_ENDIAN,
+				     GLOBAL_MMIO_CHI_ALL);
+
 	if (scm_data->nvdimm_bus)
 		nvdimm_bus_unregister(scm_data->nvdimm_bus);
 
 	free_scm_minor(scm_data);
+
+	if (scm_data->irq_addr[1])
+		iounmap(scm_data->irq_addr[1]);
+
+	if (scm_data->irq_addr[0])
+		iounmap(scm_data->irq_addr[0]);
 
 	if (scm_data->cdev.owner)
 		cdev_del(&scm_data->cdev);
@@ -490,6 +502,11 @@ static int scm_file_open(struct inode *inode, struct file *file)
 static int scm_file_release(struct inode *inode, struct file *file)
 {
 	struct scm_data *scm_data = file->private_data;
+
+	if (scm_data->ev_ctx) {
+		eventfd_ctx_put(scm_data->ev_ctx);
+		scm_data->ev_ctx = NULL;
+	}
 
 	scm_put(scm_data);
 	return 0;
@@ -986,6 +1003,51 @@ out:
 	return rc;
 }
 
+static int scm_ioctl_eventfd(struct scm_data *scm_data,
+			     struct scm_ioctl_eventfd __user *uarg)
+{
+	struct scm_ioctl_eventfd args;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	if (scm_data->ev_ctx)
+		return -EINVAL;
+
+	scm_data->ev_ctx = eventfd_ctx_fdget(args.eventfd);
+	if (!scm_data->ev_ctx)
+		return -EFAULT;
+
+	return 0;
+}
+
+static int scm_ioctl_event_check(struct scm_data *scm_data, u64 __user *uarg)
+{
+	u64 val = 0;
+	int rc;
+	u64 chi = 0;
+
+	rc = scm_chi(scm_data, &chi);
+	if (rc < 0)
+		return rc;
+
+	if (chi & GLOBAL_MMIO_CHI_ELA)
+		val |= SCM_IOCTL_EVENT_ERROR_LOG_AVAILABLE;
+
+	if (chi & GLOBAL_MMIO_CHI_CDA)
+		val |= SCM_IOCTL_EVENT_CONTROLLER_DUMP_AVAILABLE;
+
+	if (chi & GLOBAL_MMIO_CHI_CFFS)
+		val |= SCM_IOCTL_EVENT_FIRMWARE_FATAL;
+
+	if (chi & GLOBAL_MMIO_CHI_CHFS)
+		val |= SCM_IOCTL_EVENT_HARDWARE_FATAL;
+
+	rc = copy_to_user((u64 __user *) uarg, &val, sizeof(val));
+
+	return rc;
+}
+
 static long scm_file_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long args)
 {
@@ -1014,6 +1076,15 @@ static long scm_file_ioctl(struct file *file, unsigned int cmd,
 	case SCM_IOCTL_CONTROLLER_STATS:
 		rc = scm_ioctl_controller_stats(scm_data,
 						(struct scm_ioctl_controller_stats __user *)args);
+		break;
+
+	case SCM_IOCTL_EVENTFD:
+		rc = scm_ioctl_eventfd(scm_data,
+				       (struct scm_ioctl_eventfd __user *)args);
+		break;
+
+	case SCM_IOCTL_EVENT_CHECK:
+		rc = scm_ioctl_event_check(scm_data, (u64 __user *)args);
 		break;
 	}
 
@@ -1156,6 +1227,146 @@ out:
 	kfree(buf);
 }
 
+static irqreturn_t scm_imn0_handler(void *private)
+{
+	struct scm_data *scm_data = private;
+	u64 chi = 0;
+
+	(void)scm_chi(scm_data, &chi);
+
+	if (chi & GLOBAL_MMIO_CHI_ELA) {
+		dev_warn(&scm_data->dev, "Error log is available\n");
+
+		if (scm_data->ev_ctx)
+			eventfd_signal(scm_data->ev_ctx, 1);
+	}
+
+	if (chi & GLOBAL_MMIO_CHI_CDA) {
+		dev_warn(&scm_data->dev, "Controller dump is available\n");
+
+		if (scm_data->ev_ctx)
+			eventfd_signal(scm_data->ev_ctx, 1);
+	}
+
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t scm_imn1_handler(void *private)
+{
+	struct scm_data *scm_data = private;
+	u64 chi = 0;
+
+	(void)scm_chi(scm_data, &chi);
+
+	if (chi & (GLOBAL_MMIO_CHI_CFFS | GLOBAL_MMIO_CHI_CHFS)) {
+		dev_err(&scm_data->dev,
+			"Controller status is fatal, chi=0x%llx, going offline\n", chi);
+
+		if (scm_data->nvdimm_bus) {
+			nvdimm_bus_unregister(scm_data->nvdimm_bus);
+			scm_data->nvdimm_bus = NULL;
+		}
+
+		if (scm_data->ev_ctx)
+			eventfd_signal(scm_data->ev_ctx, 1);
+	}
+
+	return IRQ_HANDLED;
+}
+
+
+/**
+ * scm_setup_irq() - Set up the IRQs for the SCM device
+ * @scm_data: the SCM metadata
+ * Return: 0 on success, negative on failure
+ */
+static int scm_setup_irq(struct scm_data *scm_data)
+{
+	int rc;
+	u64 irq_addr;
+
+	rc = ocxl_afu_irq_alloc(scm_data->ocxl_context, &scm_data->irq_id[0]);
+	if (rc)
+		return rc;
+
+	rc = ocxl_irq_set_handler(scm_data->ocxl_context, scm_data->irq_id[0],
+				  scm_imn0_handler, NULL, scm_data);
+
+	irq_addr = ocxl_afu_irq_get_addr(scm_data->ocxl_context, scm_data->irq_id[0]);
+	if (!irq_addr)
+		return -EINVAL;
+
+	scm_data->irq_addr[0] = ioremap(irq_addr, PAGE_SIZE);
+	if (!scm_data->irq_addr[0])
+		return -EINVAL;
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu, GLOBAL_MMIO_IMA0_OHP,
+				      OCXL_LITTLE_ENDIAN,
+				      (u64)scm_data->irq_addr[0]);
+	if (rc)
+		goto out_irq0;
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu, GLOBAL_MMIO_IMA0_CFP,
+				      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out_irq0;
+
+	rc = ocxl_afu_irq_alloc(scm_data->ocxl_context, &scm_data->irq_id[1]);
+	if (rc)
+		goto out_irq0;
+
+
+	rc = ocxl_irq_set_handler(scm_data->ocxl_context, scm_data->irq_id[1],
+				  scm_imn1_handler, NULL, scm_data);
+	if (rc)
+		goto out_irq0;
+
+	irq_addr = ocxl_afu_irq_get_addr(scm_data->ocxl_context, scm_data->irq_id[1]);
+	if (!irq_addr) {
+		rc = -EFAULT;
+		goto out_irq0;
+	}
+
+	scm_data->irq_addr[1] = ioremap(irq_addr, PAGE_SIZE);
+	if (!scm_data->irq_addr[1]) {
+		rc = -EINVAL;
+		goto out_irq0;
+	}
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu, GLOBAL_MMIO_IMA1_OHP,
+				      OCXL_LITTLE_ENDIAN,
+				      (u64)scm_data->irq_addr[1]);
+	if (rc)
+		goto out_irq1;
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu, GLOBAL_MMIO_IMA1_CFP,
+				      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out_irq1;
+
+	// Enable doorbells
+	rc = ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_CHIE,
+				    OCXL_LITTLE_ENDIAN,
+				    GLOBAL_MMIO_CHI_ELA | GLOBAL_MMIO_CHI_CDA |
+				    GLOBAL_MMIO_CHI_CFFS | GLOBAL_MMIO_CHI_CHFS |
+				    GLOBAL_MMIO_CHI_NSCRA);
+	if (rc)
+		goto out_irq1;
+
+	return 0;
+
+out_irq1:
+	iounmap(scm_data->irq_addr[1]);
+	scm_data->irq_addr[1] = NULL;
+
+out_irq0:
+	iounmap(scm_data->irq_addr[0]);
+	scm_data->irq_addr[0] = NULL;
+
+	return rc;
+}
+
 /**
  * scm_probe_function_0 - Set up function 0 for an OpenCAPI Storage Class Memory device
  * This is important as it enables templates higher than 0 across all other functions,
@@ -1258,6 +1469,11 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (read_device_metadata(scm_data)) {
 		dev_err(&pdev->dev, "Could not read SCM device metadata\n");
+		goto err;
+	}
+
+	if (scm_setup_irq(scm_data)) {
+		dev_err(&pdev->dev, "Could not set up OCXL IRQs for SCM\n");
 		goto err;
 	}
 

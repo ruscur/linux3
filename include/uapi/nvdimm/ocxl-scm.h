@@ -66,6 +66,20 @@ struct scm_ioctl_controller_stats {
 	__u64 cache_write_latency; // nanoseconds
 };
 
+struct scm_ioctl_eventfd {
+	__s32 eventfd;
+	__u32 reserved;
+};
+
+#ifndef BIT_ULL
+#define BIT_ULL(nr)	(1ULL << (nr))
+#endif
+
+#define SCM_IOCTL_EVENT_CONTROLLER_DUMP_AVAILABLE	BIT_ULL(0)
+#define SCM_IOCTL_EVENT_ERROR_LOG_AVAILABLE		BIT_ULL(1)
+#define SCM_IOCTL_EVENT_HARDWARE_FATAL			BIT_ULL(2)
+#define SCM_IOCTL_EVENT_FIRMWARE_FATAL			BIT_ULL(3)
+
 /* ioctl numbers */
 #define SCM_MAGIC 0x5C
 /* SCM devices */
@@ -74,5 +88,7 @@ struct scm_ioctl_controller_stats {
 #define SCM_IOCTL_CONTROLLER_DUMP_DATA _IOWR(SCM_MAGIC, 0x03, struct scm_ioctl_controller_dump_data)
 #define SCM_IOCTL_CONTROLLER_DUMP_COMPLETE _IO(SCM_MAGIC, 0x04)
 #define SCM_IOCTL_CONTROLLER_STATS _IO(SCM_MAGIC, 0x05)
+#define SCM_IOCTL_EVENTFD	_IOW(SCM_MAGIC, 0x06, struct scm_ioctl_eventfd)
+#define SCM_IOCTL_EVENT_CHECK	_IOR(SCM_MAGIC, 0x07, __u64)
 
 #endif /* _UAPI_OCXL_SCM_H */
