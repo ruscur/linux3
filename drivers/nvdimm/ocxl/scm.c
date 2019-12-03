@@ -7,6 +7,7 @@
 
 #include <linux/module.h>
 #include <misc/ocxl.h>
+#include <linux/delay.h>
 #include <linux/ndctl.h>
 #include <linux/mm_types.h>
 #include <linux/memory_hotplug.h>
@@ -267,6 +268,30 @@ static int scm_register_lpc_mem(struct scm_data *scm_data)
 }
 
 /**
+ * scm_is_usable() - Is a controller usable?
+ * @scm_data: a pointer to the SCM device data
+ * Return: true if the controller is usable
+ */
+static bool scm_is_usable(const struct scm_data *scm_data)
+{
+	u64 chi = 0;
+	int rc = scm_chi(scm_data, &chi);
+
+	if (!(chi & GLOBAL_MMIO_CHI_CRDY)) {
+		dev_err(&scm_data->dev, "SCM controller is not ready.\n");
+		return false;
+	}
+
+	if (!(chi & GLOBAL_MMIO_CHI_MA)) {
+		dev_err(&scm_data->dev,
+			"SCM controller does not have memory available.\n");
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * allocate_scm_minor() - Allocate a minor number to use for an SCM device
  * @scm_data: The SCM device to associate the minor with
  * Return: the allocated minor number
@@ -381,6 +406,48 @@ static void scm_remove(struct pci_dev *pdev)
 }
 
 /**
+ * read_device_metadata() - Retrieve config information from the AFU and save it for future use
+ * @scm_data: the SCM metadata
+ * Return: 0 on success, negative on failure
+ */
+static int read_device_metadata(struct scm_data *scm_data)
+{
+	u64 val;
+	int rc;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, GLOBAL_MMIO_CCAP0,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	scm_data->scm_revision = val & 0xFFFF;
+	scm_data->read_latency = (val >> 32) & 0xFF;
+	scm_data->readiness_timeout = (val >> 48) & 0xff;
+	scm_data->memory_available_timeout = val >> 52;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, GLOBAL_MMIO_CCAP1,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	scm_data->max_controller_dump_size = val & 0xFFFFFFFF;
+
+	// Extract firmware version text
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, GLOBAL_MMIO_FWVER,
+				     OCXL_HOST_ENDIAN, (u64 *)scm_data->fw_version);
+	if (rc)
+		return rc;
+
+	scm_data->fw_version[8] = '\0';
+
+	dev_info(&scm_data->dev,
+		 "Firmware version '%s' SCM revision %d:%d\n", scm_data->fw_version,
+		 scm_data->scm_revision >> 4, scm_data->scm_revision & 0x0F);
+
+	return 0;
+}
+
+/**
  * scm_probe_function_0 - Set up function 0 for an OpenCAPI Storage Class Memory device
  * This is important as it enables templates higher than 0 across all other functions,
  * which in turn enables higher bandwidth accesses
@@ -420,6 +487,8 @@ static int scm_probe_function_0(struct pci_dev *pdev)
 static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct scm_data *scm_data = NULL;
+	int elapsed;
+	u16 timeout;
 
 	if (PCI_FUNC(pdev->devfn) == 0)
 		return scm_probe_function_0(pdev);
@@ -469,6 +538,21 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err;
 	}
 
+	if (read_device_metadata(scm_data)) {
+		dev_err(&pdev->dev, "Could not read SCM device metadata\n");
+		goto err;
+	}
+
+	elapsed = 0;
+	timeout = scm_data->readiness_timeout + scm_data->memory_available_timeout;
+	while (!scm_is_usable(scm_data)) {
+		if (elapsed++ > timeout) {
+			dev_warn(&scm_data->dev, "SCM ready timeout.\n");
+			goto err;
+		}
+
+		msleep(1000);
+	}
 	if (scm_register_lpc_mem(scm_data)) {
 		dev_err(&pdev->dev, "Could not register OCXL SCM memory with libnvdimm\n");
 		goto err;

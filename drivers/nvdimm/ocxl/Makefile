@@ -4,4 +4,4 @@ ccflags-$(CONFIG_PPC_WERROR)	+= -Werror
 
 obj-$(CONFIG_OCXL_SCM) += ocxlscm.o
 
-ocxlscm-y := scm.o
+ocxlscm-y := scm.o scm_internal.o
