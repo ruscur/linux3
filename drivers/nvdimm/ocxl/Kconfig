@@ -12,4 +12,10 @@ config OCXL_SCM
 
 	  Select N if unsure.
 
+config OCXL_SCM_DEBUG
+	bool "OpenCAPI Storage Class Memory debugging"
+	depends on OCXL_SCM
+	help
+	  Enables low level IOCTLs for OpenCAPI SCM firmware development
+
 endif

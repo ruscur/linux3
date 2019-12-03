@@ -6,6 +6,28 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
+enum scm_fwdebug_action {
+	SCM_FWDEBUG_READ_CONTROLLER_MEMORY = 0x01,
+	SCM_FWDEBUG_WRITE_CONTROLLER_MEMORY = 0x02,
+	SCM_FWDEBUG_ENABLE_FUNCTION = 0x03,
+	SCM_FWDEBUG_DISABLE_FUNCTION = 0x04,
+	SCM_FWDEBUG_GET_PEL = 0x05, // Retrieve Persistent Error Log
+};
+
+struct scm_ioctl_buffer_info {
+	__u32	admin_command_buffer_size; // out
+	__u32	near_storage_buffer_size; // out
+};
+
+struct scm_ioctl_fwdebug { // All args are inputs
+	enum scm_fwdebug_action debug_action;
+	__u16 function_code;
+	__u16 buf_size; // Size of optional data buffer
+	__u64 debug_parameter_1;
+	__u64 debug_parameter_2;
+	__u8 *buf; // Pointer to optional in/out data buffer
+};
+
 #define SCM_ERROR_LOG_ACTION_RESET	(1 << (32-32))
 #define SCM_ERROR_LOG_ACTION_CHKFW	(1 << (53-32))
 #define SCM_ERROR_LOG_ACTION_REPLACE	(1 << (54-32))
@@ -66,6 +88,11 @@ struct scm_ioctl_controller_stats {
 	__u64 cache_write_latency; // nanoseconds
 };
 
+struct scm_ioctl_mmio {
+	__u64 address; // Offset in global MMIO space
+	__u64 val; // value to write/was read
+};
+
 struct scm_ioctl_eventfd {
 	__s32 eventfd;
 	__u32 reserved;
@@ -91,5 +118,10 @@ struct scm_ioctl_eventfd {
 #define SCM_IOCTL_EVENTFD	_IOW(SCM_MAGIC, 0x06, struct scm_ioctl_eventfd)
 #define SCM_IOCTL_EVENT_CHECK	_IOR(SCM_MAGIC, 0x07, __u64)
 #define SCM_IOCTL_REQUEST_HEALTH _IO(SCM_MAGIC, 0x08)
+
+#define SCM_IOCTL_FWDEBUG	_IOWR(SCM_MAGIC, 0xf0, struct scm_ioctl_fwdebug)
+#define SCM_IOCTL_MMIO_WRITE	_IOW(SCM_MAGIC, 0xf1, struct scm_ioctl_mmio)
+#define SCM_IOCTL_MMIO_READ	_IOWR(SCM_MAGIC, 0xf2, struct scm_ioctl_mmio)
+#define SCM_IOCTL_SHUTDOWN	_IO(SCM_MAGIC, 0xf3)
 
 #endif /* _UAPI_OCXL_SCM_H */

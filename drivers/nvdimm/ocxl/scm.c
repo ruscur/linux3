@@ -1098,6 +1098,235 @@ int scm_req_controller_health_perf(struct scm_data *scm_data)
 				      GLOBAL_MMIO_HCI_REQ_HEALTH_PERF);
 }
 
+#ifdef CONFIG_OCXL_SCM_DEBUG
+/**
+ * scm_enable_fwdebug() - Enable FW debug on the controller
+ * @scm_data: a pointer to the SCM device data
+ * Return: 0 on success, negative on failure
+ */
+static int scm_enable_fwdebug(const struct scm_data *scm_data)
+{
+	return ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_HCI,
+				      OCXL_LITTLE_ENDIAN,
+				      GLOBAL_MMIO_HCI_FW_DEBUG);
+}
+
+/**
+ * scm_disable_fwdebug() - Disable FW debug on the controller
+ * @scm_data: a pointer to the SCM device data
+ * Return: 0 on success, negative on failure
+ */
+static int scm_disable_fwdebug(const struct scm_data *scm_data)
+{
+	return ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_HCIC,
+				      OCXL_LITTLE_ENDIAN,
+				      GLOBAL_MMIO_HCI_FW_DEBUG);
+}
+
+static int scm_ioctl_fwdebug(struct scm_data *scm_data,
+			     struct scm_ioctl_fwdebug __user *uarg)
+{
+	struct scm_ioctl_fwdebug args;
+	u64 val;
+	int i;
+	int rc;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	// Buffer size must be a multiple of 8
+	if ((args.buf_size & 0x07))
+		return -EINVAL;
+
+	if (args.buf_size > scm_data->admin_command.data_size)
+		return -EINVAL;
+
+	mutex_lock(&scm_data->admin_command.lock);
+
+	rc = scm_enable_fwdebug(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_request(scm_data, ADMIN_COMMAND_FW_DEBUG);
+	if (rc)
+		goto out;
+
+	// Write DebugAction & FunctionCode
+	val = ((u64)args.debug_action << 56) | ((u64)args.function_code << 40);
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu,
+				      scm_data->admin_command.request_offset + 0x08,
+				      OCXL_LITTLE_ENDIAN, val);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu,
+				      scm_data->admin_command.request_offset + 0x10,
+				      OCXL_LITTLE_ENDIAN, args.debug_parameter_1);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_write64(scm_data->ocxl_afu,
+				      scm_data->admin_command.request_offset + 0x18,
+				      OCXL_LITTLE_ENDIAN, args.debug_parameter_2);
+	if (rc)
+		goto out;
+
+	for (i = 0x20; i < 0x38; i += 0x08)
+		rc = ocxl_global_mmio_write64(scm_data->ocxl_afu,
+					      scm_data->admin_command.request_offset + i,
+					      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out;
+
+
+	// Populate admin command buffer
+	if (args.buf_size) {
+		for (i = 0; i < args.buf_size; i += sizeof(u64)) {
+			u64 val;
+
+			if (copy_from_user(&val, &args.buf[i], sizeof(u64)))
+				return -EFAULT;
+
+			rc = ocxl_global_mmio_write64(scm_data->ocxl_afu,
+						      scm_data->admin_command.data_offset + i,
+						      OCXL_HOST_ENDIAN, val);
+			if (rc)
+				goto out;
+		}
+	}
+
+	rc = scm_admin_command_execute(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_complete_timeout(scm_data,
+						scm_data->timeouts[ADMIN_COMMAND_FW_DEBUG]);
+	if (rc < 0)
+		goto out;
+
+	rc = scm_admin_response(scm_data);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS) {
+		scm_warn_status(scm_data, "Unexpected status from FW Debug", rc);
+		goto out;
+	}
+
+	if (args.buf_size) {
+		for (i = 0; i < args.buf_size; i += sizeof(u64)) {
+			u64 val;
+
+			rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+						     scm_data->admin_command.data_offset + i,
+						     OCXL_HOST_ENDIAN, &val);
+			if (rc)
+				goto out;
+
+			if (copy_to_user(&args.buf[i], &val, sizeof(u64))) {
+				rc = -EFAULT;
+				goto out;
+			}
+		}
+	}
+
+	rc = scm_admin_response_handled(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_disable_fwdebug(scm_data);
+	if (rc)
+		goto out;
+
+out:
+	mutex_unlock(&scm_data->admin_command.lock);
+	return rc;
+}
+
+static int scm_ioctl_shutdown(struct scm_data *scm_data)
+{
+	int rc;
+
+	mutex_lock(&scm_data->admin_command.lock);
+
+	rc = scm_admin_command_request(scm_data, ADMIN_COMMAND_SHUTDOWN);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_execute(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_complete_timeout(scm_data, ADMIN_COMMAND_SHUTDOWN);
+	if (rc < 0) {
+		dev_warn(&scm_data->dev, "Shutdown timed out\n");
+		goto out;
+	}
+
+	rc = 0;
+	goto out;
+
+out:
+	mutex_unlock(&scm_data->admin_command.lock);
+	return rc;
+}
+
+static int scm_ioctl_mmio_write(struct scm_data *scm_data,
+				struct scm_ioctl_mmio __user *uarg)
+{
+	struct scm_ioctl_mmio args;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	return ocxl_global_mmio_write64(scm_data->ocxl_afu, args.address,
+					OCXL_LITTLE_ENDIAN, args.val);
+}
+
+static int scm_ioctl_mmio_read(struct scm_data *scm_data,
+			       struct scm_ioctl_mmio __user *uarg)
+{
+	struct scm_ioctl_mmio args;
+	int rc;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, args.address,
+				     OCXL_LITTLE_ENDIAN, &args.val);
+	if (rc)
+		return rc;
+
+	if (copy_to_user(uarg, &args, sizeof(args)))
+		return -EFAULT;
+
+	return 0;
+}
+#else /* CONFIG_OCXL_SCM_DEBUG */
+static int scm_ioctl_fwdebug(struct scm_data *scm_data,
+			     struct scm_ioctl_fwdebug __user *uarg)
+{
+	return -EPERM;
+}
+
+static int scm_ioctl_shutdown(struct scm_data *scm_data)
+{
+	return -EPERM;
+}
+
+static int scm_ioctl_mmio_write(struct scm_data *scm_data,
+				struct scm_ioctl_mmio __user *uarg)
+{
+	return -EPERM;
+}
+
+static int scm_ioctl_mmio_read(struct scm_data *scm_data,
+			       struct scm_ioctl_mmio __user *uarg)
+{
+	return -EPERM;
+}
+#endif /* CONFIG_OCXL_SCM_DEBUG */
+
 static long scm_file_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long args)
 {
@@ -1140,6 +1369,26 @@ static long scm_file_ioctl(struct file *file, unsigned int cmd,
 	case SCM_IOCTL_REQUEST_HEALTH:
 		rc = scm_req_controller_health_perf(scm_data);
 		break;
+
+	case SCM_IOCTL_FWDEBUG:
+		rc = scm_ioctl_fwdebug(scm_data,
+				       (struct scm_ioctl_fwdebug __user *)args);
+		break;
+
+	case SCM_IOCTL_SHUTDOWN:
+		rc = scm_ioctl_shutdown(scm_data);
+		break;
+
+	case SCM_IOCTL_MMIO_WRITE:
+		rc = scm_ioctl_mmio_write(scm_data,
+					  (struct scm_ioctl_mmio __user *)args);
+		break;
+
+	case SCM_IOCTL_MMIO_READ:
+		rc = scm_ioctl_mmio_read(scm_data,
+					 (struct scm_ioctl_mmio __user *)args);
+		break;
+
 	}
 
 	return rc;
