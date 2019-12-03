@@ -173,6 +173,7 @@ int scm_ns_response_handled(const struct scm_data *scm_data)
 				      OCXL_LITTLE_ENDIAN, GLOBAL_MMIO_CHI_NSCRA);
 }
 
+
 void scm_warn_status(const struct scm_data *scm_data, const char *message,
 		     u8 status)
 {

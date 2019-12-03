@@ -170,6 +170,86 @@ static int scm_reserve_metadata(struct scm_data *scm_data,
 }
 
 /**
+ * scm_overwrite() - Overwrite all data on the card
+ * @scm_data: The SCM device data
+ * Return: 0 on success
+ */
+int scm_overwrite(struct scm_data *scm_data)
+{
+	int rc;
+
+	mutex_lock(&scm_data->ns_command.lock);
+
+	rc = scm_ns_command_request(scm_data, NS_COMMAND_SECURE_ERASE);
+	if (rc)
+		goto out;
+
+	rc = scm_ns_command_execute(scm_data);
+	if (rc)
+		goto out;
+
+	scm_data->overwrite_state = SCM_OVERWRITE_BUSY;
+
+	return 0;
+
+out:
+	mutex_unlock(&scm_data->ns_command.lock);
+	return rc;
+}
+
+/**
+ * scm_secop_overwrite() - Overwrite all data on the card
+ * @nvdimm: The nvdimm representation of the SCM device to start the overwrite on
+ * @key_data: Unused (no security key implementation)
+ * Return: 0 on success
+ */
+static int scm_secop_overwrite(struct nvdimm *nvdimm,
+			       const struct nvdimm_key_data *key_data)
+{
+	struct scm_data *scm_data = nvdimm_provider_data(nvdimm);
+
+	return scm_overwrite(scm_data);
+}
+
+/**
+ * scm_secop_query_overwrite() - Get the current overwrite state
+ * @nvdimm: The nvdimm representation of the SCM device to start the overwrite on
+ * Return: 0 if successful or idle, -EBUSY if busy, -EFAULT if failed
+ */
+static int scm_secop_query_overwrite(struct nvdimm *nvdimm)
+{
+	struct scm_data *scm_data = nvdimm_provider_data(nvdimm);
+
+	if (scm_data->overwrite_state == SCM_OVERWRITE_BUSY)
+		return -EBUSY;
+
+	if (scm_data->overwrite_state == SCM_OVERWRITE_FAILED)
+		return -EFAULT;
+
+	return 0;
+}
+
+/**
+ * scm_secop_get_flags() - return the security flags for the SCM device
+ */
+static unsigned long scm_secop_get_flags(struct nvdimm *nvdimm,
+		enum nvdimm_passphrase_type ptype)
+{
+	struct scm_data *scm_data = nvdimm_provider_data(nvdimm);
+
+	if (scm_data->overwrite_state == SCM_OVERWRITE_BUSY)
+		return BIT(NVDIMM_SECURITY_OVERWRITE);
+
+	return BIT(NVDIMM_SECURITY_DISABLED);
+}
+
+static const struct nvdimm_security_ops sec_ops  = {
+	.get_flags = scm_secop_get_flags,
+	.overwrite = scm_secop_overwrite,
+	.query_overwrite = scm_secop_query_overwrite,
+};
+
+/**
  * scm_register_lpc_mem() - Discover persistent memory on a device and register it with the NVDIMM subsystem
  * @scm_data: The SCM device data
  * Return: 0 on success
@@ -224,10 +304,10 @@ static int scm_register_lpc_mem(struct scm_data *scm_data)
 	set_bit(NDD_ALIASING, &nvdimm_flags);
 
 	snprintf(serial, sizeof(serial), "%llx", fn_config->serial);
-	nd_mapping_desc.nvdimm = nvdimm_create(scm_data->nvdimm_bus, scm_data,
+	nd_mapping_desc.nvdimm = __nvdimm_create(scm_data->nvdimm_bus, scm_data,
 				 scm_dimm_attribute_groups,
 				 nvdimm_flags, nvdimm_cmd_mask,
-				 0, NULL);
+				 0, NULL, serial, &sec_ops);
 	if (!nd_mapping_desc.nvdimm)
 		return -ENOMEM;
 
@@ -1530,12 +1610,92 @@ out:
 	kfree(buf);
 }
 
+static void scm_handle_nscra_doorbell(struct scm_data *scm_data)
+{
+	int rc;
+
+	if (scm_data->ns_command.op_code == NS_COMMAND_SECURE_ERASE) {
+		u64 success, attempted;
+
+
+		rc = scm_ns_response(scm_data);
+		if (rc < 0) {
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+			mutex_unlock(&scm_data->ns_command.lock);
+			return;
+		}
+		if (rc != STATUS_SUCCESS)
+			scm_warn_status(scm_data, "Unexpected status from overwrite", rc);
+
+		rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+					     scm_data->ns_command.response_offset +
+					     NS_RESPONSE_SECURE_ERASE_ACCESSIBLE_SUCCESS,
+					     OCXL_HOST_ENDIAN, &success);
+		if (rc) {
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+			mutex_unlock(&scm_data->ns_command.lock);
+			return;
+		}
+
+		rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+					     scm_data->ns_command.response_offset +
+					     NS_RESPONSE_SECURE_ERASE_ACCESSIBLE_ATTEMPTED,
+					     OCXL_HOST_ENDIAN, &attempted);
+		if (rc) {
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+			mutex_unlock(&scm_data->ns_command.lock);
+			return;
+		}
+
+		scm_data->overwrite_state = SCM_OVERWRITE_SUCCESS;
+		if (success != attempted)
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+
+		dev_info(&scm_data->dev,
+			 "Overwritten %llu/%llu accessible pages", success, attempted);
+
+		rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+					     scm_data->ns_command.response_offset +
+					     NS_RESPONSE_SECURE_ERASE_DEFECTIVE_SUCCESS,
+					     OCXL_HOST_ENDIAN, &success);
+		if (rc) {
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+			mutex_unlock(&scm_data->ns_command.lock);
+			return;
+		}
+
+		rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+					     scm_data->ns_command.response_offset +
+					     NS_RESPONSE_SECURE_ERASE_DEFECTIVE_ATTEMPTED,
+					     OCXL_HOST_ENDIAN, &attempted);
+		if (rc) {
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+			mutex_unlock(&scm_data->ns_command.lock);
+			return;
+		}
+
+		if (success != attempted)
+			scm_data->overwrite_state = SCM_OVERWRITE_FAILED;
+
+		dev_info(&scm_data->dev,
+			 "Overwritten %llu/%llu defective pages", success, attempted);
+
+		scm_ns_response_handled(scm_data);
+
+		mutex_unlock(&scm_data->ns_command.lock);
+		return;
+	}
+}
+
 static irqreturn_t scm_imn0_handler(void *private)
 {
 	struct scm_data *scm_data = private;
 	u64 chi = 0;
 
 	(void)scm_chi(scm_data, &chi);
+
+	if (chi & GLOBAL_MMIO_CHI_NSCRA)
+		scm_handle_nscra_doorbell(scm_data);
 
 	if (chi & GLOBAL_MMIO_CHI_ELA) {
 		dev_warn(&scm_data->dev, "Error log is available\n");

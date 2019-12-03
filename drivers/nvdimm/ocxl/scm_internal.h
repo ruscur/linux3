@@ -70,6 +70,15 @@
 #define ADMIN_COMMAND_CMD_CAPS		0x08u
 #define ADMIN_COMMAND_MAX		0x08u
 
+#define NS_COMMAND_SECURE_ERASE	0x20ull
+
+#define NS_RESPONSE_SECURE_ERASE_ACCESSIBLE_SUCCESS 0x20
+#define NS_RESPONSE_SECURE_ERASE_ACCESSIBLE_ATTEMPTED 0x28
+#define NS_RESPONSE_SECURE_ERASE_DEFECTIVE_SUCCESS 0x30
+#define NS_RESPONSE_SECURE_ERASE_DEFECTIVE_ATTEMPTED 0x38
+
+
+
 #define STATUS_SUCCESS		0x00
 #define STATUS_MEM_UNAVAILABLE	0x20
 #define STATUS_BAD_OPCODE	0x50
@@ -99,6 +108,13 @@ struct scm_function_0 {
 	struct ocxl_fn *ocxl_fn;
 };
 
+enum overwrite_state {
+	SCM_OVERWRITE_IDLE = 0,
+	SCM_OVERWRITE_BUSY,
+	SCM_OVERWRITE_SUCCESS,
+	SCM_OVERWRITE_FAILED
+};
+
 struct scm_data {
 	struct device dev;
 	struct pci_dev *pdev;
@@ -116,6 +132,7 @@ struct scm_data {
 	void *metadata_addr;
 	struct command_metadata admin_command;
 	struct command_metadata ns_command;
+	enum overwrite_state overwrite_state;
 	struct resource scm_res;
 	struct nd_region *nd_region;
 	struct eventfd_ctx *ev_ctx;
