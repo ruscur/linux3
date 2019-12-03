@@ -50,6 +50,22 @@ struct scm_ioctl_controller_dump_data {
 	__u64 reserved[8];
 };
 
+struct scm_ioctl_controller_stats {
+	__u32 reset_count;
+	__u32 reset_uptime; // seconds
+	__u32 power_on_uptime; // seconds
+	__u64 host_load_count;
+	__u64 host_store_count;
+	__u64 media_read_count;
+	__u64 media_write_count;
+	__u64 cache_hit_count;
+	__u64 cache_miss_count;
+	__u64 media_read_latency; // nanoseconds
+	__u64 media_write_latency; // nanoseconds
+	__u64 cache_read_latency; // nanoseconds
+	__u64 cache_write_latency; // nanoseconds
+};
+
 /* ioctl numbers */
 #define SCM_MAGIC 0x5C
 /* SCM devices */
@@ -57,5 +73,6 @@ struct scm_ioctl_controller_dump_data {
 #define SCM_IOCTL_CONTROLLER_DUMP _IO(SCM_MAGIC, 0x02)
 #define SCM_IOCTL_CONTROLLER_DUMP_DATA _IOWR(SCM_MAGIC, 0x03, struct scm_ioctl_controller_dump_data)
 #define SCM_IOCTL_CONTROLLER_DUMP_COMPLETE _IO(SCM_MAGIC, 0x04)
+#define SCM_IOCTL_CONTROLLER_STATS _IO(SCM_MAGIC, 0x05)
 
 #endif /* _UAPI_OCXL_SCM_H */
