@@ -94,6 +94,157 @@ static int scm_ndctl_config_size(struct nd_cmd_get_config_size *command)
 	return 0;
 }
 
+static int read_smart_attrib(struct scm_data *scm_data, u16 offset,
+			     struct scm_smart_attribs *attribs)
+{
+	u64 val;
+	int rc;
+	struct scm_smart_attrib *attrib;
+	u8 attrib_id;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, offset, OCXL_LITTLE_ENDIAN,
+				     &val);
+	if (rc)
+		return rc;
+
+	attrib_id = (val >> 56) & 0xff;
+	switch (attrib_id) {
+	case SCM_SMART_ATTR_POWER_ON_HOURS:
+		attrib = &attribs->power_on_hours;
+		break;
+
+	case SCM_SMART_ATTR_TEMPERATURE:
+		attrib = &attribs->temperature;
+		break;
+
+	case SCM_SMART_ATTR_LIFE_REMAINING:
+		attrib = &attribs->life_remaining;
+		break;
+
+	default:
+		dev_warn(&scm_data->dev, "Unknown smart attrib '%d'", attrib_id);
+		return -ENOENT;
+	}
+
+	attrib->id = attrib_id;
+	attrib->attribute_flags = (val >> 40) & 0xffff;
+	attrib->current_val = (val >> 32) & 0xff;
+	attrib->threshold_val = (val >> 24) & 0xff;
+	attrib->worst_val = (val >> 16) & 0xff;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, offset + 0x08,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	attrib->raw_val = val;
+
+	return 0;
+}
+
+/**
+ * scm_smart_header_parse() - Parse the first 64 bits of the SMART admin command response
+ * @scm_data: the SCM metadata
+ * @length: out, returns the number of bytes in the response (excluding the 64 bit header)
+ */
+static int scm_smart_header_parse(struct scm_data *scm_data, u32 *length)
+{
+	int rc;
+	u64 val;
+
+	u16 data_identifier;
+	u32 data_length;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	data_identifier = val >> 48;
+	data_length = val & 0xFFFFFFFF;
+
+	if (data_identifier != 0x534D) {
+		dev_err(&scm_data->dev,
+			"Bad data identifier for smart data, expected 'SM', got '%-.*s'\n",
+			2, (char *)&data_identifier);
+		return -EINVAL;
+	}
+
+	*length = data_length;
+	return 0;
+}
+
+static int scm_smart_update(struct scm_data *scm_data)
+{
+	u32 length, i;
+	int rc;
+
+	mutex_lock(&scm_data->admin_command.lock);
+
+	rc = scm_admin_command_request(scm_data, ADMIN_COMMAND_SMART);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_execute(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_complete_timeout(scm_data, ADMIN_COMMAND_SMART);
+	if (rc < 0) {
+		dev_err(&scm_data->dev, "SMART timeout\n");
+		goto out;
+	}
+
+	rc = scm_admin_response(scm_data);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS) {
+		scm_warn_status(scm_data, "Unexpected status from SMART", rc);
+		goto out;
+	}
+
+	rc = scm_smart_header_parse(scm_data, &length);
+	if (rc)
+		goto out;
+
+	length /= 0x10; // Length now contains the number of attributes
+
+	for (i = 0; i < length; i++)
+		read_smart_attrib(scm_data,
+				  scm_data->admin_command.data_offset + 0x08 + i * 0x10,
+				  &scm_data->smart);
+
+	rc = scm_admin_response_handled(scm_data);
+	if (rc)
+		goto out;
+
+	rc = 0;
+	goto out;
+
+out:
+	mutex_unlock(&scm_data->admin_command.lock);
+	return rc;
+}
+
+static int scm_ndctl_smart(struct scm_data *scm_data, void *buf,
+			   unsigned int buf_len)
+{
+	int rc;
+
+	if (buf_len != sizeof(scm_data->smart))
+		return -EINVAL;
+
+	rc = scm_smart_update(scm_data);
+	if (rc)
+		return rc;
+
+	memcpy(buf, &scm_data->smart, buf_len);
+
+	return 0;
+}
+
+
 static int scm_ndctl(struct nvdimm_bus_descriptor *nd_desc,
 		     struct nvdimm *nvdimm,
 		     unsigned int cmd, void *buf, unsigned int buf_len, int *cmd_rc)
@@ -101,6 +252,10 @@ static int scm_ndctl(struct nvdimm_bus_descriptor *nd_desc,
 	struct scm_data *scm_data = container_of(nd_desc, struct scm_data, bus_desc);
 
 	switch (cmd) {
+	case ND_CMD_SMART:
+		*cmd_rc = scm_ndctl_smart(scm_data, buf, buf_len);
+		return 0;
+
 	case ND_CMD_GET_CONFIG_SIZE:
 		*cmd_rc = scm_ndctl_config_size(buf);
 		return 0;
@@ -300,6 +455,7 @@ static int scm_register_lpc_mem(struct scm_data *scm_data)
 	set_bit(ND_CMD_GET_CONFIG_SIZE, &nvdimm_cmd_mask);
 	set_bit(ND_CMD_GET_CONFIG_DATA, &nvdimm_cmd_mask);
 	set_bit(ND_CMD_SET_CONFIG_DATA, &nvdimm_cmd_mask);
+	set_bit(ND_CMD_SMART, &nvdimm_cmd_mask);
 
 	set_bit(NDD_ALIASING, &nvdimm_flags);
 

@@ -115,6 +115,26 @@ enum overwrite_state {
 	SCM_OVERWRITE_FAILED
 };
 
+#define SCM_SMART_ATTR_POWER_ON_HOURS	0x09
+#define SCM_SMART_ATTR_TEMPERATURE	0xC2
+#define SCM_SMART_ATTR_LIFE_REMAINING	0xCA
+
+struct scm_smart_attrib {
+	__u8 id; /* See defines above */
+	__u16 attribute_flags;
+	__u8 current_val;
+	__u8 threshold_val;
+	__u8 worst_val;
+	__u8 reserved;
+	__u64 raw_val;
+};
+
+struct scm_smart_attribs {
+	struct scm_smart_attrib power_on_hours;
+	struct scm_smart_attrib temperature;
+	struct scm_smart_attrib life_remaining;
+};
+
 struct scm_data {
 	struct device dev;
 	struct pci_dev *pdev;
@@ -136,6 +156,7 @@ struct scm_data {
 	struct resource scm_res;
 	struct nd_region *nd_region;
 	struct eventfd_ctx *ev_ctx;
+	struct scm_smart_attribs smart;
 	char fw_version[8+1];
 	u32 timeouts[ADMIN_COMMAND_MAX+1];
 
