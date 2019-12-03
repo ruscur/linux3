@@ -6,6 +6,8 @@
 #include <linux/libnvdimm.h>
 #include <linux/mm.h>
 
+#define SCM_DEFAULT_TIMEOUT 100
+
 #define GLOBAL_MMIO_CHI		0x000
 #define GLOBAL_MMIO_CHIC	0x008
 #define GLOBAL_MMIO_CHIE	0x010
@@ -80,6 +82,16 @@
 
 #define SCM_LABEL_AREA_SIZE	(1UL << PA_SECTION_SHIFT)
 
+struct command_metadata {
+	u32 request_offset;
+	u32 response_offset;
+	u32 data_offset;
+	u32 data_size;
+	struct mutex lock;
+	u16 id;
+	u8 op_code;
+};
+
 struct scm_function_0 {
 	struct pci_dev *pdev;
 	struct ocxl_fn *ocxl_fn;
@@ -95,9 +107,11 @@ struct scm_data {
 	struct ocxl_afu *ocxl_afu;
 	struct ocxl_context *ocxl_context;
 	void *metadata_addr;
+	struct command_metadata admin_command;
 	struct resource scm_res;
 	struct nd_region *nd_region;
 	char fw_version[8+1];
+	u32 timeouts[ADMIN_COMMAND_MAX+1];
 
 	u32 max_controller_dump_size;
 	u16 scm_revision; // major/minor
@@ -122,3 +136,51 @@ struct scm_data {
  * Returns 0 on success, negative on error
  */
 int scm_chi(const struct scm_data *scm_data, u64 *chi);
+
+/**
+ * scm_admin_command_request() - Issue an admin command request
+ * @scm_data: a pointer to the SCM device data
+ * @op_code: The op-code for the command
+ *
+ * Returns an identifier for the command, or negative on error
+ */
+int scm_admin_command_request(struct scm_data *scm_data, u8 op_code);
+
+/**
+ * scm_admin_response() - Validate an admin response
+ * @scm_data: a pointer to the SCM device data
+ * Returns the status code of the command, or negative on error
+ */
+int scm_admin_response(const struct scm_data *scm_data);
+
+/**
+ * scm_admin_command_execute() - Notify the controller to start processing a pending admin command
+ * @scm_data: a pointer to the SCM device data
+ * Returns 0 on success, negative on error
+ */
+int scm_admin_command_execute(const struct scm_data *scm_data);
+
+/**
+ * scm_admin_command_complete_timeout() - Wait for an admin command to finish executing
+ * @scm_data: a pointer to the SCM device data
+ * @command: the admin command to wait for completion (determines the timeout)
+ * Returns 0 on success, -EBUSY on timeout
+ */
+int scm_admin_command_complete_timeout(const struct scm_data *scm_data,
+				       int command);
+
+/**
+ * scm_admin_response_handled() - Notify the controller that the admin response has been handled
+ * @scm_data: a pointer to the SCM device data
+ * Returns 0 on success, negative on failure
+ */
+int scm_admin_response_handled(const struct scm_data *scm_data);
+
+/**
+ * scm_warn_status() - Emit a kernel warning showing a command status.
+ * @scm_data: a pointer to the SCM device data
+ * @message: A message to accompany the warning
+ * @status: The command status
+ */
+void scm_warn_status(const struct scm_data *scm_data, const char *message,
+		     u8 status);

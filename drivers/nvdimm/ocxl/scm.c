@@ -268,6 +268,58 @@ static int scm_register_lpc_mem(struct scm_data *scm_data)
 }
 
 /**
+ * scm_extract_command_metadata() - Extract command data from MMIO & save it for further use
+ * @scm_data: a pointer to the SCM device data
+ * @offset: The base address of the command data structures (address of CREQO)
+ * @command_metadata: A pointer to the command metadata to populate
+ * Return: 0 on success, negative on failure
+ */
+static int scm_extract_command_metadata(struct scm_data *scm_data, u32 offset,
+					struct command_metadata *command_metadata)
+{
+	int rc;
+	u64 tmp;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, offset, OCXL_LITTLE_ENDIAN,
+				     &tmp);
+	if (rc)
+		return rc;
+
+	command_metadata->request_offset = tmp >> 32;
+	command_metadata->response_offset = tmp & 0xFFFFFFFF;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, offset + 8, OCXL_LITTLE_ENDIAN,
+				     &tmp);
+	if (rc)
+		return rc;
+
+	command_metadata->data_offset = tmp >> 32;
+	command_metadata->data_size = tmp & 0xFFFFFFFF;
+
+	command_metadata->id = 0;
+
+	return 0;
+}
+
+/**
+ * scm_setup_command_metadata() - Set up the command metadata
+ * @scm_data: a pointer to the SCM device data
+ */
+static int scm_setup_command_metadata(struct scm_data *scm_data)
+{
+	int rc;
+
+	mutex_init(&scm_data->admin_command.lock);
+
+	rc = scm_extract_command_metadata(scm_data, GLOBAL_MMIO_ACMA_CREQO,
+					  &scm_data->admin_command);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+/**
  * scm_is_usable() - Is a controller usable?
  * @scm_data: a pointer to the SCM device data
  * Return: true if the controller is usable
@@ -276,6 +328,8 @@ static bool scm_is_usable(const struct scm_data *scm_data)
 {
 	u64 chi = 0;
 	int rc = scm_chi(scm_data, &chi);
+	if (rc)
+		return false;
 
 	if (!(chi & GLOBAL_MMIO_CHI_CRDY)) {
 		dev_err(&scm_data->dev, "SCM controller is not ready.\n");
@@ -502,6 +556,14 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 	scm_data->pdev = pdev;
 
+	scm_data->timeouts[ADMIN_COMMAND_ERRLOG] = 2000; // ms
+	scm_data->timeouts[ADMIN_COMMAND_HEARTBEAT] = 100; // ms
+	scm_data->timeouts[ADMIN_COMMAND_SMART] = 100; // ms
+	scm_data->timeouts[ADMIN_COMMAND_CONTROLLER_DUMP] = 1000; // ms
+	scm_data->timeouts[ADMIN_COMMAND_CONTROLLER_STATS] = 100; // ms
+	scm_data->timeouts[ADMIN_COMMAND_SHUTDOWN] = 1000; // ms
+	scm_data->timeouts[ADMIN_COMMAND_FW_UPDATE] = 16000; // ms
+
 	pci_set_drvdata(pdev, scm_data);
 
 	scm_data->ocxl_fn = ocxl_function_open(pdev);
@@ -540,6 +602,11 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (read_device_metadata(scm_data)) {
 		dev_err(&pdev->dev, "Could not read SCM device metadata\n");
+		goto err;
+	}
+
+	if (scm_setup_command_metadata(scm_data)) {
+		dev_err(&pdev->dev, "Could not read OCXL command matada\n");
 		goto err;
 	}
 
