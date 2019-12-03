@@ -310,9 +310,15 @@ static int scm_setup_command_metadata(struct scm_data *scm_data)
 	int rc;
 
 	mutex_init(&scm_data->admin_command.lock);
+	mutex_init(&scm_data->ns_command.lock);
 
 	rc = scm_extract_command_metadata(scm_data, GLOBAL_MMIO_ACMA_CREQO,
 					  &scm_data->admin_command);
+	if (rc)
+		return rc;
+
+	rc = scm_extract_command_metadata(scm_data, GLOBAL_MMIO_NSCMA_CREQO,
+					  &scm_data->ns_command);
 	if (rc)
 		return rc;
 

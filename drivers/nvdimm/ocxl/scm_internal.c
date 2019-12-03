@@ -132,6 +132,47 @@ int scm_admin_response_handled(const struct scm_data *scm_data)
 				      OCXL_LITTLE_ENDIAN, GLOBAL_MMIO_CHI_ACRA);
 }
 
+int scm_ns_command_request(struct scm_data *scm_data, u8 op_code)
+{
+	u64 val;
+	int rc = ocxl_global_mmio_read64(scm_data->ocxl_afu, GLOBAL_MMIO_CHI,
+					 OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	if (!(val & GLOBAL_MMIO_CHI_NSCRA))
+		return -EBUSY;
+
+	return scm_command_request(scm_data, &scm_data->ns_command, op_code);
+}
+
+int scm_ns_response(const struct scm_data *scm_data)
+{
+	return scm_command_response(scm_data, &scm_data->ns_command);
+}
+
+int scm_ns_command_execute(const struct scm_data *scm_data)
+{
+	return ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_HCI,
+				      OCXL_LITTLE_ENDIAN, GLOBAL_MMIO_HCI_NSCRW);
+}
+
+bool scm_ns_command_complete(const struct scm_data *scm_data)
+{
+	u64 val = 0;
+	int rc = scm_chi(scm_data, &val);
+
+	WARN_ON(rc);
+
+	return (val & GLOBAL_MMIO_CHI_NSCRA) != 0;
+}
+
+int scm_ns_response_handled(const struct scm_data *scm_data)
+{
+	return ocxl_global_mmio_set64(scm_data->ocxl_afu, GLOBAL_MMIO_CHIC,
+				      OCXL_LITTLE_ENDIAN, GLOBAL_MMIO_CHI_NSCRA);
+}
+
 void scm_warn_status(const struct scm_data *scm_data, const char *message,
 		     u8 status)
 {

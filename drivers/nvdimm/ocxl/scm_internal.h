@@ -108,6 +108,7 @@ struct scm_data {
 	struct ocxl_context *ocxl_context;
 	void *metadata_addr;
 	struct command_metadata admin_command;
+	struct command_metadata ns_command;
 	struct resource scm_res;
 	struct nd_region *nd_region;
 	char fw_version[8+1];
@@ -177,6 +178,42 @@ int scm_admin_command_complete_timeout(const struct scm_data *scm_data,
 int scm_admin_response_handled(const struct scm_data *scm_data);
 
 /**
+ * scm_ns_command_request() - Issue a near storage command request
+ * @scm_data: a pointer to the SCM device data
+ * @op_code: The op-code for the command
+ * Returns an identifier for the command, or negative on error
+ */
+int scm_ns_command_request(struct scm_data *scm_data, u8 op_code);
+
+/**
+ * scm_ns_response() - Validate a near storage response
+ * @scm_data: a pointer to the SCM device data
+ * Returns the status code of the command, or negative on error
+ */
+int scm_ns_response(const struct scm_data *scm_data);
+
+/**
+ * scm_ns_command_execute() - Notify the controller to start processing a pending near storage command
+ * @scm_data: a pointer to the SCM device data
+ * Returns 0 on success, negative on error
+ */
+int scm_ns_command_execute(const struct scm_data *scm_data);
+
+/**
+ * scm_ns_command_complete() - Is a near storage command executing
+ * scm_data: a pointer to the SCM device data
+ * Returns true if the previous admin command has completed
+ */
+bool scm_ns_command_complete(const struct scm_data *scm_data);
+
+/**
+ * scm_ns_response_handled() - Notify the controller that the near storage response has been handled
+ * scm_data: a pointer to the SCM device data
+ * Returns 0 on success, negative on failure
+ */
+int scm_ns_response_handled(const struct scm_data *scm_data);
+
+/**
  * scm_warn_status() - Emit a kernel warning showing a command status.
  * @scm_data: a pointer to the SCM device data
  * @message: A message to accompany the warning
@@ -184,3 +221,4 @@ int scm_admin_response_handled(const struct scm_data *scm_data);
  */
 void scm_warn_status(const struct scm_data *scm_data, const char *message,
 		     u8 status);
+
