@@ -210,3 +210,28 @@ void scm_warn_status(const struct scm_data *scm_data, const char *message,
 
 	dev_warn(&scm_data->dev, "%s: %s (%x)\n", message, text, status);
 }
+
+void scm_warn_status_fw_update(const struct scm_data *scm_data,
+			       const char *message, u8 status)
+{
+	const char *text;
+
+	switch (status) {
+	case STATUS_FW_UPDATE_BLOCKED:
+		text = "Firmware update is blocked, please try again later";
+		break;
+
+	case STATUS_FW_ARG_INVALID:
+		text = "Internal error in SCM firmware update mechanism";
+		break;
+
+	case STATUS_FW_INVALID:
+		text = "Firmware content is invalid, please verify firmware update file";
+		break;
+
+	default:
+		return scm_warn_status(scm_data, message, status);
+	}
+
+	dev_warn(&scm_data->dev, "%s: %s (%x)\n", message, text, status);
+}

@@ -138,6 +138,12 @@ struct scm_data {
 };
 
 /**
+ * Create sysfs entries for an SCM device
+ * scm_data: The SCM metadata
+ */
+int scm_sysfs_add(struct scm_data *scm_data);
+
+/**
  * scm_chi() - Get the value of the CHI register
  * @scm_data: The SCM metadata
  * @chi: returns the CHI value
@@ -230,3 +236,11 @@ int scm_ns_response_handled(const struct scm_data *scm_data);
 void scm_warn_status(const struct scm_data *scm_data, const char *message,
 		     u8 status);
 
+/**
+ * scm_warn_status_fw_update() - Emit a kernel warning showing a command status.
+ * @scm_data: a pointer to the SCM device data
+ * @message: A message to accompany the warning
+ * @status: The command status
+ */
+void scm_warn_status_fw_update(const struct scm_data *scm_data,
+			       const char *message, u8 status);
