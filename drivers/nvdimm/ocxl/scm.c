@@ -9,6 +9,7 @@
 #include <misc/ocxl.h>
 #include <linux/delay.h>
 #include <linux/ndctl.h>
+#include <linux/fs.h>
 #include <linux/mm_types.h>
 #include <linux/memory_hotplug.h>
 #include "scm_internal.h"
@@ -386,6 +387,9 @@ static void free_scm(struct scm_data *scm_data)
 
 	free_scm_minor(scm_data);
 
+	if (scm_data->cdev.owner)
+		cdev_del(&scm_data->cdev);
+
 	if (scm_data->metadata_addr)
 		devm_memunmap(&scm_data->dev, scm_data->metadata_addr);
 
@@ -442,6 +446,70 @@ static int scm_register(struct scm_data *scm_data)
 
 	rc = device_register(&scm_data->dev);
 	return rc;
+}
+
+static void scm_put(struct scm_data *scm_data)
+{
+	put_device(&scm_data->dev);
+}
+
+static struct scm_data *scm_get(struct scm_data *scm_data)
+{
+	return (get_device(&scm_data->dev) == NULL) ? NULL : scm_data;
+}
+
+static struct scm_data *find_and_get_scm(dev_t devno)
+{
+	struct scm_data *scm_data;
+	int minor = MINOR(devno);
+	/*
+	 * We don't declare an RCU critical section here, as our AFU
+	 * is protected by a reference counter on the device. By the time the
+	 * minor number of a device is removed from the idr, the ref count of
+	 * the device is already at 0, so no user API will access that AFU and
+	 * this function can't return it.
+	 */
+	scm_data = idr_find(&minors_idr, minor);
+	if (scm_data)
+		scm_get(scm_data);
+	return scm_data;
+}
+
+static int scm_file_open(struct inode *inode, struct file *file)
+{
+	struct scm_data *scm_data;
+
+	scm_data = find_and_get_scm(inode->i_rdev);
+	if (!scm_data)
+		return -ENODEV;
+
+	file->private_data = scm_data;
+	return 0;
+}
+
+static int scm_file_release(struct inode *inode, struct file *file)
+{
+	struct scm_data *scm_data = file->private_data;
+
+	scm_put(scm_data);
+	return 0;
+}
+
+static const struct file_operations scm_fops = {
+	.owner		= THIS_MODULE,
+	.open		= scm_file_open,
+	.release	= scm_file_release,
+};
+
+/**
+ * scm_create_cdev() - Create the chardev in /dev for this scm device
+ * @scm_data: the SCM metadata
+ * Return: 0 on success, negative on failure
+ */
+static int scm_create_cdev(struct scm_data *scm_data)
+{
+	cdev_init(&scm_data->cdev, &scm_fops);
+	return cdev_add(&scm_data->cdev, scm_data->dev.devt, 1);
 }
 
 /**
@@ -616,6 +684,11 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err;
 	}
 
+	if (scm_create_cdev(scm_data)) {
+		dev_err(&pdev->dev, "Could not create SCM character device\n");
+		goto err;
+	}
+
 	elapsed = 0;
 	timeout = scm_data->readiness_timeout + scm_data->memory_available_timeout;
 	while (!scm_is_usable(scm_data)) {
@@ -653,13 +726,51 @@ static struct pci_driver scm_pci_driver = {
 	.shutdown = scm_remove,
 };
 
+static int scm_file_init(void)
+{
+	int rc;
+
+	mutex_init(&minors_idr_lock);
+	idr_init(&minors_idr);
+
+	rc = alloc_chrdev_region(&scm_dev, 0, SCM_NUM_MINORS, "ocxl-scm");
+	if (rc) {
+		idr_destroy(&minors_idr);
+		pr_err("Unable to allocate scm major number: %d\n", rc);
+		return rc;
+	}
+
+	scm_class = class_create(THIS_MODULE, "ocxl-scm");
+	if (IS_ERR(scm_class)) {
+		idr_destroy(&minors_idr);
+		pr_err("Unable to create ocxl-scm class\n");
+		unregister_chrdev_region(scm_dev, SCM_NUM_MINORS);
+		return PTR_ERR(scm_class);
+	}
+
+	return 0;
+}
+
+static void scm_file_exit(void)
+{
+	class_destroy(scm_class);
+	unregister_chrdev_region(scm_dev, SCM_NUM_MINORS);
+	idr_destroy(&minors_idr);
+}
+
 static int __init scm_init(void)
 {
 	int rc = 0;
 
-	rc = pci_register_driver(&scm_pci_driver);
+	rc = scm_file_init();
 	if (rc)
 		return rc;
+
+	rc = pci_register_driver(&scm_pci_driver);
+	if (rc) {
+		scm_file_exit();
+		return rc;
+	}
 
 	return 0;
 }
@@ -667,6 +778,7 @@ static int __init scm_init(void)
 static void scm_exit(void)
 {
 	pci_unregister_driver(&scm_pci_driver);
+	scm_file_exit();
 }
 
 module_init(scm_init);
