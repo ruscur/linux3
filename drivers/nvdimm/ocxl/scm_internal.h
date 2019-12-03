@@ -5,6 +5,7 @@
 #include <linux/cdev.h>
 #include <misc/ocxl.h>
 #include <linux/libnvdimm.h>
+#include <uapi/linux/ocxl-scm.h>
 #include <linux/mm.h>
 
 #define SCM_DEFAULT_TIMEOUT 100

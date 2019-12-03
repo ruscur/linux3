@@ -495,10 +495,220 @@ static int scm_file_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+/**
+ * scm_error_log_header_parse() - Parse the first 64 bits of the error log command response
+ * @scm_data: the SCM metadata
+ * @length: out, returns the number of bytes in the response (excluding the 64 bit header)
+ */
+static int scm_error_log_header_parse(struct scm_data *scm_data, u16 *length)
+{
+	int rc;
+	u64 val;
+
+	u16 data_identifier;
+	u32 data_length;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	data_identifier = val >> 48;
+	data_length = val & 0xFFFF;
+
+	if (data_identifier != 0x454C) {
+		dev_err(&scm_data->dev,
+			"Bad data identifier for error log data, expected 'EL', got '%2s' (%#x), data_length=%u\n",
+			(char *)&data_identifier,
+			(unsigned int)data_identifier, data_length);
+		return -EINVAL;
+	}
+
+	*length = data_length;
+	return 0;
+}
+
+static int scm_error_log_offset_0x08(struct scm_data *scm_data,
+				     u32 *log_identifier, u32 *program_ref_code)
+{
+	int rc;
+	u64 val;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset + 0x08,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	*log_identifier = val >> 32;
+	*program_ref_code = val & 0xFFFFFFFF;
+
+	return 0;
+}
+
+static int scm_read_error_log(struct scm_data *scm_data,
+			      struct scm_ioctl_error_log *log, bool buf_is_user)
+{
+	u64 val;
+	u16 user_buf_length;
+	u16 buf_length;
+	u16 i;
+	int rc;
+
+	if (log->buf_size % 8)
+		return -EINVAL;
+
+	rc = scm_chi(scm_data, &val);
+	if (rc)
+		goto out;
+
+	if (!(val & GLOBAL_MMIO_CHI_ELA))
+		return -EAGAIN;
+
+	user_buf_length = log->buf_size;
+
+	mutex_lock(&scm_data->admin_command.lock);
+
+	rc = scm_admin_command_request(scm_data, ADMIN_COMMAND_ERRLOG);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_execute(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_complete_timeout(scm_data, ADMIN_COMMAND_ERRLOG);
+	if (rc < 0) {
+		dev_warn(&scm_data->dev, "Read error log timed out\n");
+		goto out;
+	}
+
+	rc = scm_admin_response(scm_data);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS) {
+		scm_warn_status(scm_data, "Unexpected status from retrieve error log", rc);
+		goto out;
+	}
+
+
+	rc = scm_error_log_header_parse(scm_data, &log->buf_size);
+	if (rc)
+		goto out;
+	// log->buf_size now contains the scm buffer size, not the user size
+
+	rc = scm_error_log_offset_0x08(scm_data, &log->log_identifier,
+				       &log->program_reference_code);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset + 0x10,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		goto out;
+
+	log->error_log_type = val >> 56;
+	log->action_flags = (log->error_log_type == SCM_ERROR_LOG_TYPE_GENERAL) ?
+			    (val >> 32) & 0xFFFFFF : 0;
+	log->power_on_seconds = val & 0xFFFFFFFF;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset + 0x18,
+				     OCXL_LITTLE_ENDIAN, &log->timestamp);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset + 0x20,
+				     OCXL_HOST_ENDIAN, &log->wwid[0]);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset + 0x28,
+				     OCXL_HOST_ENDIAN, &log->wwid[1]);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+				     scm_data->admin_command.data_offset + 0x30,
+				     OCXL_HOST_ENDIAN, (u64 *)log->fw_revision);
+	if (rc)
+		goto out;
+	log->fw_revision[8] = '\0';
+
+	buf_length = (user_buf_length < log->buf_size) ?
+		     user_buf_length : log->buf_size;
+	for (i = 0; i < buf_length + 0x48; i += 8) {
+		u64 val;
+
+		rc = ocxl_global_mmio_read64(scm_data->ocxl_afu,
+					     scm_data->admin_command.data_offset + i,
+					     OCXL_HOST_ENDIAN, &val);
+		if (rc)
+			goto out;
+
+		if (buf_is_user) {
+			if (copy_to_user(&log->buf[i], &val, sizeof(u64))) {
+				rc = -EFAULT;
+				goto out;
+			}
+		} else
+			log->buf[i] = val;
+	}
+
+	rc = scm_admin_response_handled(scm_data);
+	if (rc)
+		goto out;
+
+out:
+	mutex_unlock(&scm_data->admin_command.lock);
+	return rc;
+
+}
+
+static int scm_ioctl_error_log(struct scm_data *scm_data,
+			       struct scm_ioctl_error_log __user *uarg)
+{
+	struct scm_ioctl_error_log args;
+	int rc;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	rc = scm_read_error_log(scm_data, &args, true);
+	if (rc)
+		return rc;
+
+	if (copy_to_user(uarg, &args, sizeof(args)))
+		return -EFAULT;
+
+	return 0;
+}
+
+static long scm_file_ioctl(struct file *file, unsigned int cmd,
+			   unsigned long args)
+{
+	struct scm_data *scm_data = file->private_data;
+	int rc = -EINVAL;
+
+	switch (cmd) {
+	case SCM_IOCTL_ERROR_LOG:
+		rc = scm_ioctl_error_log(scm_data,
+					 (struct scm_ioctl_error_log __user *)args);
+		break;
+	}
+	return rc;
+}
+
 static const struct file_operations scm_fops = {
 	.owner		= THIS_MODULE,
 	.open		= scm_file_open,
 	.release	= scm_file_release,
+	.unlocked_ioctl = scm_file_ioctl,
+	.compat_ioctl   = scm_file_ioctl,
 };
 
 /**
@@ -575,6 +785,60 @@ static int read_device_metadata(struct scm_data *scm_data)
 	return 0;
 }
 
+static const char *scm_decode_error_log_type(u8 error_log_type)
+{
+	switch (error_log_type) {
+	case 0x00:
+		return "general";
+	case 0x01:
+		return "predictive failure";
+	case 0x02:
+		return "thermal warning";
+	case 0x03:
+		return "data loss";
+	case 0x04:
+		return "health & performance";
+	default:
+		return "unknown";
+	}
+}
+
+static void scm_dump_error_log(struct scm_data *scm_data)
+{
+	struct scm_ioctl_error_log log;
+	u32 buf_size;
+	u8 *buf;
+	int rc;
+
+	if (scm_data->admin_command.data_size == 0)
+		return;
+
+	buf_size = scm_data->admin_command.data_size - 0x48;
+	buf = kzalloc(buf_size, GFP_KERNEL);
+	if (!buf)
+		return;
+
+	log.buf = buf;
+	log.buf_size = buf_size;
+
+	rc = scm_read_error_log(scm_data, &log, false);
+	if (rc < 0)
+		goto out;
+
+	dev_warn(&scm_data->dev,
+		 "SCM Error log: WWID=0x%016llx%016llx LID=0x%x PRC=%x type=0x%x %s, Uptime=%u seconds timestamp=0x%llx\n",
+		 log.wwid[0], log.wwid[1],
+		 log.log_identifier, log.program_reference_code,
+		 log.error_log_type,
+		 scm_decode_error_log_type(log.error_log_type),
+		 log.power_on_seconds, log.timestamp);
+	print_hex_dump(KERN_WARNING, "buf", DUMP_PREFIX_OFFSET, 16, 1, buf,
+		       log.buf_size, false);
+
+out:
+	kfree(buf);
+}
+
 /**
  * scm_probe_function_0 - Set up function 0 for an OpenCAPI Storage Class Memory device
  * This is important as it enables templates higher than 0 across all other functions,
@@ -617,6 +881,7 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct scm_data *scm_data = NULL;
 	int elapsed;
 	u16 timeout;
+	u64 chi;
 
 	if (PCI_FUNC(pdev->devfn) == 0)
 		return scm_probe_function_0(pdev);
@@ -707,6 +972,11 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	return 0;
 
 err:
+	if (scm_data &&
+		    (scm_chi(scm_data, &chi) == 0) &&
+		    (chi & GLOBAL_MMIO_CHI_ELA))
+		scm_dump_error_log(scm_data);
+
 	/*
 	 * Further cleanup is done in the release handler via free_scm()
 	 * This allows us to keep the character device live to handle IOCTLs to
