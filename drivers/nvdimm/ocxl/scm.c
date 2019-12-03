@@ -354,6 +354,44 @@ static bool scm_is_usable(const struct scm_data *scm_data)
 }
 
 /**
+ * scm_heartbeat() - Issue a heartbeat command to the controller
+ * @scm_data: a pointer to the SCM device data
+ * Return: 0 if the controller responded correctly, negative on error
+ */
+static int scm_heartbeat(struct scm_data *scm_data)
+{
+	int rc;
+
+	mutex_lock(&scm_data->admin_command.lock);
+
+	rc = scm_admin_command_request(scm_data, ADMIN_COMMAND_HEARTBEAT);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_execute(scm_data);
+	if (rc)
+		goto out;
+
+	rc = scm_admin_command_complete_timeout(scm_data, ADMIN_COMMAND_HEARTBEAT);
+	if (rc < 0) {
+		dev_err(&scm_data->dev, "Heartbeat timeout\n");
+		goto out;
+	}
+
+	rc = scm_admin_response(scm_data);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS)
+		scm_warn_status(scm_data, "Unexpected status from heartbeat", rc);
+
+	rc = scm_admin_response_handled(scm_data);
+
+out:
+	mutex_unlock(&scm_data->admin_command.lock);
+	return rc;
+}
+
+/**
  * allocate_scm_minor() - Allocate a minor number to use for an SCM device
  * @scm_data: The SCM device to associate the minor with
  * Return: the allocated minor number
@@ -1505,6 +1543,11 @@ static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (scm_sysfs_add(scm_data)) {
 		dev_err(&pdev->dev, "Could not create SCM sysfs entries\n");
+		goto err;
+	}
+
+	if (scm_heartbeat(scm_data)) {
+		dev_err(&pdev->dev, "SCM Heartbeat failed\n");
 		goto err;
 	}
 
