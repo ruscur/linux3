@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+if LIBNVDIMM
+
+config OCXL_SCM
+	tristate "OpenCAPI Storage Class Memory"
+	depends on LIBNVDIMM && PPC_POWERNV && PCI && EEH
+	select ZONE_DEVICE
+	select OCXL
+	help
+	  Exposes devices that implement the OpenCAPI Storage Class Memory
+	  specification as persistent memory regions.
+
+	  Select N if unsure.
+
+endif

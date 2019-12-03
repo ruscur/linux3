@@ -1,0 +1,519 @@
+// SPDX-License-Identifier: GPL-2.0+
+// Copyright 2019 IBM Corp.
+
+/*
+ * A driver for Storage Class Memory, connected via OpenCAPI
+ */
+
+#include <linux/module.h>
+#include <misc/ocxl.h>
+#include <linux/ndctl.h>
+#include <linux/mm_types.h>
+#include <linux/memory_hotplug.h>
+#include "scm_internal.h"
+
+
+static const struct pci_device_id scm_pci_tbl[] = {
+	{ PCI_DEVICE(PCI_VENDOR_ID_IBM, 0x0625), },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(pci, scm_pci_tbl);
+
+#define SCM_NUM_MINORS 256 // Total to reserve
+
+static dev_t scm_dev;
+static struct class *scm_class;
+static struct mutex minors_idr_lock;
+static struct idr minors_idr;
+
+static const struct attribute_group *scm_pmem_attribute_groups[] = {
+	&nvdimm_bus_attribute_group,
+	NULL,
+};
+
+static const struct attribute_group *scm_pmem_region_attribute_groups[] = {
+	&nd_region_attribute_group,
+	&nd_device_attribute_group,
+	&nd_mapping_attribute_group,
+	&nd_numa_attribute_group,
+	NULL,
+};
+
+/**
+ * scm_ndctl_config_write() - Handle a ND_CMD_SET_CONFIG_DATA command from ndctl
+ * @scm_data: the SCM metadata
+ * @command: the incoming data to write
+ * Return: 0 on success, negative on failure
+ */
+static int scm_ndctl_config_write(struct scm_data *scm_data,
+				  struct nd_cmd_set_config_hdr *command)
+{
+	if (command->in_offset + command->in_length > SCM_LABEL_AREA_SIZE)
+		return -EINVAL;
+
+	memcpy_flushcache(scm_data->metadata_addr + command->in_offset, command->in_buf,
+			  command->in_length);
+
+	return 0;
+}
+
+/**
+ * scm_ndctl_config_read() - Handle a ND_CMD_GET_CONFIG_DATA command from ndctl
+ * @scm_data: the SCM metadata
+ * @command: the read request
+ * Return: 0 on success, negative on failure
+ */
+static int scm_ndctl_config_read(struct scm_data *scm_data,
+				 struct nd_cmd_get_config_data_hdr *command)
+{
+	if (command->in_offset + command->in_length > SCM_LABEL_AREA_SIZE)
+		return -EINVAL;
+
+	memcpy_mcsafe(command->out_buf, scm_data->metadata_addr + command->in_offset,
+		      command->in_length);
+
+	return 0;
+}
+
+/**
+ * scm_ndctl_config_size() - Handle a ND_CMD_GET_CONFIG_SIZE command from ndctl
+ * @scm_data: the SCM metadata
+ * @command: the read request
+ * Return: 0 on success, negative on failure
+ */
+static int scm_ndctl_config_size(struct nd_cmd_get_config_size *command)
+{
+	command->status = 0;
+	command->config_size = SCM_LABEL_AREA_SIZE;
+	command->max_xfer = PAGE_SIZE;
+
+	return 0;
+}
+
+static int scm_ndctl(struct nvdimm_bus_descriptor *nd_desc,
+		     struct nvdimm *nvdimm,
+		     unsigned int cmd, void *buf, unsigned int buf_len, int *cmd_rc)
+{
+	struct scm_data *scm_data = container_of(nd_desc, struct scm_data, bus_desc);
+
+	switch (cmd) {
+	case ND_CMD_GET_CONFIG_SIZE:
+		*cmd_rc = scm_ndctl_config_size(buf);
+		return 0;
+
+	case ND_CMD_GET_CONFIG_DATA:
+		*cmd_rc = scm_ndctl_config_read(scm_data, buf);
+		return 0;
+
+	case ND_CMD_SET_CONFIG_DATA:
+		*cmd_rc = scm_ndctl_config_write(scm_data, buf);
+		return 0;
+
+	default:
+		return -ENOTTY;
+	}
+}
+
+static ssize_t serial_show(struct device *dev,
+			   struct device_attribute *attr, char *buf)
+{
+	struct nvdimm *nvdimm = to_nvdimm(dev);
+	struct scm_data *scm_data = nvdimm_provider_data(nvdimm);
+	const struct ocxl_fn_config *config = ocxl_function_config(scm_data->ocxl_fn);
+
+	return sprintf(buf, "0x%llx\n", config->serial);
+}
+static DEVICE_ATTR_RO(serial);
+
+static struct attribute *scm_dimm_attributes[] = {
+	&dev_attr_serial.attr,
+	NULL,
+};
+
+static umode_t scm_dimm_attr_visible(struct kobject *kobj,
+				     struct attribute *a, int n)
+{
+	return a->mode;
+}
+
+static const struct attribute_group scm_dimm_attribute_group = {
+	.name = "ocxl",
+	.attrs = scm_dimm_attributes,
+	.is_visible = scm_dimm_attr_visible,
+};
+
+static const struct attribute_group *scm_dimm_attribute_groups[] = {
+	&nvdimm_attribute_group,
+	&nd_device_attribute_group,
+	&scm_dimm_attribute_group,
+	NULL,
+};
+
+/**
+ * scm_reserve_metadata() - Reserve space for nvdimm metadata
+ * @scm_data: The SCM device data
+ * @lpc_mem: The resource representing the LPC memory of the SCM device
+ */
+static int scm_reserve_metadata(struct scm_data *scm_data,
+				struct resource *lpc_mem)
+{
+	scm_data->metadata_addr = devm_memremap(&scm_data->dev, lpc_mem->start,
+						SCM_LABEL_AREA_SIZE, MEMREMAP_WB);
+	if (IS_ERR(scm_data->metadata_addr))
+		return PTR_ERR(scm_data->metadata_addr);
+
+	return 0;
+}
+
+/**
+ * scm_register_lpc_mem() - Discover persistent memory on a device and register it with the NVDIMM subsystem
+ * @scm_data: The SCM device data
+ * Return: 0 on success
+ */
+static int scm_register_lpc_mem(struct scm_data *scm_data)
+{
+	struct nd_region_desc region_desc;
+	struct nd_mapping_desc nd_mapping_desc;
+	struct resource *lpc_mem;
+	const struct ocxl_afu_config *config;
+	const struct ocxl_fn_config *fn_config;
+	int rc;
+	unsigned long nvdimm_cmd_mask = 0;
+	unsigned long nvdimm_flags = 0;
+	int target_node;
+	char serial[16+1];
+
+	// Set up the reserved metadata area
+	rc = ocxl_afu_map_lpc_mem(scm_data->ocxl_afu);
+	if (rc < 0)
+		return rc;
+
+	lpc_mem = ocxl_afu_lpc_mem(scm_data->ocxl_afu);
+	if (lpc_mem == NULL || lpc_mem->start == 0)
+		return -EINVAL;
+
+	config = ocxl_afu_config(scm_data->ocxl_afu);
+	fn_config = ocxl_function_config(scm_data->ocxl_fn);
+
+	rc = scm_reserve_metadata(scm_data, lpc_mem);
+	if (rc)
+		return rc;
+
+	scm_data->bus_desc.attr_groups = scm_pmem_attribute_groups;
+	scm_data->bus_desc.provider_name = "ocxl-scm";
+	scm_data->bus_desc.ndctl = scm_ndctl;
+	scm_data->bus_desc.module = THIS_MODULE;
+
+	scm_data->nvdimm_bus = nvdimm_bus_register(&scm_data->dev,
+			       &scm_data->bus_desc);
+	if (!scm_data->nvdimm_bus)
+		return -EINVAL;
+
+	scm_data->scm_res.start = (u64)lpc_mem->start + SCM_LABEL_AREA_SIZE;
+	scm_data->scm_res.end = (u64)lpc_mem->start + config->lpc_mem_size - 1;
+	scm_data->scm_res.name = "SCM persistent memory";
+
+	set_bit(ND_CMD_GET_CONFIG_SIZE, &nvdimm_cmd_mask);
+	set_bit(ND_CMD_GET_CONFIG_DATA, &nvdimm_cmd_mask);
+	set_bit(ND_CMD_SET_CONFIG_DATA, &nvdimm_cmd_mask);
+
+	set_bit(NDD_ALIASING, &nvdimm_flags);
+
+	snprintf(serial, sizeof(serial), "%llx", fn_config->serial);
+	nd_mapping_desc.nvdimm = nvdimm_create(scm_data->nvdimm_bus, scm_data,
+				 scm_dimm_attribute_groups,
+				 nvdimm_flags, nvdimm_cmd_mask,
+				 0, NULL);
+	if (!nd_mapping_desc.nvdimm)
+		return -ENOMEM;
+
+	if (nvdimm_bus_check_dimm_count(scm_data->nvdimm_bus, 1))
+		return -EINVAL;
+
+	nd_mapping_desc.start = scm_data->scm_res.start;
+	nd_mapping_desc.size = resource_size(&scm_data->scm_res);
+	nd_mapping_desc.position = 0;
+
+	scm_data->nd_set.cookie1 = fn_config->serial + 1; // allow for empty serial
+	scm_data->nd_set.cookie2 = fn_config->serial + 1;
+
+	target_node = of_node_to_nid(scm_data->pdev->dev.of_node);
+
+	memset(&region_desc, 0, sizeof(region_desc));
+	region_desc.res = &scm_data->scm_res;
+	region_desc.attr_groups = scm_pmem_region_attribute_groups;
+	region_desc.numa_node = NUMA_NO_NODE;
+	region_desc.target_node = target_node;
+	region_desc.num_mappings = 1;
+	region_desc.mapping = &nd_mapping_desc;
+	region_desc.nd_set = &scm_data->nd_set;
+
+	set_bit(ND_REGION_PAGEMAP, &region_desc.flags);
+	/*
+	 * NB: libnvdimm copies the data from ndr_desc into it's own
+	 * structures so passing a stack pointer is fine.
+	 */
+	scm_data->nd_region = nvdimm_pmem_region_create(scm_data->nvdimm_bus,
+			      &region_desc);
+	if (!scm_data->nd_region)
+		return -EINVAL;
+
+	dev_info(&scm_data->dev,
+		 "Onlining %lluMB of persistent memory\n",
+		 nd_mapping_desc.size / SZ_1M);
+
+	return 0;
+}
+
+/**
+ * allocate_scm_minor() - Allocate a minor number to use for an SCM device
+ * @scm_data: The SCM device to associate the minor with
+ * Return: the allocated minor number
+ */
+static int allocate_scm_minor(struct scm_data *scm_data)
+{
+	int minor;
+
+	mutex_lock(&minors_idr_lock);
+	minor = idr_alloc(&minors_idr, scm_data, 0, SCM_NUM_MINORS, GFP_KERNEL);
+	mutex_unlock(&minors_idr_lock);
+	return minor;
+}
+
+static void free_scm_minor(struct scm_data *scm_data)
+{
+	mutex_lock(&minors_idr_lock);
+	idr_remove(&minors_idr, MINOR(scm_data->dev.devt));
+	mutex_unlock(&minors_idr_lock);
+}
+
+/**
+ * free_scm() - Free all members of an SCM struct
+ * @scm_data: the SCM metadata to clear
+ */
+static void free_scm(struct scm_data *scm_data)
+{
+	int rc;
+
+	if (scm_data->nvdimm_bus)
+		nvdimm_bus_unregister(scm_data->nvdimm_bus);
+
+	free_scm_minor(scm_data);
+
+	if (scm_data->metadata_addr)
+		devm_memunmap(&scm_data->dev, scm_data->metadata_addr);
+
+	if (scm_data->ocxl_context) {
+		rc = ocxl_context_detach(scm_data->ocxl_context);
+		if (rc == -EBUSY)
+			dev_warn(&scm_data->dev, "Timeout detaching ocxl context\n");
+		else
+			ocxl_context_free(scm_data->ocxl_context);
+
+	}
+
+	if (scm_data->ocxl_afu)
+		ocxl_afu_put(scm_data->ocxl_afu);
+
+	if (scm_data->ocxl_fn)
+		ocxl_function_close(scm_data->ocxl_fn);
+
+	kfree(scm_data);
+}
+
+/**
+ * free_scm_dev - Free an SCM device
+ * @dev: The device struct
+ */
+static void free_scm_dev(struct device *dev)
+{
+	struct scm_data *scm_data = container_of(dev, struct scm_data, dev);
+
+	free_scm(scm_data);
+}
+
+/**
+ * scm_register - Register an SCM device with the kernel
+ * @scm_data: the SCM metadata
+ * Return: 0 on success, negative on failure
+ */
+static int scm_register(struct scm_data *scm_data)
+{
+	int rc;
+	int minor = allocate_scm_minor(scm_data);
+
+	if (minor < 0)
+		return minor;
+
+	scm_data->dev.release = free_scm_dev;
+	rc = dev_set_name(&scm_data->dev, "ocxl-scm%d", minor);
+	if (rc < 0)
+		return rc;
+
+	scm_data->dev.devt = MKDEV(MAJOR(scm_dev), minor);
+	scm_data->dev.class = scm_class;
+	scm_data->dev.parent = &scm_data->pdev->dev;
+
+	rc = device_register(&scm_data->dev);
+	return rc;
+}
+
+/**
+ * scm_remove() - Free an OpenCAPI Storage Class Memory device
+ * @pdev: the PCI device information struct
+ */
+static void scm_remove(struct pci_dev *pdev)
+{
+	if (PCI_FUNC(pdev->devfn) == 0) {
+		struct scm_function_0 *scm_func_0 = pci_get_drvdata(pdev);
+
+		if (scm_func_0) {
+			ocxl_function_close(scm_func_0->ocxl_fn);
+			scm_func_0->ocxl_fn = NULL;
+		}
+	} else {
+		struct scm_data *scm_data = pci_get_drvdata(pdev);
+
+		if (scm_data)
+			device_unregister(&scm_data->dev);
+	}
+}
+
+/**
+ * scm_probe_function_0 - Set up function 0 for an OpenCAPI Storage Class Memory device
+ * This is important as it enables templates higher than 0 across all other functions,
+ * which in turn enables higher bandwidth accesses
+ * which in turn enables higher bandwidth accesses
+ * @pdev: the PCI device information struct
+ * Return: 0 on success, negative on failure
+ */
+static int scm_probe_function_0(struct pci_dev *pdev)
+{
+	struct scm_function_0 *scm_func_0 = NULL;
+	struct ocxl_fn *fn;
+
+	scm_func_0 = kzalloc(sizeof(*scm_func_0), GFP_KERNEL);
+	if (!scm_func_0)
+		return -ENOMEM;
+
+	scm_func_0->pdev = pdev;
+	fn = ocxl_function_open(pdev);
+	if (IS_ERR(fn)) {
+		kfree(scm_func_0);
+		dev_err(&pdev->dev, "failed to open OCXL function\n");
+		return PTR_ERR(fn);
+	}
+	scm_func_0->ocxl_fn = fn;
+
+	pci_set_drvdata(pdev, scm_func_0);
+
+	return 0;
+}
+
+/**
+ * scm_probe - Init an OpenCAPI Storage Class Memory device
+ * @pdev: the PCI device information struct
+ * @ent: The entry from scm_pci_tbl
+ * Return: 0 on success, negative on failure
+ */
+static int scm_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+{
+	struct scm_data *scm_data = NULL;
+
+	if (PCI_FUNC(pdev->devfn) == 0)
+		return scm_probe_function_0(pdev);
+	else if (PCI_FUNC(pdev->devfn) != 1)
+		return 0;
+
+	scm_data = kzalloc(sizeof(*scm_data), GFP_KERNEL);
+	if (!scm_data) {
+		dev_err(&pdev->dev, "Could not allocate SCM metadata\n");
+		goto err;
+	}
+	scm_data->pdev = pdev;
+
+	pci_set_drvdata(pdev, scm_data);
+
+	scm_data->ocxl_fn = ocxl_function_open(pdev);
+	if (IS_ERR(scm_data->ocxl_fn)) {
+		kfree(scm_data);
+		scm_data = NULL;
+		pci_set_drvdata(pdev, NULL);
+		dev_err(&pdev->dev, "failed to open OCXL function\n");
+		goto err;
+	}
+
+	scm_data->ocxl_afu = ocxl_function_fetch_afu(scm_data->ocxl_fn, 0);
+	if (scm_data->ocxl_afu == NULL) {
+		dev_err(&pdev->dev, "Could not get OCXL AFU from function\n");
+		goto err;
+	}
+
+	ocxl_afu_get(scm_data->ocxl_afu);
+
+	if (scm_register(scm_data) < 0) {
+		dev_err(&pdev->dev, "Could not register SCM device with the kernel\n");
+		goto err;
+	}
+
+	// Resources allocated below here are cleaned up in the release handler
+
+	if (ocxl_context_alloc(&scm_data->ocxl_context, scm_data->ocxl_afu, NULL)) {
+		dev_err(&pdev->dev, "Could not allocate OCXL context\n");
+		goto err;
+	}
+
+	if (ocxl_context_attach(scm_data->ocxl_context, 0, NULL)) {
+		dev_err(&pdev->dev, "Could not attach ocxl context\n");
+		goto err;
+	}
+
+	if (scm_register_lpc_mem(scm_data)) {
+		dev_err(&pdev->dev, "Could not register OCXL SCM memory with libnvdimm\n");
+		goto err;
+	}
+
+	return 0;
+
+err:
+	/*
+	 * Further cleanup is done in the release handler via free_scm()
+	 * This allows us to keep the character device live to handle IOCTLs to
+	 * investigate issues if the card has an error
+	 */
+
+	dev_err(&pdev->dev,
+		"Error detected, will not register storage class memory\n");
+	return -ENXIO;
+}
+
+static struct pci_driver scm_pci_driver = {
+	.name = "ocxl-scm",
+	.id_table = scm_pci_tbl,
+	.probe = scm_probe,
+	.remove = scm_remove,
+	.shutdown = scm_remove,
+};
+
+static int __init scm_init(void)
+{
+	int rc = 0;
+
+	rc = pci_register_driver(&scm_pci_driver);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+static void scm_exit(void)
+{
+	pci_unregister_driver(&scm_pci_driver);
+}
+
+module_init(scm_init);
+module_exit(scm_exit);
+
+MODULE_DESCRIPTION("Storage Class Memory");
+MODULE_LICENSE("GPL");

@@ -131,4 +131,6 @@ config NVDIMM_TEST_BUILD
 	  core devm_memremap_pages() implementation and other
 	  infrastructure.
 
+source "drivers/nvdimm/ocxl/Kconfig"
+
 endif
