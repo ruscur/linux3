@@ -551,6 +551,10 @@ static int cmm_migratepage(struct balloon_dev_info *b_dev_info,
 	 */
 	plpar_page_set_active(page);
 
+	/* fixup the managed page count (esp. of the zone) */
+	adjust_managed_page_count(page, 1);
+	adjust_managed_page_count(newpage, -1);
+
 	/* balloon page list reference */
 	put_page(page);
 
