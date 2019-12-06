@@ -1418,13 +1418,16 @@ static int fadump_region_show(struct seq_file *m, void *private)
 	return 0;
 }
 
-static struct kobj_attribute fadump_release_attr = __ATTR(fadump_release_mem,
+struct kobject *fadump_kobj;
+EXPORT_SYMBOL_GPL(fadump_kobj);
+
+static struct kobj_attribute release_attr = __ATTR(release_mem,
 						0200, NULL,
 						fadump_release_memory_store);
-static struct kobj_attribute fadump_attr = __ATTR(fadump_enabled,
+static struct kobj_attribute enable_attr = __ATTR(enabled,
 						0444, fadump_enabled_show,
 						NULL);
-static struct kobj_attribute fadump_register_attr = __ATTR(fadump_registered,
+static struct kobj_attribute register_attr = __ATTR(registered,
 						0644, fadump_register_show,
 						fadump_register_store);
 
@@ -1435,16 +1438,11 @@ static void fadump_init_files(void)
 	struct dentry *debugfs_file;
 	int rc = 0;
 
-	rc = sysfs_create_file(kernel_kobj, &fadump_attr.attr);
-	if (rc)
-		printk(KERN_ERR "fadump: unable to create sysfs file"
-			" fadump_enabled (%d)\n", rc);
-
-	rc = sysfs_create_file(kernel_kobj, &fadump_register_attr.attr);
-	if (rc)
-		printk(KERN_ERR "fadump: unable to create sysfs file"
-			" fadump_registered (%d)\n", rc);
-
+	fadump_kobj = kobject_create_and_add("fadump", kernel_kobj);
+	if (!fadump_kobj) {
+		pr_err("failed to create fadump kobject\n");
+		return;
+	}
 	debugfs_file = debugfs_create_file("fadump_region", 0444,
 					powerpc_debugfs_root, NULL,
 					&fadump_region_fops);
@@ -1452,11 +1450,47 @@ static void fadump_init_files(void)
 		printk(KERN_ERR "fadump: unable to create debugfs file"
 				" fadump_region\n");
 
+	rc = sysfs_create_file(fadump_kobj, &enable_attr.attr);
+	if (rc)
+		pr_err("unable to create enabled sysfs file (%d)\n",
+		       rc);
+	rc = sysfs_create_file(fadump_kobj, &register_attr.attr);
+	if (rc)
+		pr_err("unable to create registered sysfs file (%d)\n",
+		       rc);
 	if (fw_dump.dump_active) {
-		rc = sysfs_create_file(kernel_kobj, &fadump_release_attr.attr);
+		rc = sysfs_create_file(fadump_kobj, &release_attr.attr);
 		if (rc)
-			printk(KERN_ERR "fadump: unable to create sysfs file"
-				" fadump_release_mem (%d)\n", rc);
+			pr_err("unable to create release_mem sysfs file (%d)\n",
+			       rc);
+	}
+
+	/* The FADump sysfs are moved from kernel_kobj to fadump_kobj need to
+	 * create symlink at old location to maintain backward compatibility.
+	 *
+	 *      - fadump_enabled -> fadump/enabled
+	 *      - fadump_registered -> fadump/registered
+	 *      - fadump_release_mem -> fadump/release_mem
+	 */
+	rc = create_sysfs_symlink_entry_to_kobj(kernel_kobj, fadump_kobj,
+						"enabled", "fadump_enabled");
+	if (rc)
+		pr_err("unable to create fadump_enabled symlink (%d)\n", rc);
+
+	rc = create_sysfs_symlink_entry_to_kobj(kernel_kobj, fadump_kobj,
+						"registered",
+						"fadump_registered");
+	if (rc)
+		pr_err("unable to create fadump_registered symlink (%d)\n", rc);
+
+	if (fw_dump.dump_active) {
+		rc = create_sysfs_symlink_entry_to_kobj(kernel_kobj,
+							fadump_kobj,
+							"release_mem",
+							"fadump_release_mem");
+		if (rc)
+			pr_err("unable to create fadump_release_mem symlink (%d)\n",
+			       rc);
 	}
 	return;
 }
