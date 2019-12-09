@@ -25,10 +25,11 @@ static DEFINE_PER_CPU(int, cpu_vas_id);
 
 static int init_vas_instance(struct platform_device *pdev)
 {
-	int rc, cpu, vasid;
-	struct resource *res;
-	struct vas_instance *vinst;
 	struct device_node *dn = pdev->dev.of_node;
+	int rc, cpu, vasid, nresources = 5;
+	struct vas_instance *vinst;
+	struct resource *res;
+	uint64_t port;
 
 	rc = of_property_read_u32(dn, "ibm,vas-id", &vasid);
 	if (rc) {
@@ -36,7 +37,18 @@ static int init_vas_instance(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	if (pdev->num_resources != 4) {
+	rc = of_property_read_u64(dn, "ibm,vas-port", &port);
+	if (rc) {
+		pr_err("No ibm,vas-port property for %s?\n", pdev->name);
+		/* No interrupts property */
+		nresources = 4;
+	}
+
+	/*
+	 * interrupts property is available with 'ibm,vas-port' property.
+	 * 4 Resources and 1 IRQ if interrupts property is available.
+	 */
+	if (pdev->num_resources != nresources) {
 		pr_err("Unexpected DT configuration for [%s, %d]\n",
 				pdev->name, vasid);
 		return -ENODEV;
@@ -51,6 +63,7 @@ static int init_vas_instance(struct platform_device *pdev)
 	mutex_init(&vinst->mutex);
 	vinst->vas_id = vasid;
 	vinst->pdev = pdev;
+	vinst->irq_port = port;
 
 	res = &pdev->resource[0];
 	vinst->hvwc_bar_start = res->start;
@@ -66,12 +79,23 @@ static int init_vas_instance(struct platform_device *pdev)
 		pr_err("Bad 'paste_win_id_shift' in DT, %llx\n", res->end);
 		goto free_vinst;
 	}
-
 	vinst->paste_win_id_shift = 63 - res->end;
 
-	pr_devel("Initialized instance [%s, %d], paste_base 0x%llx, "
-			"paste_win_id_shift 0x%llx\n", pdev->name, vasid,
-			vinst->paste_base_addr, vinst->paste_win_id_shift);
+	/* interrupts property */
+	if (pdev->num_resources == 5) {
+		res = &pdev->resource[4];
+		vinst->virq = res->start;
+		if (vinst->virq <= 0) {
+			pr_err("IRQ resource is not available for [%s, %d]\n",
+				pdev->name, vasid);
+			vinst->virq = 0;
+		}
+	}
+
+	pr_devel("Initialized instance [%s, %d] paste_base 0x%llx paste_win_id_shift 0x%llx IRQ %d Port 0x%llx\n",
+			pdev->name, vasid, vinst->paste_base_addr,
+			vinst->paste_win_id_shift, vinst->virq,
+			vinst->irq_port);
 
 	for_each_possible_cpu(cpu) {
 		if (cpu_to_chip_id(cpu) == of_get_ibm_chip_id(dn))
