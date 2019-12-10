@@ -55,6 +55,7 @@
  * we don't really have any PMD directory physically.
  */
 #define PTRS_PER_PTE		1024
+#define MAX_PTRS_PER_PTE	1024
 #define PTRS_PER_PTE_SHIFT	10
 #define PTRS_PER_PGD		1024
 #define PGD_ORDER		0

@@ -342,6 +342,9 @@ static inline int is_module_addr(void *addr)
 #define PTRS_PER_PGD	_CRST_ENTRIES
 
 #define MAX_PTRS_PER_P4D	PTRS_PER_P4D
+#define MAX_PTRS_PER_PUD	PTRS_PER_PUD
+#define MAX_PTRS_PER_PMD	PTRS_PER_PMD
+#define MAX_PTRS_PER_PTE	PTRS_PER_PTE
 
 /*
  * Segment table and region3 table entry encoding

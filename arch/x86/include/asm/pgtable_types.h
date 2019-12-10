@@ -249,6 +249,11 @@ enum page_cache_mode {
 # include <asm/pgtable_64_types.h>
 #endif
 
+/* There is no runtime switching of these sizes */
+#define MAX_PTRS_PER_PUD PTRS_PER_PUD
+#define MAX_PTRS_PER_PMD PTRS_PER_PMD
+#define MAX_PTRS_PER_PTE PTRS_PER_PTE
+
 #ifndef __ASSEMBLY__
 
 #include <linux/types.h>

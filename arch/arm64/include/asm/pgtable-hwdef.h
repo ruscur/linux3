@@ -41,6 +41,7 @@
 #define ARM64_HW_PGTABLE_LEVEL_SHIFT(n)	((PAGE_SHIFT - 3) * (4 - (n)) + 3)
 
 #define PTRS_PER_PTE		(1 << (PAGE_SHIFT - 3))
+#define MAX_PTRS_PER_PTE	PTRS_PER_PTE
 
 /*
  * PMD_SHIFT determines the size a level 2 page table entry can map.
@@ -50,6 +51,7 @@
 #define PMD_SIZE		(_AC(1, UL) << PMD_SHIFT)
 #define PMD_MASK		(~(PMD_SIZE-1))
 #define PTRS_PER_PMD		PTRS_PER_PTE
+#define MAX_PTRS_PER_PMD	PTRS_PER_PMD
 #endif
 
 /*
@@ -60,6 +62,7 @@
 #define PUD_SIZE		(_AC(1, UL) << PUD_SHIFT)
 #define PUD_MASK		(~(PUD_SIZE-1))
 #define PTRS_PER_PUD		PTRS_PER_PTE
+#define MAX_PTRS_PER_PUD	PTRS_PER_PUD
 #endif
 
 /*
