@@ -1736,7 +1736,32 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 			op->val = (int) regs->gpr[ra] /
 				(int) regs->gpr[rb];
 			goto arith_done;
-
+#ifdef __powerpc64__
+		case 425:	/* divde[.] */
+			if (instr & 1) {
+				asm volatile(PPC_DIVDE_DOT(%0, %1, %2) :
+					"=r" (op->val) : "r" (regs->gpr[ra]),
+					"r" (regs->gpr[rb]));
+				set_cr0(regs, op);
+			} else {
+				asm volatile(PPC_DIVDE(%0, %1, %2) :
+					"=r" (op->val) : "r" (regs->gpr[ra]),
+					"r" (regs->gpr[rb]));
+			}
+			goto compute_done;
+		case 393:	/* divdeu[.] */
+			if (instr & 1) {
+				asm volatile(PPC_DIVDEU_DOT(%0, %1, %2) :
+					"=r" (op->val) : "r" (regs->gpr[ra]),
+					"r" (regs->gpr[rb]));
+				set_cr0(regs, op);
+			} else {
+				asm volatile(PPC_DIVDEU(%0, %1, %2) :
+					"=r" (op->val) : "r" (regs->gpr[ra]),
+					"r" (regs->gpr[rb]));
+			}
+			goto compute_done;
+#endif
 		case 755:	/* darn */
 			if (!cpu_has_feature(CPU_FTR_ARCH_300))
 				return -1;
