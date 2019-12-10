@@ -1,4 +1,4 @@
-KASAN is supported on powerpc on 32-bit only.
+KASAN is supported on powerpc on 32-bit and 64-bit Radix only.
 
 32 bit support
 ==============
@@ -10,3 +10,103 @@ fixmap area and occupies one eighth of the total kernel virtual memory space.
 
 Instrumentation of the vmalloc area is not currently supported, but modules
 are.
+
+64 bit support
+==============
+
+Currently, only the radix MMU is supported. There have been versions for Book3E
+processors floating around on the mailing list, but nothing has been merged.
+
+KASAN support on Book3S is a bit tricky to get right:
+
+ - We want to be able to support inline instrumentation so as to be able to
+   catch global and stack issues.
+
+ - Inline instrumentation requires a fixed offset.
+
+ - We run a lot of code in real mode. Most notably a lot of KVM runs in real
+   mode, and we'd like to be able to instrument it.
+
+ - Because we run code in real mode after boot, the offset has to point to
+   valid memory both in and out of real mode.
+
+One approach is just to give up on inline instrumentation. This way we can
+delay all checks until after we get everything set up correctly. However, we'd
+really like to do better.
+
+If we know _at compile time_ how much contiguous physical memory we have, we
+can set aside the top 1/8th of the first block of physical memory and use
+that. This is a big hammer and comes with 3 big consequences:
+
+ - there's no nice way to handle physically discontiguous memory, so
+   you are restricted to the first physical memory block.
+
+ - kernels will simply fail to boot on machines with less memory than specified
+   when compiling.
+
+ - kernels running on machines with more memory than specified when compiling
+   will simply ignore the extra memory.
+
+If you can live with this, you get full support for KASAN.
+
+Tips
+----
+
+ - Compile with CONFIG_RELOCATABLE.
+
+   In development, we found boot hangs when building with ftrace and KUAP
+   on. These ended up being due to kernel bloat pushing prom_init calls to be
+   done via the PLT. Because we did not have a relocatable kernel, and they are
+   done very early, this caused us to jump off into somewhere invalid. Enabling
+   relocation fixes this.
+
+NUMA/discontiguous physical memory
+----------------------------------
+
+We currently cannot really deal with discontiguous physical memory. You are
+restricted to the physical memory that is contiguous from physical address
+zero, and must specify the size of that memory, not total memory, when
+configuring your kernel.
+
+Discontiguous memory can occur when you have a machine with memory spread
+across multiple nodes. For example, on a Talos II with 64GB of RAM:
+
+ - 32GB runs from 0x0 to 0x0000_0008_0000_0000,
+ - then there's a gap,
+ - then the final 32GB runs from 0x0000_2000_0000_0000 to 0x0000_2008_0000_0000
+
+This can create _significant_ issues:
+
+ - If we try to treat the machine as having 64GB of _contiguous_ RAM, we would
+   assume that ran from 0x0 to 0x0000_0010_0000_0000. We'd then reserve the
+   last 1/8th - 0x0000_000e_0000_0000 to 0x0000_0010_0000_0000 as the shadow
+   region. But when we try to access any of that, we'll try to access pages
+   that are not physically present.
+
+ - If we try to base the shadow region size on the top address, we'll need to
+   reserve 0x2008_0000_0000 / 8 = 0x0401_0000_0000 bytes = 4100 GB of memory,
+   which will clearly not work on a system with 64GB of RAM.
+
+Therefore, you are restricted to the memory in the node starting at 0x0. For
+this system, that's 32GB. If you specify a contiguous physical memory size
+greater than the size of the first contiguous region of memory, the system will
+be unable to boot or even print an error message warning you.
+
+You can determine the layout of your system's memory by observing the messages
+that the Radix MMU prints on boot. The Talos II discussed earlier has:
+
+radix-mmu: Mapped 0x0000000000000000-0x0000000040000000 with 1.00 GiB pages (exec)
+radix-mmu: Mapped 0x0000000040000000-0x0000000800000000 with 1.00 GiB pages
+radix-mmu: Mapped 0x0000200000000000-0x0000200800000000 with 1.00 GiB pages
+
+As discussed, you'd configure this system for 32768 MB.
+
+Another system prints:
+
+radix-mmu: Mapped 0x0000000000000000-0x0000000040000000 with 1.00 GiB pages (exec)
+radix-mmu: Mapped 0x0000000040000000-0x0000002000000000 with 1.00 GiB pages
+radix-mmu: Mapped 0x0000200000000000-0x0000202000000000 with 1.00 GiB pages
+
+This machine has more memory: 0x0000_0040_0000_0000 total, but only
+0x0000_0020_0000_0000 is physically contiguous from zero, so we'd configure the
+kernel for 131072 MB of physically contiguous memory.

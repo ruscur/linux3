@@ -2081,7 +2081,14 @@ void show_stack(struct task_struct *tsk, unsigned long *stack)
 		/*
 		 * See if this is an exception frame.
 		 * We look for the "regshere" marker in the current frame.
+		 *
+		 * KASAN may complain about this. If it is an exception frame,
+		 * we won't have unpoisoned the stack in asm when we set the
+		 * exception marker. If it's not an exception frame, who knows
+		 * how things are laid out - the shadow could be in any state
+		 * at all. Just disable KASAN reporting for now.
 		 */
+		kasan_disable_current();
 		if (validate_sp(sp, tsk, STACK_INT_FRAME_SIZE)
 		    && stack[STACK_FRAME_MARKER] == STACK_FRAME_REGS_MARKER) {
 			struct pt_regs *regs = (struct pt_regs *)
@@ -2091,6 +2098,7 @@ void show_stack(struct task_struct *tsk, unsigned long *stack)
 			       regs->trap, (void *)regs->nip, (void *)lr);
 			firstframe = 1;
 		}
+		kasan_enable_current();
 
 		sp = newsp;
 	} while (count++ < kstack_depth_to_print);

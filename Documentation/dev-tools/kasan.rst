@@ -22,8 +22,9 @@ global variables yet.
 Tag-based KASAN is only supported in Clang and requires version 7.0.0 or later.
 
 Currently generic KASAN is supported for the x86_64, arm64, xtensa and s390
-architectures. It is also supported on 32-bit powerpc kernels. Tag-based KASAN
-is supported only on arm64.
+architectures. It is also supported on powerpc, for 32-bit kernels, and for
+64-bit kernels running under the Radix MMU. Tag-based KASAN is supported only
+on arm64.
 
 Usage
 -----
@@ -256,7 +257,8 @@ CONFIG_KASAN_VMALLOC
 ~~~~~~~~~~~~~~~~~~~~
 
 With ``CONFIG_KASAN_VMALLOC``, KASAN can cover vmalloc space at the
-cost of greater memory usage. Currently this is only supported on x86.
+cost of greater memory usage. Currently this is optional on x86, and
+required on 64-bit powerpc.
 
 This works by hooking into vmalloc and vmap, and dynamically
 allocating real shadow memory to back the mappings.
