@@ -210,7 +210,7 @@ END_FTR_SECTION_NESTED(ftr,ftr,943)
 #define kvmppc_interrupt kvmppc_interrupt_pr
 #endif
 
-.macro KVMTEST name, hsrr, n
+.macro KVMTEST name
 	lbz	r10,HSTATE_IN_GUEST(r13)
 	cmpwi	r10,0
 	bne	\name\()_kvm
@@ -284,7 +284,7 @@ END_FTR_SECTION_NESTED(CPU_FTR_HAS_PPR,CPU_FTR_HAS_PPR,948)
 .endm
 
 #else
-.macro KVMTEST name, hsrr, n
+.macro KVMTEST name
 .endm
 .macro KVM_HANDLER name, vec, hsrr, area, skip
 .endm
@@ -431,7 +431,7 @@ END_FTR_SECTION_NESTED(CPU_FTR_HAS_PPR,CPU_FTR_HAS_PPR,948)
 	SAVE_CTR(r10, \area\())
 	mfcr	r9
 	.if \kvm
-		KVMTEST \name \hsrr \vec
+		KVMTEST \name
 	.endif
 	.if \bitmask
 		lbz	r10,PACAIRQSOFTMASK(r13)
@@ -1444,7 +1444,7 @@ EXC_VIRT_NONE(0x4b00, 0x100)
 	GET_PACA(r13)
 	std	r10,PACA_EXGEN+EX_R10(r13)
 	INTERRUPT_TO_KERNEL
-	KVMTEST system_call EXC_STD 0xc00 /* uses r10, branch to system_call_kvm */
+	KVMTEST system_call /* uses r10, branch to system_call_kvm */
 	mfctr	r9
 #else
 	mr	r9,r13
@@ -1811,7 +1811,7 @@ EXC_REAL_BEGIN(denorm_exception_hv, 0x1500, 0x100)
 	andis.	r10,r10,(HSRR1_DENORM)@h /* denorm? */
 	bne+	denorm_assist
 #endif
-	KVMTEST denorm_exception_hv, EXC_HV 0x1500
+	KVMTEST denorm_exception_hv
 	INT_SAVE_SRR_AND_JUMP denorm_common, EXC_HV, 1
 EXC_REAL_END(denorm_exception_hv, 0x1500, 0x100)
 
