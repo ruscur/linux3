@@ -287,7 +287,17 @@ static bool bad_stack_expansion(struct pt_regs *regs, unsigned long address,
 			if (!res)
 				return !store_updates_sp(inst);
 			*must_retry = true;
+		} else if ((flags & FAULT_FLAG_WRITE) &&
+			   !(flags & FAULT_FLAG_USER)) {
+			/*
+			 * the kernel can also attempt to write beyond the end
+			 * of a process's stack - for example setting up a
+			 * signal frame. We assume this is valid, subject to
+			 * the checks in expand_stack() later.
+			 */
+			return false;
 		}
+
 		return true;
 	}
 	return false;
