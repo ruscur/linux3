@@ -154,7 +154,7 @@ good_exit:
 				       (mem2->entries << PAGE_SHIFT)))) {
 			ret = -EINVAL;
 			mutex_unlock(&mem_list_mutex);
-			goto free_exit;
+			goto convert_exit;
 		}
 	}
 
@@ -166,6 +166,9 @@ good_exit:
 
 	return 0;
 
+convert_exit:
+	for (i = 0; i < pinned; i++)
+		mem->hpages[i] = pfn_to_page(mem->hpas[i] >> PAGE_SHIFT);
 free_exit:
 	/* free the reference taken */
 	for (i = 0; i < pinned; i++)
