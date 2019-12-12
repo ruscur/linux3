@@ -258,7 +258,7 @@ unsigned long kvmppc_h_svm_init_done(struct kvm *kvm)
  * QEMU page table with normal PTEs from newly allocated pages.
  */
 void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
-			     struct kvm *kvm)
+			     struct kvm *kvm, bool skip_page_out)
 {
 	int i;
 	struct kvmppc_uvmem_page_pvt *pvt;
@@ -276,7 +276,8 @@ void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
 
 		uvmem_page = pfn_to_page(uvmem_pfn);
 		pvt = uvmem_page->zone_device_data;
-		pvt->skip_page_out = true;
+		pvt->skip_page_out = skip_page_out;
+
 		mutex_unlock(&kvm->arch.uvmem_lock);
 
 		pfn = gfn_to_pfn(kvm, gfn);
@@ -284,6 +285,49 @@ void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
 			continue;
 		kvm_release_pfn_clean(pfn);
 	}
+}
+
+unsigned long kvmppc_h_svm_init_abort(struct kvm_vcpu *vcpu)
+{
+	int i;
+	ulong pc, msr;
+	struct kvm *kvm = vcpu->kvm;
+
+	pc = kvmppc_get_gpr(vcpu, 4);
+	msr = kvmppc_get_gpr(vcpu, 5);
+
+	if (!(kvm->arch.secure_guest & KVMPPC_SECURE_INIT_START))
+		return H_UNSUPPORTED;
+
+	/*
+	 * we expect a guest address and guest MSR, so MSR_HV should
+	 * not be set. Warn and proceed to terminate the VM.
+	 */
+	if (msr & MSR_HV) {
+		pr_warning("MSR_HV set on H_SVM_INIT_ABORT call!\n");
+		msr &= ~MSR_HV;
+	}
+
+	for (i = 0; i < KVM_ADDRESS_SPACE_NUM; i++) {
+		struct kvm_memory_slot *memslot;
+		struct kvm_memslots *slots = __kvm_memslots(kvm, i);
+
+		if (!slots)
+			continue;
+
+		kvm_for_each_memslot(memslot, slots) {
+			kvmppc_uvmem_drop_pages(memslot, kvm, false);
+			uv_unregister_mem_slot(kvm->arch.lpid, memslot->id);
+		}
+	}
+
+	kvm->arch.secure_guest = 0;
+
+	/* Return to the point where VM issued UV_ESM ucall */
+	kvmppc_set_pc(vcpu, pc);
+	kvmppc_set_msr(vcpu, msr);
+
+	return H_PARAMETER;
 }
 
 /*

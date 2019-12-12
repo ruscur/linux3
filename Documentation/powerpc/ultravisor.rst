@@ -948,6 +948,62 @@ Use cases
     up its internal state for this virtual machine.
 
 
+H_SVM_INIT_ABORT
+----------------
+
+    Abort the process of securing an SVM.
+
+Syntax
+~~~~~~
+
+.. code-block:: c
+
+	uint64_t hypercall(const uint64_t H_SVM_INIT_ABORT,
+		uint64_t guest_pc,      /* guest NIP to return to */
+		uint64_t guest_msr,     /* guest MSR value */
+
+Return values
+~~~~~~~~~~~~~
+
+    One of the following values:
+
+	* H_PARAMETER 		on successfully cleaning up the state, Hypervisor will
+	  return this value to the **guest**, to indicate that the underlying
+	  UV_ESM ultra call failed.
+
+	* H_UNSUPPORTED		if called from the wrong context (e.g. from an SVM
+	  or before an H_SVM_INIT_START hypercall). This will return to the
+	  Ultravisor which incorrectly issued the hcall.
+
+
+Description
+~~~~~~~~~~~
+
+    Abort the process of securing a virtual machine. This call must
+    be made after a prior call to ``H_SVM_INIT_START`` hypercall and
+    before a call to ``H_SVM_INIT_DONE``.
+
+    This hcall will cleanup any partial state that was established for
+    the VM since the prior ``H_SVM_INIT_START hcall`` including paging
+    out pages that were paged-into secure memory, unregistering memory
+    slots etc.
+
+    After the partial state is cleaned up, control returns to the address
+    specified in ``guest_pc`` with the MSR values set to ``guest_msr``.
+    These parameters are expected to match the state of NIP and MSR
+    registers of the VM at the time it issued the ``UV_ESM`` ultra call
+    to transition to a secure VM.
+
+Use cases
+~~~~~~~~~
+
+    If after a successful call to ``H_SVM_INIT_START``, the Ultravisor
+    encounters an error while securing a virtual machine, either due
+    to lack of resources or because the VM's security information could
+    not be validated, Ultravisor informs the Hypervisor about it.
+    Hypervisor should use this call to clean up any internal state for
+    this virtual machine and return to the VM.
+
 H_SVM_PAGE_IN
 -------------
 
