@@ -61,7 +61,7 @@ fi
 #filter 64bit architectures
 ARCH64STR="arm64 ia64 mips64 parisc64 ppc64 riscv64 s390x sh64 sparc64 x86_64"
 if [ -z $ARCH ]; then
-  ARCH=`uname -m 2>/dev/null | sed -e 's/aarch64.*/arm64/'`
+  ARCH=`uname -m 2>/dev/null | sed -e 's/aarch64.*/arm64/' -e 's/ppc64.*/ppc64/'`
 fi
 VADDR64=0
 echo "$ARCH64STR" | grep $ARCH && VADDR64=1
