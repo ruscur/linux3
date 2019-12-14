@@ -320,7 +320,6 @@ static const struct of_device_id spm_match_table[] = {
 static int spm_dev_probe(struct platform_device *pdev)
 {
 	struct spm_driver_data *drv;
-	struct resource *res;
 	const struct of_device_id *match_id;
 	void __iomem *addr;
 	int cpu;
@@ -329,8 +328,7 @@ static int spm_dev_probe(struct platform_device *pdev)
 	if (!drv)
 		return -EINVAL;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	drv->reg_base = devm_ioremap_resource(&pdev->dev, res);
+	drv->reg_base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(drv->reg_base))
 		return PTR_ERR(drv->reg_base);
 
