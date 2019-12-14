@@ -113,7 +113,6 @@ int zx2967_pd_probe(struct platform_device *pdev,
 		    int domain_num)
 {
 	struct genpd_onecell_data *genpd_data;
-	struct resource *res;
 	int i;
 
 	genpd_data = devm_kzalloc(&pdev->dev, sizeof(*genpd_data), GFP_KERNEL);
@@ -123,8 +122,7 @@ int zx2967_pd_probe(struct platform_device *pdev,
 	genpd_data->domains = zx_pm_domains;
 	genpd_data->num_domains = domain_num;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	pcubase = devm_ioremap_resource(&pdev->dev, res);
+	pcubase = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(pcubase))
 		return PTR_ERR(pcubase);
 
