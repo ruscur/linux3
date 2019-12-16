@@ -53,7 +53,7 @@ Which flags are set by each wrapper
 For these pin_user_pages*() functions, FOLL_PIN is OR'd in with whatever gup
 flags the caller provides. The caller is required to pass in a non-null struct
 pages* array, and the function then pin pages by incrementing each by a special
-value. For now, that value is +1, just like get_user_pages*().::
+value: GUP_PIN_COUNTING_BIAS.::
 
  Function
  --------
