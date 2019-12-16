@@ -461,13 +461,27 @@ static int of_drconf_to_nid_single(struct drmem_lmb *lmb)
 	return nid;
 }
 
+static int vphn_get_nid(long hwid)
+{
+	__be32 associativity[VPHN_ASSOC_BUFSIZE] = {0};
+	long rc;
+
+	rc = hcall_vphn(hwid, VPHN_FLAG_VCPU, associativity);
+	if (rc == H_SUCCESS)
+		return associativity_to_nid(associativity);
+
+	return NUMA_NO_NODE;
+}
+
 /*
  * Figure out to which domain a cpu belongs and stick it there.
+ * cpu_to_phys_id is only valid between smp_setup_cpu_maps() and
+ * smp_setup_pacas(). If called outside this window, set get_hwid to true.
  * Return the id of the domain used.
  */
-static int numa_setup_cpu(unsigned long lcpu)
+static int numa_setup_cpu(unsigned long lcpu, bool get_hwid)
 {
-	struct device_node *cpu;
+	struct device_node *cpu = NULL;
 	int fcpu = cpu_first_thread_sibling(lcpu);
 	int nid = NUMA_NO_NODE;
 
@@ -485,6 +499,27 @@ static int numa_setup_cpu(unsigned long lcpu)
 		return nid;
 	}
 
+	/*
+	 * On a shared lpar, device tree will not have node associativity.
+	 * At this time lppaca, or its __old_status field may not be
+	 * updated. Hence kernel cannot detect if its on a shared lpar. So
+	 * request an explicit associativity irrespective of whether the
+	 * lpar is shared or dedicated. Use the device tree property as a
+	 * fallback.
+	 */
+	if (firmware_has_feature(FW_FEATURE_VPHN)) {
+		long hwid;
+
+		if (get_hwid)
+			hwid = get_hard_smp_processor_id(lcpu);
+		else
+			hwid = cpu_to_phys_id[lcpu];
+		nid = vphn_get_nid(hwid);
+	}
+
+	if (nid != NUMA_NO_NODE)
+		goto out_present;
+
 	cpu = of_get_cpu_node(lcpu, NULL);
 
 	if (!cpu) {
@@ -496,6 +531,7 @@ static int numa_setup_cpu(unsigned long lcpu)
 	}
 
 	nid = of_node_to_nid_single(cpu);
+	of_node_put(cpu);
 
 out_present:
 	if (nid < 0 || !node_possible(nid))
@@ -515,7 +551,6 @@ out_present:
 	}
 
 	map_cpu_to_node(lcpu, nid);
-	of_node_put(cpu);
 out:
 	return nid;
 }
@@ -546,7 +581,7 @@ static int ppc_numa_cpu_prepare(unsigned int cpu)
 {
 	int nid;
 
-	nid = numa_setup_cpu(cpu);
+	nid = numa_setup_cpu(cpu, true);
 	verify_cpu_node_mapping(cpu, nid);
 	return 0;
 }
@@ -893,7 +928,7 @@ void __init mem_topology_setup(void)
 	reset_numa_cpu_lookup_table();
 
 	for_each_present_cpu(cpu)
-		numa_setup_cpu(cpu);
+		numa_setup_cpu(cpu, false);
 }
 
 void __init initmem_init(void)
