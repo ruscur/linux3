@@ -1188,7 +1188,7 @@ static inline void add_cpu_to_smallcore_masks(int cpu)
 static void add_cpu_to_masks(int cpu)
 {
 	int first_thread = cpu_first_thread_sibling(cpu);
-	int chipid = cpu_to_chip_id(cpu);
+	int nid = cpu_to_nid(cpu);
 	int i;
 
 	/*
@@ -1217,11 +1217,11 @@ static void add_cpu_to_masks(int cpu)
 	for_each_cpu(i, cpu_l2_cache_mask(cpu))
 		set_cpus_related(cpu, i, cpu_core_mask);
 
-	if (chipid == -1)
+	if (nid == -1)
 		return;
 
 	for_each_cpu(i, cpu_online_mask)
-		if (cpu_to_chip_id(i) == chipid)
+		if (cpu_to_nid(i) == nid)
 			set_cpus_related(cpu, i, cpu_core_mask);
 }
 

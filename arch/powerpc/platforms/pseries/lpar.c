@@ -650,6 +650,28 @@ static int __init vcpudispatch_stats_procfs_init(void)
 }
 
 machine_device_initcall(pseries, vcpudispatch_stats_procfs_init);
+
+int cpu_to_nid(cpu)
+{
+	int nid = cpu_to_chip_id(cpu);
+
+	/*
+	 * If the platform is PowerNV or Guest on KVM, ibm,chip-id is
+	 * defined. Hence we would return the chip-id as the
+	 * cpu_to_nid.
+	 */
+	if (nid == -1 && firmware_has_feature(FW_FEATURE_LPAR)) {
+		struct device_node *np = of_get_cpu_node(cpu, NULL);
+
+		if (np) {
+			nid = of_node_to_nid(np);
+			of_node_put(np);
+		}
+	}
+	return nid;
+}
+EXPORT_SYMBOL(cpu_to_nid);
+
 #endif /* CONFIG_PPC_SPLPAR */
 
 void vpa_init(int cpu)

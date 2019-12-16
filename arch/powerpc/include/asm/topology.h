@@ -130,11 +130,16 @@ static inline void shared_proc_topology_init(void) {}
 
 #ifdef CONFIG_SMP
 #include <asm/cputable.h>
+#ifdef CONFIG_PPC_SPLPAR
+int cpu_to_nid(int);
+#else
+#define cpu_to_nid(cpu)		cpu_to_chip_id(cpu)
+#endif
 
 #ifdef CONFIG_PPC64
 #include <asm/smp.h>
 
-#define topology_physical_package_id(cpu)	(cpu_to_chip_id(cpu))
+#define topology_physical_package_id(cpu)	(cpu_to_nid(cpu))
 #define topology_sibling_cpumask(cpu)	(per_cpu(cpu_sibling_map, cpu))
 #define topology_core_cpumask(cpu)	(per_cpu(cpu_core_map, cpu))
 #define topology_core_id(cpu)		(cpu_to_core_id(cpu))
