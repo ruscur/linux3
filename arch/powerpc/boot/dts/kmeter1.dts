@@ -70,7 +70,45 @@
 			reg = <0x3000 0x100>;
 			interrupts = <14 0x8>;
 			interrupt-parent = <&ipic>;
-			clock-frequency = <400000>;
+			clock-frequency = <100000>;
+
+			mux@70 {
+				compatible = "nxp,pca9547";
+				reg = <0x70>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				i2c@2 {
+					reg = <2>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					/* Temperature sensors */
+					temp@48 {
+						label = "Top";
+						compatible = "national,lm75";
+						reg = <0x48>;
+					};
+
+					temp@49 {
+						label = "Control";
+						compatible = "national,lm75";
+						reg = <0x49>;
+					};
+
+					temp@4a {
+						label = "Power";
+						compatible = "national,lm75";
+						reg = <0x4a>;
+					};
+
+					temp@4b {
+						label = "Front";
+						compatible = "national,lm75";
+						reg = <0x4b>;
+					};
+				};
+			};
 		};
 
 		serial0: serial@4500 {
