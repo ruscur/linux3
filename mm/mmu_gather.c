@@ -143,15 +143,21 @@ static void tlb_remove_table_rcu(struct rcu_head *head)
 	free_page((unsigned long)batch);
 }
 
-static void tlb_table_flush(struct mmu_gather *tlb)
+static void __tlb_table_flush(struct mmu_gather *tlb, bool table_inval)
 {
 	struct mmu_table_batch **batch = &tlb->batch;
 
 	if (*batch) {
-		tlb_table_invalidate(tlb);
+		if (table_inval)
+			tlb_table_invalidate(tlb);
 		call_rcu(&(*batch)->rcu, tlb_remove_table_rcu);
 		*batch = NULL;
 	}
+}
+
+static void tlb_table_flush(struct mmu_gather *tlb)
+{
+	__tlb_table_flush(tlb, true);
 }
 
 void tlb_remove_table(struct mmu_gather *tlb, void *table)
@@ -178,7 +184,7 @@ void tlb_remove_table(struct mmu_gather *tlb, void *table)
 static void tlb_flush_mmu_free(struct mmu_gather *tlb)
 {
 #ifdef CONFIG_HAVE_RCU_TABLE_FREE
-	tlb_table_flush(tlb);
+	__tlb_table_flush(tlb, false);
 #endif
 #ifndef CONFIG_HAVE_MMU_GATHER_NO_GATHER
 	tlb_batch_pages_flush(tlb);
