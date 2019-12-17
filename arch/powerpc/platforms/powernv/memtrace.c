@@ -268,15 +268,11 @@ static int memtrace_online(void)
 
 static int memtrace_enable_set(void *data, u64 val)
 {
-	u64 bytes;
+	const unsigned long bytes = memory_block_size_bytes();
 
-	/*
-	 * Don't attempt to do anything if size isn't aligned to a memory
-	 * block or equal to zero.
-	 */
-	bytes = memory_block_size_bytes();
-	if (val & (bytes - 1)) {
-		pr_err("Value must be aligned with 0x%llx\n", bytes);
+	if (val && (!is_power_of_2(val) || val < bytes)) {
+		pr_err("Value must be 0 or a power of 2 (at least 0x%lx)\n",
+		       bytes);
 		return -EINVAL;
 	}
 
