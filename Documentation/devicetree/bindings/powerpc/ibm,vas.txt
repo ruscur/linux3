@@ -11,6 +11,8 @@ Required properties:
   window context start and length, OS/User window context start and length,
   "Paste address" start and length, "Paste window id" start bit and number
   of bits)
+- ibm,vas-port : Port address for the interrupt.
+- interrupts: IRQ value for each VAS instance and level.
 
 Example:
 
@@ -18,5 +20,8 @@ Example:
 		compatible = "ibm,vas", "ibm,power9-vas";
 		reg = <0x6019100000000 0x2000000 0x6019000000000 0x100000000 0x8000000000000 0x100000000 0x20 0x10>;
 		name = "vas";
+		interrupts = <0x1f 0>;
+		interrupt-parent = <&mpic>;
 		ibm,vas-id = <0x1>;
+		ibm,vas-port = <0x6010001000000>;
 	};
