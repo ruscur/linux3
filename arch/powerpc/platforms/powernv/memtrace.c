@@ -76,83 +76,130 @@ static int memtrace_free_node(int nid, unsigned long start, unsigned long size)
 	return ret;
 }
 
-static int check_memblock_online(struct memory_block *mem, void *arg)
+struct memtrace_alloc_info {
+	struct notifier_block memory_notifier;
+	unsigned long base_pfn;
+	unsigned long nr_pages;
+};
+
+static int memtrace_memory_notifier_cb(struct notifier_block *nb,
+				       unsigned long action, void *arg)
 {
-	if (mem->state != MEM_ONLINE)
-		return -1;
+	struct memtrace_alloc_info *info = container_of(nb,
+						     struct memtrace_alloc_info,
+						     memory_notifier);
+	unsigned long pfn, start_pfn, end_pfn;
+	const struct memory_notify *mhp = arg;
+	static bool going_offline;
 
-	return 0;
-}
+	/* Ignore ranges that don't overlap. */
+	if (mhp->start_pfn + mhp->nr_pages <= info->base_pfn ||
+	    info->base_pfn + info->nr_pages <= mhp->start_pfn)
+		return NOTIFY_OK;
 
-static int change_memblock_state(struct memory_block *mem, void *arg)
-{
-	unsigned long state = (unsigned long)arg;
+	start_pfn = max_t(unsigned long, info->base_pfn, mhp->start_pfn);
+	end_pfn = min_t(unsigned long, info->base_pfn + info->nr_pages,
+			mhp->start_pfn + mhp->nr_pages);
 
-	mem->state = state;
-
-	return 0;
-}
-
-/* called with device_hotplug_lock held */
-static bool memtrace_offline_pages(u32 nid, u64 start_pfn, u64 nr_pages)
-{
-	const unsigned long start = PFN_PHYS(start_pfn);
-	const unsigned long size = PFN_PHYS(nr_pages);
-
-	if (walk_memory_blocks(start, size, NULL, check_memblock_online))
-		return false;
-
-	walk_memory_blocks(start, size, (void *)MEM_GOING_OFFLINE,
-			   change_memblock_state);
-
-	if (offline_pages(start_pfn, nr_pages)) {
-		walk_memory_blocks(start, size, (void *)MEM_ONLINE,
-				   change_memblock_state);
-		return false;
+	/*
+	 * Drop our reference to the allocated (PageOffline()) pages, but
+	 * reaquire them in case offlining fails. We might get called for
+	 * MEM_CANCEL_OFFLINE but not for MEM_GOING_OFFLINE in case another
+	 * notifier aborted offlining.
+	 */
+	switch (action) {
+	case MEM_GOING_OFFLINE:
+		for (pfn = start_pfn; pfn < end_pfn; pfn++)
+			page_ref_dec(pfn_to_page(pfn));
+		going_offline = true;
+		break;
+	case MEM_CANCEL_OFFLINE:
+		if (going_offline)
+			for (pfn = start_pfn; pfn < end_pfn; pfn++)
+				page_ref_inc(pfn_to_page(pfn));
+		going_offline = false;
+		break;
+	case MEM_GOING_ONLINE:
+		/*
+		 * While our notifier is active, user space could
+		 * offline+re-online this memory. Disallow any such activity.
+		 */
+		return notifier_to_errno(-EBUSY);
 	}
-
-	walk_memory_blocks(start, size, (void *)MEM_OFFLINE,
-			   change_memblock_state);
-
-
-	return true;
+	return NOTIFY_OK;
 }
 
 static u64 memtrace_alloc_node(u32 nid, u64 size)
 {
-	u64 start_pfn, end_pfn, nr_pages, pfn;
-	u64 base_pfn;
-	u64 bytes = memory_block_size_bytes();
+	const unsigned long memory_block_bytes = memory_block_size_bytes();
+	const unsigned long nr_pages = size >> PAGE_SHIFT;
+	struct memtrace_alloc_info info = {
+		.memory_notifier = {
+			.notifier_call = memtrace_memory_notifier_cb,
+		},
+	};
+	unsigned long base_pfn, to_remove_pfn, pfn;
+	struct page *page;
+	int ret;
 
 	if (!node_spanned_pages(nid))
 		return 0;
 
-	start_pfn = node_start_pfn(nid);
-	end_pfn = node_end_pfn(nid);
-	nr_pages = size >> PAGE_SHIFT;
+	/*
+	 * Try to allocate memory (that might span multiple memory blocks)
+	 * on the requested node. Trace memory needs to be aligned to the size,
+	 * which is guaranteed by alloc_contig_pages().
+	 */
+	page = alloc_contig_pages(nr_pages, __GFP_THISNODE, nid, NULL);
+	if (!page)
+		return 0;
+	to_remove_pfn = base_pfn = page_to_pfn(page);
+	info.base_pfn = base_pfn;
+	info.nr_pages = nr_pages;
 
-	/* Trace memory needs to be aligned to the size */
-	end_pfn = round_down(end_pfn - nr_pages, nr_pages);
+	/* PageOffline() allows to isolate the memory when offlining. */
+	for (pfn = base_pfn; pfn < base_pfn + nr_pages; pfn++)
+		__SetPageOffline(pfn_to_page(pfn));
 
-	lock_device_hotplug();
-	for (base_pfn = end_pfn; base_pfn > start_pfn; base_pfn -= nr_pages) {
-		if (memtrace_offline_pages(nid, base_pfn, nr_pages) == true) {
-			/*
-			 * Remove memory in memory block size chunks so that
-			 * iomem resources are always split to the same size and
-			 * we never try to remove memory that spans two iomem
-			 * resources.
-			 */
-			end_pfn = base_pfn + nr_pages;
-			for (pfn = base_pfn; pfn < end_pfn; pfn += bytes>> PAGE_SHIFT) {
-				__remove_memory(nid, pfn << PAGE_SHIFT, bytes);
-			}
-			unlock_device_hotplug();
-			return base_pfn << PAGE_SHIFT;
-		}
+	/* A temporary memory notifier allows to offline the isolated memory. */
+	ret = register_memory_notifier(&info.memory_notifier);
+	if (ret)
+		goto out_free_pages;
+
+	/*
+	 * Try to offline and remove all involved memory blocks. This will
+	 * only fail in the unlikely event that another memory notifier NACKs
+	 * the offlining request - no memory has to be migrated.
+	 *
+	 * Remove memory in memory block size chunks so that iomem resources
+	 * are always split to the same size and we never try to remove memory
+	 * that spans two iomem resources.
+	 */
+	for (; to_remove_pfn < base_pfn + nr_pages;
+	     to_remove_pfn += PHYS_PFN(memory_block_bytes)) {
+		ret = offline_and_remove_memory(nid, PFN_PHYS(to_remove_pfn),
+						memory_block_bytes);
+		if (ret)
+			goto out_readd_memory;
 	}
-	unlock_device_hotplug();
 
+	unregister_memory_notifier(&info.memory_notifier);
+	return PFN_PHYS(base_pfn);
+out_readd_memory:
+	/* Unregister before adding+onlining (notifer blocks onlining). */
+	unregister_memory_notifier(&info.memory_notifier);
+	if (to_remove_pfn != base_pfn) {
+		ret = memtrace_free_node(nid, PFN_PHYS(base_pfn),
+					 PFN_PHYS(to_remove_pfn - base_pfn));
+		if (ret)
+			/* Even more unlikely, log and ignore. */
+			pr_err("Failed to add trace memory to node %d\n", nid);
+	}
+out_free_pages:
+	/* Only free memory that was not temporarily offlined+removed. */
+	for (pfn = to_remove_pfn; pfn < base_pfn + nr_pages; pfn++)
+		__ClearPageOffline(pfn_to_page(pfn));
+	free_contig_range(to_remove_pfn, nr_pages - (to_remove_pfn - base_pfn));
 	return 0;
 }
 
