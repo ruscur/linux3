@@ -50,6 +50,32 @@ static const struct file_operations memtrace_fops = {
 	.open	= simple_open,
 };
 
+static int online_mem_block(struct memory_block *mem, void *arg)
+{
+	return device_online(&mem->dev);
+}
+
+static int memtrace_free_node(int nid, unsigned long start, unsigned long size)
+{
+	int ret;
+
+	ret = add_memory(nid, start, size);
+	if (!ret) {
+		/*
+		 * If the kernel isn't compiled with the auto online option, we
+		 * will try to online ourselves. We'll ignore any errors here -
+		 * user space can try to online itself later (after all, the
+		 * memory was added successfully).
+		 */
+		if (!memhp_auto_online) {
+			lock_device_hotplug();
+			walk_memory_blocks(start, size, NULL, online_mem_block);
+			unlock_device_hotplug();
+		}
+	}
+	return ret;
+}
+
 static int check_memblock_online(struct memory_block *mem, void *arg)
 {
 	if (mem->state != MEM_ONLINE)
@@ -202,11 +228,6 @@ static int memtrace_init_debugfs(void)
 	return ret;
 }
 
-static int online_mem_block(struct memory_block *mem, void *arg)
-{
-	return device_online(&mem->dev);
-}
-
 /*
  * Iterate through the chunks of memory we have removed from the kernel
  * and attempt to add them back to the kernel.
@@ -229,22 +250,11 @@ static int memtrace_online(void)
 			ent->mem = 0;
 		}
 
-		if (add_memory(ent->nid, ent->start, ent->size)) {
+		if (memtrace_free_node(ent->nid, ent->start, ent->size)) {
 			pr_err("Failed to add trace memory to node %d\n",
 				ent->nid);
 			ret += 1;
 			continue;
-		}
-
-		/*
-		 * If kernel isn't compiled with the auto online option
-		 * we need to online the memory ourselves.
-		 */
-		if (!memhp_auto_online) {
-			lock_device_hotplug();
-			walk_memory_blocks(ent->start, ent->size, NULL,
-					   online_mem_block);
-			unlock_device_hotplug();
 		}
 
 		/*
