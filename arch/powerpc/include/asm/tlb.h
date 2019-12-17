@@ -27,6 +27,10 @@
 #define tlb_flush tlb_flush
 extern void tlb_flush(struct mmu_gather *tlb);
 
+#ifdef CONFIG_HAVE_RCU_TABLE_FREE
+#define tlb_needs_table_invalidate()	radix_enabled()
+#endif
+
 /* Get the generic bits... */
 #include <asm-generic/tlb.h>
 
