@@ -710,6 +710,9 @@ long kvmppc_h_stuff_tce(struct kvm_vcpu *vcpu,
 	if (ret != H_SUCCESS)
 		return ret;
 
+	if (tce_value == 0)
+		return H_TOO_HARD;
+
 	/* Check permission bits only to allow userspace poison TCE for debug */
 	if (tce_value & (TCE_PCI_WRITE | TCE_PCI_READ))
 		return H_PARAMETER;
