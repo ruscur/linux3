@@ -811,15 +811,27 @@ END_FTR_SECTION_IFCLR(CPU_FTR_ARCH_207S)
 	mtspr	SPRN_CIABR, r7
 	mtspr	SPRN_TAR, r8
 	ld	r5, VCPU_IC(r4)
-	ld	r8, VCPU_EBBHR(r4)
 	mtspr	SPRN_IC, r5
-	mtspr	SPRN_EBBHR, r8
-	ld	r5, VCPU_EBBRR(r4)
-	ld	r6, VCPU_BESCR(r4)
+
+	/* EBB and TM are disabled for secure VMs so skip them */
+	mfmsr   r8
+	andis.  r8, r8, MSR_S@high
+	bne     clear_ebb0
+	ld      r5, VCPU_EBBHR(r4)
+	ld      r6, VCPU_EBBRR(r4)
+	ld      r7, VCPU_BESCR(r4)
+	b       store_ebb0
+clear_ebb0:
+	li      r5, 0
+	li      r6, 0
+	li      r7, 0
+store_ebb0:
+	mtspr   SPRN_EBBHR, r5
+	mtspr   SPRN_EBBRR, r6
+	mtspr   SPRN_BESCR, r7
+
 	lwz	r7, VCPU_GUEST_PID(r4)
 	ld	r8, VCPU_WORT(r4)
-	mtspr	SPRN_EBBRR, r5
-	mtspr	SPRN_BESCR, r6
 	mtspr	SPRN_PID, r7
 	mtspr	SPRN_WORT, r8
 BEGIN_FTR_SECTION
@@ -1623,14 +1635,26 @@ END_FTR_SECTION_IFCLR(CPU_FTR_ARCH_207S)
 	mfspr	r7, SPRN_TAR
 	std	r5, VCPU_IC(r9)
 	std	r7, VCPU_TAR(r9)
-	mfspr	r8, SPRN_EBBHR
-	std	r8, VCPU_EBBHR(r9)
-	mfspr	r5, SPRN_EBBRR
-	mfspr	r6, SPRN_BESCR
+
+	/* EBB and TM are disabled for secure VMs so skip them */
+	mfmsr   r8
+	andis.  r8, r8, MSR_S@high
+	bne     clear_ebb1
+	mfspr   r5, SPRN_EBBHR
+	mfspr   r6, SPRN_EBBRR
+	mfspr   r7, SPRN_BESCR
+	b       store_ebb1
+clear_ebb1:
+	li      r5, 0
+	li      r6, 0
+	li      r7, 0
+store_ebb1:
+	std     r5, VCPU_EBBHR(r9)
+	std     r6, VCPU_EBBRR(r9)
+	std     r7, VCPU_BESCR(r9)
+
 	mfspr	r7, SPRN_PID
 	mfspr	r8, SPRN_WORT
-	std	r5, VCPU_EBBRR(r9)
-	std	r6, VCPU_BESCR(r9)
 	stw	r7, VCPU_GUEST_PID(r9)
 	std	r8, VCPU_WORT(r9)
 BEGIN_FTR_SECTION

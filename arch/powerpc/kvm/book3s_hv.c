@@ -3573,9 +3573,9 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 	mtspr(SPRN_PSPB, vcpu->arch.pspb);
 	mtspr(SPRN_FSCR, vcpu->arch.fscr);
 	mtspr(SPRN_TAR, vcpu->arch.tar);
-	mtspr(SPRN_EBBHR, vcpu->arch.ebbhr);
-	mtspr(SPRN_EBBRR, vcpu->arch.ebbrr);
-	mtspr(SPRN_BESCR, vcpu->arch.bescr);
+	mtspr_r(SPRN_EBBHR, vcpu->arch.ebbhr);
+	mtspr_r(SPRN_EBBRR, vcpu->arch.ebbrr);
+	mtspr_r(SPRN_BESCR, vcpu->arch.bescr);
 	mtspr(SPRN_WORT, vcpu->arch.wort);
 	mtspr(SPRN_TIDR, vcpu->arch.tid);
 	mtspr(SPRN_DAR, vcpu->arch.shregs.dar);
@@ -3646,9 +3646,9 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 	vcpu->arch.pspb = mfspr(SPRN_PSPB);
 	vcpu->arch.fscr = mfspr(SPRN_FSCR);
 	vcpu->arch.tar = mfspr(SPRN_TAR);
-	vcpu->arch.ebbhr = mfspr(SPRN_EBBHR);
-	vcpu->arch.ebbrr = mfspr(SPRN_EBBRR);
-	vcpu->arch.bescr = mfspr(SPRN_BESCR);
+	vcpu->arch.ebbhr = mfspr_r(SPRN_EBBHR);
+	vcpu->arch.ebbrr = mfspr_r(SPRN_EBBRR);
+	vcpu->arch.bescr = mfspr_r(SPRN_BESCR);
 	vcpu->arch.wort = mfspr(SPRN_WORT);
 	vcpu->arch.tid = mfspr(SPRN_TIDR);
 	vcpu->arch.amr = mfspr(SPRN_AMR);
@@ -4277,9 +4277,9 @@ static int kvmppc_vcpu_run_hv(struct kvm_run *run, struct kvm_vcpu *vcpu)
 
 	/* Save userspace EBB and other register values */
 	if (cpu_has_feature(CPU_FTR_ARCH_207S)) {
-		ebb_regs[0] = mfspr(SPRN_EBBHR);
-		ebb_regs[1] = mfspr(SPRN_EBBRR);
-		ebb_regs[2] = mfspr(SPRN_BESCR);
+		ebb_regs[0] = mfspr_r(SPRN_EBBHR);
+		ebb_regs[1] = mfspr_r(SPRN_EBBRR);
+		ebb_regs[2] = mfspr_r(SPRN_BESCR);
 		user_tar = mfspr(SPRN_TAR);
 	}
 	user_vrsave = mfspr(SPRN_VRSAVE);
@@ -4325,9 +4325,9 @@ static int kvmppc_vcpu_run_hv(struct kvm_run *run, struct kvm_vcpu *vcpu)
 
 	/* Restore userspace EBB and other register values */
 	if (cpu_has_feature(CPU_FTR_ARCH_207S)) {
-		mtspr(SPRN_EBBHR, ebb_regs[0]);
-		mtspr(SPRN_EBBRR, ebb_regs[1]);
-		mtspr(SPRN_BESCR, ebb_regs[2]);
+		mtspr_r(SPRN_EBBHR, ebb_regs[0]);
+		mtspr_r(SPRN_EBBRR, ebb_regs[1]);
+		mtspr_r(SPRN_BESCR, ebb_regs[2]);
 		mtspr(SPRN_TAR, user_tar);
 		mtspr(SPRN_FSCR, current->thread.fscr);
 	}

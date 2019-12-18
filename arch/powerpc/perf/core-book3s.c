@@ -16,6 +16,7 @@
 #include <asm/machdep.h>
 #include <asm/firmware.h>
 #include <asm/ptrace.h>
+#include <asm/svm.h>
 #include <asm/code-patching.h>
 
 #ifdef CONFIG_PPC64
@@ -844,9 +845,9 @@ void perf_event_print_debug(void)
 
 	if (ppmu->flags & PPMU_ARCH_207S) {
 		pr_info("MMCR2: %016lx EBBHR: %016lx\n",
-			mfspr(SPRN_MMCR2), mfspr(SPRN_EBBHR));
+			mfspr(SPRN_MMCR2), mfspr_r(SPRN_EBBHR));
 		pr_info("EBBRR: %016lx BESCR: %016lx\n",
-			mfspr(SPRN_EBBRR), mfspr(SPRN_BESCR));
+			mfspr_r(SPRN_EBBRR), mfspr_r(SPRN_BESCR));
 	}
 #endif
 	pr_info("SIAR:  %016lx SDAR:  %016lx SIER:  %016lx\n",

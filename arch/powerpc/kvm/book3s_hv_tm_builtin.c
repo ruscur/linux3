@@ -45,18 +45,18 @@ int kvmhv_p9_tm_emulation_early(struct kvm_vcpu *vcpu)
 		if (!(vcpu->arch.hfscr & HFSCR_EBB) ||
 		    ((msr & MSR_PR) && !(mfspr(SPRN_FSCR) & FSCR_EBB)))
 			return 0;
-		bescr = mfspr(SPRN_BESCR);
+		bescr = mfspr_r(SPRN_BESCR);
 		/* expect to see a S->T transition requested */
 		if (((bescr >> 30) & 3) != 2)
 			return 0;
 		bescr &= ~BESCR_GE;
 		if (instr & (1 << 11))
 			bescr |= BESCR_GE;
-		mtspr(SPRN_BESCR, bescr);
+		mtspr_r(SPRN_BESCR, bescr);
 		msr = (msr & ~MSR_TS_MASK) | MSR_TS_T;
 		vcpu->arch.shregs.msr = msr;
 		vcpu->arch.cfar = vcpu->arch.regs.nip - 4;
-		vcpu->arch.regs.nip = mfspr(SPRN_EBBRR);
+		vcpu->arch.regs.nip = mfspr_r(SPRN_EBBRR);
 		return 1;
 
 	case PPC_INST_MTMSRD:

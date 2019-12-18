@@ -1397,6 +1397,41 @@ static inline void msr_check_and_clear(unsigned long bits)
 		__msr_check_and_clear(bits);
 }
 
+#ifdef CONFIG_PPC_SVM
+/*
+ * Move from some "restricted" sprs.
+ * Secure VMs should not access some registers as the related features
+ * are disabled in the CPU. If an SVM is attempting read from the given
+ * SPR, return 0. Otherwise behave like a normal mfspr.
+ */
+#define mfspr_r(rn)						\
+({								\
+	unsigned long rval = 0ULL;				\
+								\
+	if (!(mfmsr() & MSR_S))					\
+		asm volatile("mfspr %0," __stringify(rn)	\
+				: "=r" (rval));			\
+	rval;							\
+})
+
+/*
+ * Move to some "restricted" sprs.
+ * Secure VMs should not access some registers as the related features
+ * are disabled in the CPU. If an SVM is attempting write to the given
+ * SPR, ignore the write. Otherwise behave like a normal mtspr.
+ */
+#define mtspr_r(rn, v)					\
+({								\
+	if (!(mfmsr() & MSR_S))					\
+		asm volatile("mtspr " __stringify(rn) ",%0" :	\
+				     : "r" ((unsigned long)(v)) \
+				     : "memory");		\
+})
+#else
+#define mfspr_r		mfspr
+#define mtspr_r		mtspr
+#endif
+
 #ifdef __powerpc64__
 #if defined(CONFIG_PPC_CELL) || defined(CONFIG_PPC_FSL_BOOK3E)
 #define mftb()		({unsigned long rval;				\
