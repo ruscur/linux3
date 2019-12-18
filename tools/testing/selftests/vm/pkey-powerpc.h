@@ -36,7 +36,6 @@
 					     pkey-31 and exec-only key */
 #define PKEY_BITS_PER_PKEY	2
 #define HPAGE_SIZE		(1UL << 24)
-#define PAGE_SIZE		(1UL << 16)
 #define pkey_reg_t		u64
 #define PKEY_REG_FMT		"%016lx"
 
