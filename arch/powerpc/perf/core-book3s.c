@@ -2273,6 +2273,12 @@ static int power_pmu_prepare_cpu(unsigned int cpu)
 
 int register_power_pmu(struct power_pmu *pmu)
 {
+	/*
+	 * PMU events are not currently supported in SVMs
+	 */
+	if (is_secure_guest())
+		return -ENOSYS;
+
 	if (ppmu)
 		return -EBUSY;		/* something's already registered */
 
