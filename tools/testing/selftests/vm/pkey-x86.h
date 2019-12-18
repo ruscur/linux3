@@ -46,6 +46,8 @@
 #define HPAGE_SIZE		(1UL<<21)
 #define PAGE_SIZE		4096
 #define MB			(1<<20)
+#define pkey_reg_t		u32
+#define PKEY_REG_FMT		"%016x"
 
 static inline void __page_o_noops(void)
 {
@@ -53,11 +55,11 @@ static inline void __page_o_noops(void)
 	asm(".rept 512 ; nopl 0x7eeeeeee(%eax) ; .endr");
 }
 
-static inline unsigned int __read_pkey_reg(void)
+static inline pkey_reg_t __read_pkey_reg(void)
 {
 	unsigned int eax, edx;
 	unsigned int ecx = 0;
-	unsigned int pkey_reg;
+	pkey_reg_t pkey_reg;
 
 	asm volatile(".byte 0x0f,0x01,0xee\n\t"
 		     : "=a" (eax), "=d" (edx)
@@ -66,13 +68,13 @@ static inline unsigned int __read_pkey_reg(void)
 	return pkey_reg;
 }
 
-static inline void __write_pkey_reg(unsigned int pkey_reg)
+static inline void __write_pkey_reg(pkey_reg_t pkey_reg)
 {
-	unsigned int eax = pkey_reg;
-	unsigned int ecx = 0;
-	unsigned int edx = 0;
+	pkey_reg_t eax = pkey_reg;
+	pkey_reg_t ecx = 0;
+	pkey_reg_t edx = 0;
 
-	dprintf4("%s() changing %08x to %08x\n", __func__,
+	dprintf4("%s() changing "PKEY_REG_FMT" to "PKEY_REG_FMT"\n", __func__,
 			__read_pkey_reg(), pkey_reg);
 	asm volatile(".byte 0x0f,0x01,0xef\n\t"
 		     : : "a" (eax), "c" (ecx), "d" (edx));
