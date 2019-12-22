@@ -139,6 +139,8 @@ extern int xive_native_set_queue_state(u32 vp_id, uint32_t prio, u32 qtoggle,
 extern int xive_native_get_vp_state(u32 vp_id, u64 *out_state);
 extern bool xive_native_has_queue_state_support(void);
 extern u32 xive_native_alloc_irq_on_chip(u32 chip_id);
+extern int xive_native_alloc_get_irq_info(u32 chip_id, u32 *irq,
+					u64 *trigger_addr);
 
 static inline u32 xive_native_alloc_irq(void)
 {
