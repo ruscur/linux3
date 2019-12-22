@@ -5,6 +5,8 @@
 #ifndef _ASM_POWERPC_XIVE_H
 #define _ASM_POWERPC_XIVE_H
 
+#include <asm/opal-api.h>
+
 #define XIVE_INVALID_VP	0xffffffff
 
 #ifdef CONFIG_PPC_XIVE
@@ -108,7 +110,6 @@ extern void xive_native_free_vp_block(u32 vp_base);
 extern int xive_native_populate_irq_data(u32 hw_irq,
 					 struct xive_irq_data *data);
 extern void xive_cleanup_irq_data(struct xive_irq_data *xd);
-extern u32 xive_native_alloc_irq(void);
 extern void xive_native_free_irq(u32 irq);
 extern int xive_native_configure_irq(u32 hw_irq, u32 target, u8 prio, u32 sw_irq);
 
@@ -137,6 +138,12 @@ extern int xive_native_set_queue_state(u32 vp_id, uint32_t prio, u32 qtoggle,
 				       u32 qindex);
 extern int xive_native_get_vp_state(u32 vp_id, u64 *out_state);
 extern bool xive_native_has_queue_state_support(void);
+extern u32 xive_native_alloc_irq_on_chip(u32 chip_id);
+
+static inline u32 xive_native_alloc_irq(void)
+{
+	return xive_native_alloc_irq_on_chip(OPAL_XIVE_ANY_CHIP);
+}
 
 #else
 
