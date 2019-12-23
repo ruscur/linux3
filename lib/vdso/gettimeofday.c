@@ -144,7 +144,7 @@ __cvdso_gettimeofday(const struct vdso_data *vd, struct __kernel_old_timeval *tv
 static __maybe_unused __kernel_old_time_t
 __cvdso_time(const struct vdso_data *vd, __kernel_old_time_t *time)
 {
-	__kernel_old_time_t t = READ_ONCE(vd[CS_HRES_COARSE].basetime[CLOCK_REALTIME].sec);
+	__kernel_old_time_t t = vd[CS_HRES_COARSE].basetime[CLOCK_REALTIME].sec;
 
 	if (time)
 		*time = t;
