@@ -596,15 +596,16 @@ u64 arch_irq_stat_cpu(unsigned int cpu)
 	return sum;
 }
 
-static inline void check_stack_overflow(void)
+static inline void check_stack_overflow(struct pt_regs *regs)
 {
 #ifdef CONFIG_DEBUG_STACKOVERFLOW
+	bool is_user = user_mode(regs);
 	long sp;
 
-	sp = current_stack_pointer() & (THREAD_SIZE-1);
+	sp = regs->gpr[1] & (THREAD_SIZE - 1);
 
 	/* check for stack overflow: is there less than 2KB free? */
-	if (unlikely(sp < 2048)) {
+	if (unlikely(!is_user && sp < 2048)) {
 		pr_err("do_IRQ: stack overflow: %ld\n", sp);
 		dump_stack();
 	}
@@ -654,6 +655,8 @@ void __do_irq(struct pt_regs *regs)
 
 	trace_irq_entry(regs);
 
+	check_stack_overflow(regs);
+
 	/*
 	 * Query the platform PIC for the interrupt & ack it.
 	 *
@@ -684,8 +687,6 @@ void do_IRQ(struct pt_regs *regs)
 	cursp = (void *)(stack_pointer() & ~(THREAD_SIZE - 1));
 	irqsp = hardirq_ctx[raw_smp_processor_id()];
 	sirqsp = softirq_ctx[raw_smp_processor_id()];
-
-	check_stack_overflow();
 
 	/* Already there ? Otherwise switch stack and call */
 	if (unlikely(cursp == irqsp || cursp == sirqsp))
