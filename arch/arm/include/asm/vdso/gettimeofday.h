@@ -70,6 +70,32 @@ static __always_inline int clock_getres_fallback(
 	return ret;
 }
 
+static __always_inline
+long clock_gettime32_fallback(clockid_t _clkid, struct old_timespec32 *_ts)
+{
+	struct __kernel_timespec ts;
+	int ret = clock_gettime_fallback(clock, &ts);
+
+	if (likely(!ret)) {
+		_ts->tv_sec = ts.tv_sec;
+		_ts->tv_nsec = ts.tv_nsec;
+	}
+	return ret;
+}
+
+static __always_inline
+long clock_getres32_fallback(clockid_t _clkid, struct old_timespec32 *_ts)
+{
+	struct __kernel_timespec ts;
+	int ret = clock_getres_fallback(clock, &ts);
+
+	if (likely(!ret && _ts)) {
+		_ts->tv_sec = ts.tv_sec;
+		_ts->tv_nsec = ts.tv_nsec;
+	}
+	return ret;
+}
+
 static __always_inline u64 __arch_get_hw_counter(int clock_mode)
 {
 #ifdef CONFIG_ARM_ARCH_TIMER

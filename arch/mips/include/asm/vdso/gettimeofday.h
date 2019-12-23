@@ -109,8 +109,6 @@ static __always_inline int clock_getres_fallback(
 
 #if _MIPS_SIM != _MIPS_SIM_ABI64
 
-#define VDSO_HAS_32BIT_FALLBACK	1
-
 static __always_inline long clock_gettime32_fallback(
 					clockid_t _clkid,
 					struct old_timespec32 *_ts)
@@ -149,6 +147,32 @@ static __always_inline int clock_getres32_fallback(
 	  "$14", "$15", "$24", "$25", "hi", "lo", "memory");
 
 	return error ? -ret : ret;
+}
+#else
+static __always_inline
+long clock_gettime32_fallback(clockid_t _clkid, struct old_timespec32 *_ts)
+{
+	struct __kernel_timespec ts;
+	int ret = clock_gettime_fallback(clock, &ts);
+
+	if (likely(!ret)) {
+		_ts->tv_sec = ts.tv_sec;
+		_ts->tv_nsec = ts.tv_nsec;
+	}
+	return ret;
+}
+
+static __always_inline
+long clock_getres32_fallback(clockid_t _clkid, struct old_timespec32 *_ts)
+{
+	struct __kernel_timespec ts;
+	int ret = clock_getres_fallback(clock, &ts);
+
+	if (likely(!ret && _ts)) {
+		_ts->tv_sec = ts.tv_sec;
+		_ts->tv_nsec = ts.tv_nsec;
+	}
+	return ret;
 }
 #endif
 
