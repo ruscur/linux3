@@ -596,20 +596,19 @@ u64 arch_irq_stat_cpu(unsigned int cpu)
 	return sum;
 }
 
-static inline void check_stack_overflow(struct pt_regs *regs)
+static void check_stack_overflow(struct pt_regs *regs)
 {
-#ifdef CONFIG_DEBUG_STACKOVERFLOW
 	bool is_user = user_mode(regs);
-	long sp;
+	long sp = regs->gpr[1] & (THREAD_SIZE - 1);
 
-	sp = regs->gpr[1] & (THREAD_SIZE - 1);
+	if (!IS_ENABLED(CONFIG_DEBUG_STACKOVERFLOW))
+		return;
 
 	/* check for stack overflow: is there less than 2KB free? */
 	if (unlikely(!is_user && sp < 2048)) {
 		pr_err("do_IRQ: stack overflow: %ld\n", sp);
 		dump_stack();
 	}
-#endif
 }
 
 #ifdef CONFIG_PPC32
