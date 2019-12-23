@@ -19,7 +19,8 @@ extern __kernel_old_time_t __vdso_time(__kernel_old_time_t *t);
 
 int __vdso_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz)
 {
-	int ret = __cvdso_gettimeofday(tv, tz);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+	int ret = __cvdso_gettimeofday(vd, tv, tz);
 
 	if (likely(!ret))
 		return ret;
@@ -32,7 +33,9 @@ int gettimeofday(struct __kernel_old_timeval *, struct timezone *)
 
 __kernel_old_time_t __vdso_time(__kernel_old_time_t *t)
 {
-	return __cvdso_time(t);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+
+	return __cvdso_time(vd, t);
 }
 
 __kernel_old_time_t time(__kernel_old_time_t *t)	__attribute__((weak, alias("__vdso_time")));
@@ -45,7 +48,8 @@ extern int __vdso_clock_getres(clockid_t clock, struct __kernel_timespec *res);
 
 int __vdso_clock_gettime(clockid_t clock, struct __kernel_timespec *ts)
 {
-	int ret = __cvdso_clock_gettime(clock, ts);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+	int ret = __cvdso_clock_gettime(vd, clock, ts);
 
 	if (likely(!ret))
 		return ret;
@@ -59,7 +63,8 @@ int clock_gettime(clockid_t, struct __kernel_timespec *)
 int __vdso_clock_getres(clockid_t clock,
 			struct __kernel_timespec *res)
 {
-	int ret =  __cvdso_clock_getres(clock_id, res);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+	int ret =  __cvdso_clock_getres(vd, clock_id, res);
 
 	if (likely(!ret))
 		return ret;
@@ -76,7 +81,8 @@ extern int __vdso_clock_getres(clockid_t clock, struct old_timespec32 *res);
 
 int __vdso_clock_gettime(clockid_t clock, struct old_timespec32 *ts)
 {
-	int ret = __cvdso_clock_gettime32(clock, ts);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+	int ret = __cvdso_clock_gettime32(vd, clock, ts);
 
 	if (likely(!ret))
 		return ret;
@@ -89,7 +95,8 @@ int clock_gettime(clockid_t, struct old_timespec32 *)
 
 int __vdso_clock_gettime64(clockid_t clock, struct __kernel_timespec *ts)
 {
-	int ret = __cvdso_clock_gettime(clock, ts);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+	int ret = __cvdso_clock_gettime(vd, clock, ts);
 
 	if (likely(!ret))
 		return ret;
@@ -102,7 +109,8 @@ int clock_gettime64(clockid_t, struct __kernel_timespec *)
 
 int __vdso_clock_getres(clockid_t clock, struct old_timespec32 *res)
 {
-	int ret = __cvdso_clock_getres_time32(clock, res);
+	const struct vdso_data *vd = __arch_get_vdso_data();
+	int ret = __cvdso_clock_getres_time32(vd, clock, res);
 
 	if (likely(!ret))
 		return ret;
