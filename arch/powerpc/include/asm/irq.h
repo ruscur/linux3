@@ -54,7 +54,6 @@ extern void *mcheckirq_ctx[NR_CPUS];
  * Per-cpu stacks for handling hard and soft interrupts.
  */
 extern void *hardirq_ctx[NR_CPUS];
-extern void *softirq_ctx[NR_CPUS];
 
 #ifdef CONFIG_PPC64
 void call_do_softirq(void *sp);

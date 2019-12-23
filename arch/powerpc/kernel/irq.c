@@ -680,15 +680,14 @@ void __do_irq(struct pt_regs *regs)
 
 void do_IRQ(struct pt_regs *regs)
 {
-	void *cursp, *irqsp, *sirqsp;
+	void *cursp, *irqsp;
 
 	/* Switch to the irq stack to handle this */
 	cursp = (void *)(stack_pointer() & ~(THREAD_SIZE - 1));
 	irqsp = hardirq_ctx[raw_smp_processor_id()];
-	sirqsp = softirq_ctx[raw_smp_processor_id()];
 
 	/* Already there ? Otherwise switch stack and call */
-	if (unlikely(cursp == irqsp || cursp == sirqsp))
+	if (unlikely(cursp == irqsp))
 		__do_irq(regs);
 	else
 		call_do_irq(regs, irqsp);
@@ -706,12 +705,11 @@ void    *dbgirq_ctx[NR_CPUS] __read_mostly;
 void *mcheckirq_ctx[NR_CPUS] __read_mostly;
 #endif
 
-void *softirq_ctx[NR_CPUS] __read_mostly;
 void *hardirq_ctx[NR_CPUS] __read_mostly;
 
 void do_softirq_own_stack(void)
 {
-	call_do_softirq(softirq_ctx[smp_processor_id()]);
+	call_do_softirq(hardirq_ctx[smp_processor_id()]);
 }
 
 irq_hw_number_t virq_to_hw(unsigned int virq)

@@ -652,10 +652,8 @@ void __init irqstack_early_init(void)
 	 * cannot afford to take SLB misses on them. They are not
 	 * accessed in realmode.
 	 */
-	for_each_possible_cpu(i) {
-		softirq_ctx[i] = alloc_stack(limit, i);
+	for_each_possible_cpu(i)
 		hardirq_ctx[i] = alloc_stack(limit, i);
-	}
 }
 
 #ifdef CONFIG_PPC_BOOK3E
