@@ -17,6 +17,7 @@
 #include <linux/elf.h>
 #include <linux/security.h>
 #include <linux/memblock.h>
+#include <vdso/datapage.h>
 
 #include <asm/pgtable.h>
 #include <asm/processor.h>
@@ -71,10 +72,10 @@ static int vdso_ready;
  * with it, it will become dynamically allocated
  */
 static union {
-	struct vdso_data	data;
+	struct vdso_arch_data	arch_data;
 	u8			page[PAGE_SIZE];
 } vdso_data_store __page_aligned_data;
-struct vdso_data *vdso_data = &vdso_data_store.data;
+struct vdso_arch_data *vdso_arch_data = &vdso_data_store.arch_data;
 
 /* Format of the patch table */
 struct vdso_patch_def
@@ -661,7 +662,7 @@ static void __init vdso_setup_syscall_map(void)
 				0x80000000UL >> (i & 0x1f);
 #else /* CONFIG_PPC64 */
 		if (sys_call_table[i] != sys_ni_syscall)
-			vdso_data->syscall_map_32[i >> 5] |=
+			vdso_arch_data->syscall_map_32[i >> 5] |=
 				0x80000000UL >> (i & 0x1f);
 #endif /* CONFIG_PPC64 */
 	}
@@ -729,10 +730,10 @@ static int __init vdso_init(void)
 	vdso64_pages = (&vdso64_end - &vdso64_start) >> PAGE_SHIFT;
 	DBG("vdso64_kbase: %p, 0x%x pages\n", vdso64_kbase, vdso64_pages);
 #else
-	vdso_data->dcache_block_size = L1_CACHE_BYTES;
-	vdso_data->dcache_log_block_size = L1_CACHE_SHIFT;
-	vdso_data->icache_block_size = L1_CACHE_BYTES;
-	vdso_data->icache_log_block_size = L1_CACHE_SHIFT;
+	vdso_arch_data->dcache_block_size = L1_CACHE_BYTES;
+	vdso_arch_data->dcache_log_block_size = L1_CACHE_SHIFT;
+	vdso_arch_data->icache_block_size = L1_CACHE_BYTES;
+	vdso_arch_data->icache_log_block_size = L1_CACHE_SHIFT;
 #endif /* CONFIG_PPC64 */
 
 
@@ -775,7 +776,7 @@ static int __init vdso_init(void)
 		get_page(pg);
 		vdso32_pagelist[i] = pg;
 	}
-	vdso32_pagelist[i++] = virt_to_page(vdso_data);
+	vdso32_pagelist[i++] = virt_to_page(vdso_arch_data);
 	vdso32_pagelist[i] = NULL;
 #endif
 
@@ -792,7 +793,7 @@ static int __init vdso_init(void)
 	vdso64_pagelist[i] = NULL;
 #endif /* CONFIG_PPC64 */
 
-	get_page(virt_to_page(vdso_data));
+	get_page(virt_to_page(vdso_arch_data));
 
 	smp_wmb();
 	vdso_ready = 1;
