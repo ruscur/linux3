@@ -647,6 +647,7 @@ static inline void call_do_irq(struct pt_regs *regs, void *sp)
 
 void __do_irq(struct pt_regs *regs)
 {
+	struct pt_regs *old_regs = set_irq_regs(regs);
 	unsigned int irq;
 
 	irq_enter();
@@ -672,11 +673,11 @@ void __do_irq(struct pt_regs *regs)
 	trace_irq_exit(regs);
 
 	irq_exit();
+	set_irq_regs(old_regs);
 }
 
 void do_IRQ(struct pt_regs *regs)
 {
-	struct pt_regs *old_regs = set_irq_regs(regs);
 	void *cursp, *irqsp, *sirqsp;
 
 	/* Switch to the irq stack to handle this */
@@ -686,16 +687,11 @@ void do_IRQ(struct pt_regs *regs)
 
 	check_stack_overflow();
 
-	/* Already there ? */
-	if (unlikely(cursp == irqsp || cursp == sirqsp)) {
+	/* Already there ? Otherwise switch stack and call */
+	if (unlikely(cursp == irqsp || cursp == sirqsp))
 		__do_irq(regs);
-		set_irq_regs(old_regs);
-		return;
-	}
-	/* Switch stack and call */
-	call_do_irq(regs, irqsp);
-
-	set_irq_regs(old_regs);
+	else
+		call_do_irq(regs, irqsp);
 }
 
 void __init init_IRQ(void)
