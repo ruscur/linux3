@@ -91,8 +91,6 @@ _ENTRY(crit_srr0)
 	.space	4
 _ENTRY(crit_srr1)
 	.space	4
-_ENTRY(saved_ksp_limit)
-	.space	4
 
 /*
  * Exception prolog for critical exceptions.  This is a little different

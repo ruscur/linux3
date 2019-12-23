@@ -86,13 +86,6 @@ crit_transfer_to_handler:
 	stw	r0,_SRR0(r11)
 	mfspr	r0,SPRN_SRR1
 	stw	r0,_SRR1(r11)
-
-	/* set the stack limit to the current stack */
-	mfspr	r8,SPRN_SPRG_THREAD
-	lwz	r0,KSP_LIMIT(r8)
-	stw	r0,SAVED_KSP_LIMIT(r11)
-	rlwinm	r0,r1,0,0,(31 - THREAD_SHIFT)
-	stw	r0,KSP_LIMIT(r8)
 	/* fall through */
 #endif
 
@@ -107,13 +100,6 @@ crit_transfer_to_handler:
 	stw	r0,crit_srr0@l(0)
 	mfspr	r0,SPRN_SRR1
 	stw	r0,crit_srr1@l(0)
-
-	/* set the stack limit to the current stack */
-	mfspr	r8,SPRN_SPRG_THREAD
-	lwz	r0,KSP_LIMIT(r8)
-	stw	r0,saved_ksp_limit@l(0)
-	rlwinm	r0,r1,0,0,(31 - THREAD_SHIFT)
-	stw	r0,KSP_LIMIT(r8)
 	/* fall through */
 #endif
 
@@ -181,9 +167,6 @@ transfer_to_handler:
          */
 	kuap_save_and_lock r11, r12, r9, r2, r0
 	addi	r2, r12, -THREAD
-	lwz	r9,KSP_LIMIT(r12)
-	cmplw	r1,r9			/* if r1 <= ksp_limit */
-	ble-	stack_ovf		/* then the kernel stack overflowed */
 5:
 #if defined(CONFIG_PPC_BOOK3S_32) || defined(CONFIG_E500)
 	lwz	r12,TI_LOCAL_FLAGS(r2)
@@ -286,32 +269,6 @@ reenable_mmu:
 	kuap_restore r11, r2, r3, r4, r5
 	b	fast_exception_return
 #endif
-
-/*
- * On kernel stack overflow, load up an initial stack pointer
- * and call StackOverflow(regs), which should not return.
- */
-stack_ovf:
-	/* sometimes we use a statically-allocated stack, which is OK. */
-	lis	r12,_end@h
-	ori	r12,r12,_end@l
-	cmplw	r1,r12
-	ble	5b			/* r1 <= &_end is OK */
-	SAVE_NVGPRS(r11)
-	addi	r3,r1,STACK_FRAME_OVERHEAD
-	lis	r1,init_thread_union@ha
-	addi	r1,r1,init_thread_union@l
-	addi	r1,r1,THREAD_SIZE-STACK_FRAME_OVERHEAD
-	lis	r9,StackOverflow@ha
-	addi	r9,r9,StackOverflow@l
-	LOAD_REG_IMMEDIATE(r10,MSR_KERNEL)
-#if defined(CONFIG_PPC_8xx) && defined(CONFIG_PERF_EVENTS)
-	mtspr	SPRN_NRI, r0
-#endif
-	mtspr	SPRN_SRR0,r9
-	mtspr	SPRN_SRR1,r10
-	SYNC
-	RFI
 
 #ifdef CONFIG_TRACE_IRQFLAGS
 trace_syscall_entry_irq_off:
@@ -1142,11 +1099,6 @@ exc_exit_restart_end:
 #ifdef CONFIG_40x
 	.globl	ret_from_crit_exc
 ret_from_crit_exc:
-	mfspr	r9,SPRN_SPRG_THREAD
-	lis	r10,saved_ksp_limit@ha;
-	lwz	r10,saved_ksp_limit@l(r10);
-	tovirt(r9,r9);
-	stw	r10,KSP_LIMIT(r9)
 	lis	r9,crit_srr0@ha;
 	lwz	r9,crit_srr0@l(r9);
 	lis	r10,crit_srr1@ha;
@@ -1159,18 +1111,12 @@ ret_from_crit_exc:
 #ifdef CONFIG_BOOKE
 	.globl	ret_from_crit_exc
 ret_from_crit_exc:
-	mfspr	r9,SPRN_SPRG_THREAD
-	lwz	r10,SAVED_KSP_LIMIT(r1)
-	stw	r10,KSP_LIMIT(r9)
 	RESTORE_xSRR(SRR0,SRR1);
 	RESTORE_MMU_REGS;
 	RET_FROM_EXC_LEVEL(SPRN_CSRR0, SPRN_CSRR1, PPC_RFCI)
 
 	.globl	ret_from_debug_exc
 ret_from_debug_exc:
-	mfspr	r9,SPRN_SPRG_THREAD
-	lwz	r10,SAVED_KSP_LIMIT(r1)
-	stw	r10,KSP_LIMIT(r9)
 	RESTORE_xSRR(SRR0,SRR1);
 	RESTORE_xSRR(CSRR0,CSRR1);
 	RESTORE_MMU_REGS;
@@ -1178,9 +1124,6 @@ ret_from_debug_exc:
 
 	.globl	ret_from_mcheck_exc
 ret_from_mcheck_exc:
-	mfspr	r9,SPRN_SPRG_THREAD
-	lwz	r10,SAVED_KSP_LIMIT(r1)
-	stw	r10,KSP_LIMIT(r9)
 	RESTORE_xSRR(SRR0,SRR1);
 	RESTORE_xSRR(CSRR0,CSRR1);
 	RESTORE_xSRR(DSRR0,DSRR1);
