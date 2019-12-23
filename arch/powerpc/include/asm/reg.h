@@ -1466,6 +1466,14 @@ static inline void update_power8_hid0(unsigned long hid0)
 	 */
 	asm volatile("sync; mtspr %0,%1; isync":: "i"(SPRN_HID0), "r"(hid0));
 }
+
+static __always_inline unsigned long stack_pointer(void)
+{
+	register unsigned long r1 asm("r1");
+
+	return r1;
+}
+
 #endif /* __ASSEMBLY__ */
 #endif /* __KERNEL__ */
 #endif /* _ASM_POWERPC_REG_H */
