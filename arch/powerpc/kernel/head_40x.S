@@ -315,7 +315,7 @@ _ENTRY(crit_srr1)
 	EXC_XFER_LITE(0x400, handle_page_fault)
 
 /* 0x0500 - External Interrupt Exception */
-	EXCEPTION(0x0500, HardwareInterrupt, do_IRQ, EXC_XFER_LITE)
+	EXCEPTION_IRQ(0x0500, HardwareInterrupt, __do_irq, EXC_XFER_LITE)
 
 /* 0x0600 - Alignment Exception */
 	START_EXCEPTION(0x0600, Alignment)

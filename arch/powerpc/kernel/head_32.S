@@ -332,7 +332,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
 	EXC_XFER_LITE(0x400, handle_page_fault)
 
 /* External interrupt */
-	EXCEPTION(0x500, HardwareInterrupt, do_IRQ, EXC_XFER_LITE)
+	EXCEPTION_IRQ(0x500, HardwareInterrupt, __do_irq, EXC_XFER_LITE)
 
 /* Alignment exception */
 	. = 0x600

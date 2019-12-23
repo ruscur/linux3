@@ -11,21 +11,41 @@
  * task's thread_struct.
  */
 
-.macro EXCEPTION_PROLOG
+.macro EXCEPTION_PROLOG is_irq=0
 	mtspr	SPRN_SPRG_SCRATCH0,r10
 	mtspr	SPRN_SPRG_SCRATCH1,r11
 	mfcr	r10
-	EXCEPTION_PROLOG_1
+	EXCEPTION_PROLOG_1 is_irq=\is_irq
 	EXCEPTION_PROLOG_2
 .endm
 
-.macro EXCEPTION_PROLOG_1
+.macro EXCEPTION_PROLOG_1 is_irq=0
 	mfspr	r11,SPRN_SRR1		/* check whether user or kernel */
 	andi.	r11,r11,MSR_PR
+	.if \is_irq
+	bne	2f
+	mfspr	r11, SPRN_SPRG_THREAD
+	lwz	r11, TASK_STACK - THREAD(r11)
+	xor	r11, r11, r1
+	cmplwi	cr7, r11, THREAD_SIZE - 1
+	tophys(r11, r1)			/* use tophys(r1) if not thread stack */
+	bgt	cr7, 1f
+2:
+#ifdef CONFIG_SMP
+	mfspr	r11, SPRN_SPRG_THREAD
+	lwz	r11, TASK_CPU - THREAD(r11)
+	slwi	r11, r11, 3
+	addis	r11, r11, (hardirq_ctx - PAGE_OFFSET)@ha
+#else
+	lis	r11, (hardirq_ctx - PAGE_OFFSET)@ha
+#endif
+	lwz	r11, (hardirq_ctx - PAGE_OFFSET)@l(r11)
+	.else
 	tophys(r11,r1)			/* use tophys(r1) if kernel */
 	beq	1f
 	mfspr	r11,SPRN_SPRG_THREAD
 	lwz	r11,TASK_STACK-THREAD(r11)
+	.endif
 	addi	r11,r11,THREAD_SIZE
 	tophys(r11,r11)
 1:	subi	r11,r11,INT_FRAME_SIZE	/* alloc exc. frame */
@@ -168,6 +188,12 @@ label:
 #define EXCEPTION(n, label, hdlr, xfer)		\
 	START_EXCEPTION(n, label)		\
 	EXCEPTION_PROLOG;			\
+	addi	r3,r1,STACK_FRAME_OVERHEAD;	\
+	xfer(n, hdlr)
+
+#define EXCEPTION_IRQ(n, label, hdlr, xfer)	\
+	START_EXCEPTION(n, label)		\
+	EXCEPTION_PROLOG is_irq=1;		\
 	addi	r3,r1,STACK_FRAME_OVERHEAD;	\
 	xfer(n, hdlr)
 

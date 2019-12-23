@@ -150,7 +150,7 @@ DataAccess:
 InstructionAccess:
 
 /* External interrupt */
-	EXCEPTION(0x500, HardwareInterrupt, do_IRQ, EXC_XFER_LITE)
+	EXCEPTION_IRQ(0x500, HardwareInterrupt, __do_irq, EXC_XFER_LITE)
 
 /* Alignment exception */
 	. = 0x600
