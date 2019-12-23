@@ -16,9 +16,6 @@
  * - __arch_get_vdso_data(): to get the vdso datapage.
  * - __arch_get_hw_counter(): to get the hw counter based on the
  *   clock_mode.
- * - gettimeofday_fallback(): fallback for gettimeofday.
- * - clock_gettime_fallback(): fallback for clock_gettime.
- * - clock_getres_fallback(): fallback for clock_getres.
  */
 #ifdef ENABLE_COMPAT_VDSO
 #include <asm/vdso/compat_gettimeofday.h>
@@ -110,23 +107,14 @@ __cvdso_clock_gettime_common(clockid_t clock, struct __kernel_timespec *ts)
 static __maybe_unused int
 __cvdso_clock_gettime(clockid_t clock, struct __kernel_timespec *ts)
 {
-	int ret = __cvdso_clock_gettime_common(clock, ts);
-
-	if (unlikely(ret))
-		return clock_gettime_fallback(clock, ts);
-	return 0;
+	return __cvdso_clock_gettime_common(clock, ts);
 }
 
 static __maybe_unused int
 __cvdso_clock_gettime32(clockid_t clock, struct old_timespec32 *res)
 {
 	struct __kernel_timespec ts;
-	int ret;
-
-	ret = __cvdso_clock_gettime_common(clock, &ts);
-
-	if (unlikely(ret))
-		return clock_gettime32_fallback(clock, res);
+	int ret = __cvdso_clock_gettime_common(clock, &ts);
 
 	if (likely(!ret)) {
 		res->tv_sec = ts.tv_sec;
@@ -144,7 +132,7 @@ __cvdso_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz)
 		struct __kernel_timespec ts;
 
 		if (do_hres(&vd[CS_HRES_COARSE], CLOCK_REALTIME, &ts))
-			return gettimeofday_fallback(tv, tz);
+			return -1;
 
 		tv->tv_sec = ts.tv_sec;
 		tv->tv_usec = (u32)ts.tv_nsec / NSEC_PER_USEC;
@@ -218,23 +206,14 @@ int __cvdso_clock_getres_common(clockid_t clock, struct __kernel_timespec *res)
 
 int __cvdso_clock_getres(clockid_t clock, struct __kernel_timespec *res)
 {
-	int ret = __cvdso_clock_getres_common(clock, res);
-
-	if (unlikely(ret))
-		return clock_getres_fallback(clock, res);
-	return 0;
+	return __cvdso_clock_getres_common(clock, res);
 }
 
 static __maybe_unused int
 __cvdso_clock_getres_time32(clockid_t clock, struct old_timespec32 *res)
 {
 	struct __kernel_timespec ts;
-	int ret;
-
-	ret = __cvdso_clock_getres_common(clock, &ts);
-
-	if (unlikely(ret))
-		return clock_getres32_fallback(clock, res);
+	int ret = __cvdso_clock_getres_common(clock, &ts);
 
 	if (likely(!ret && res)) {
 		res->tv_sec = ts.tv_sec;

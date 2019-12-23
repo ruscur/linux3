@@ -14,25 +14,45 @@
 int __vdso_clock_gettime(clockid_t clock,
 			 struct old_timespec32 *ts)
 {
-	return __cvdso_clock_gettime32(clock, ts);
+	int ret = __cvdso_clock_gettime32(clock, ts);
+
+	if (likely(!ret))
+		return ret;
+
+	return clock_gettime32_fallback(clock, ts);
 }
 
 int __vdso_gettimeofday(struct __kernel_old_timeval *tv,
 			struct timezone *tz)
 {
-	return __cvdso_gettimeofday(tv, tz);
+	int ret = __cvdso_gettimeofday(tv, tz);
+
+	if (likely(!ret))
+		return ret;
+
+	return gettimeofday_fallback(tv, tz);
 }
 
 int __vdso_clock_getres(clockid_t clock_id,
 			struct old_timespec32 *res)
 {
-	return __cvdso_clock_getres_time32(clock_id, res);
+	int ret = __cvdso_clock_getres_time32(clock_id, res);
+
+	if (likely(!ret))
+		return ret;
+
+	return clock_getres32_fallback(clock, res);
 }
 
 int __vdso_clock_gettime64(clockid_t clock,
 			   struct __kernel_timespec *ts)
 {
-	return __cvdso_clock_gettime(clock, ts);
+	int ret = __cvdso_clock_gettime(clock, ts);
+
+	if (likely(!ret))
+		return ret;
+
+	return clock_gettime_fallback(clock, ts);
 }
 
 #else
@@ -40,19 +60,34 @@ int __vdso_clock_gettime64(clockid_t clock,
 int __vdso_clock_gettime(clockid_t clock,
 			 struct __kernel_timespec *ts)
 {
-	return __cvdso_clock_gettime(clock, ts);
+	int ret = __cvdso_clock_gettime(clock, ts);
+
+	if (likely(!ret))
+		return ret;
+
+	return clock_gettime_fallback(clock, ts);
 }
 
 int __vdso_gettimeofday(struct __kernel_old_timeval *tv,
 			struct timezone *tz)
 {
-	return __cvdso_gettimeofday(tv, tz);
+	int ret = __cvdso_gettimeofday(tv, tz);
+
+	if (likely(!ret))
+		return ret;
+
+	return gettimeofday_fallback(tv, tz);
 }
 
 int __vdso_clock_getres(clockid_t clock_id,
 			struct __kernel_timespec *res)
 {
-	return __cvdso_clock_getres(clock_id, res);
+	int ret =  __cvdso_clock_getres(clock_id, res);
+
+	if (likely(!ret))
+		return ret;
+
+	return clock_getres_fallback(clock, res);
 }
 
 #endif
