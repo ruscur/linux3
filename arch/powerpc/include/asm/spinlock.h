@@ -16,6 +16,7 @@
  * (the type definitions are in asm/spinlock_types.h)
  */
 #include <linux/irqflags.h>
+#include <linux/jump_label.h>
 #ifdef CONFIG_PPC64
 #include <asm/paca.h>
 #include <asm/hvcall.h>
