@@ -811,6 +811,11 @@ void perf_event_print_debug(void)
 		return;
 	}
 
+	if (is_secure_guest()) {
+		pr_info("Performance monitor access disabled in SVM.\n");
+		return;
+	}
+
 	if (!ppmu->n_counter)
 		return;
 

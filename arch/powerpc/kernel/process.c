@@ -1062,9 +1062,11 @@ static inline void save_sprs(struct thread_struct *t)
 		t->dscr = mfspr(SPRN_DSCR);
 
 	if (cpu_has_feature(CPU_FTR_ARCH_207S)) {
-		t->bescr = mfspr(SPRN_BESCR);
-		t->ebbhr = mfspr(SPRN_EBBHR);
-		t->ebbrr = mfspr(SPRN_EBBRR);
+		if (!is_secure_guest()) {
+			t->bescr = mfspr(SPRN_BESCR);
+			t->ebbhr = mfspr(SPRN_EBBHR);
+			t->ebbrr = mfspr(SPRN_EBBRR);
+		}
 
 		t->fscr = mfspr(SPRN_FSCR);
 
@@ -1100,12 +1102,14 @@ static inline void restore_sprs(struct thread_struct *old_thread,
 	}
 
 	if (cpu_has_feature(CPU_FTR_ARCH_207S)) {
-		if (old_thread->bescr != new_thread->bescr)
-			mtspr(SPRN_BESCR, new_thread->bescr);
-		if (old_thread->ebbhr != new_thread->ebbhr)
-			mtspr(SPRN_EBBHR, new_thread->ebbhr);
-		if (old_thread->ebbrr != new_thread->ebbrr)
-			mtspr(SPRN_EBBRR, new_thread->ebbrr);
+		if (!is_secure_guest()) {
+			if (old_thread->bescr != new_thread->bescr)
+				mtspr(SPRN_BESCR, new_thread->bescr);
+			if (old_thread->ebbhr != new_thread->ebbhr)
+				mtspr(SPRN_EBBHR, new_thread->ebbhr);
+			if (old_thread->ebbrr != new_thread->ebbrr)
+				mtspr(SPRN_EBBRR, new_thread->ebbrr);
+		}
 
 		if (old_thread->fscr != new_thread->fscr)
 			mtspr(SPRN_FSCR, new_thread->fscr);
