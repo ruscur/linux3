@@ -36,7 +36,7 @@ static int __ref kasan_init_shadow_page_tables(unsigned long k_start, unsigned l
 	unsigned long k_cur, k_next;
 	pgprot_t prot = slab_is_available() ? kasan_prot_ro() : PAGE_KERNEL;
 
-	pmd = pmd_offset(pud_offset(pgd_offset_k(k_start), k_start), k_start);
+	pmd = pmd_ptr_k(k_start);
 
 	for (k_cur = k_start; k_cur != k_end; k_cur = k_next, pmd++) {
 		pte_t *new;
@@ -94,7 +94,7 @@ static int __ref kasan_init_region(void *start, size_t size)
 		block = memblock_alloc(k_end - k_start, PAGE_SIZE);
 
 	for (k_cur = k_start & PAGE_MASK; k_cur < k_end; k_cur += PAGE_SIZE) {
-		pmd_t *pmd = pmd_offset(pud_offset(pgd_offset_k(k_cur), k_cur), k_cur);
+		pmd_t *pmd = pmd_ptr_k(k_cur);
 		void *va = block ? block + k_cur - k_start : kasan_get_one_page();
 		pte_t pte = pfn_pte(PHYS_PFN(__pa(va)), PAGE_KERNEL);
 
@@ -118,7 +118,7 @@ static void __init kasan_remap_early_shadow_ro(void)
 	kasan_populate_pte(kasan_early_shadow_pte, prot);
 
 	for (k_cur = k_start & PAGE_MASK; k_cur < k_end; k_cur += PAGE_SIZE) {
-		pmd_t *pmd = pmd_offset(pud_offset(pgd_offset_k(k_cur), k_cur), k_cur);
+		pmd_t *pmd = pmd_ptr_k(k_cur);
 		pte_t *ptep = pte_offset_kernel(pmd, k_cur);
 
 		if ((pte_val(*ptep) & PTE_RPN_MASK) != pa)
@@ -205,7 +205,7 @@ void __init kasan_early_init(void)
 	unsigned long addr = KASAN_SHADOW_START;
 	unsigned long end = KASAN_SHADOW_END;
 	unsigned long next;
-	pmd_t *pmd = pmd_offset(pud_offset(pgd_offset_k(addr), addr), addr);
+	pmd_t *pmd = pmd_ptr_k(addr);
 
 	BUILD_BUG_ON(KASAN_SHADOW_START & ~PGDIR_MASK);
 
