@@ -601,7 +601,7 @@ extern void slb_set_size(u16 size);
  */
 #define MAX_USER_CONTEXT	((ASM_CONST(1) << CONTEXT_BITS) - 2)
 #define MIN_USER_CONTEXT	(MAX_KERNEL_CTX_CNT + MAX_VMALLOC_CTX_CNT + \
-				 MAX_IO_CTX_CNT + MAX_VMEMMAP_CTX_CNT)
+				 MAX_IO_CTX_CNT + MAX_VMEMMAP_CTX_CNT + 1)
 /*
  * For platforms that support on 65bit VA we limit the context bits
  */
