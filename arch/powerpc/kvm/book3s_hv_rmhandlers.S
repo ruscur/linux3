@@ -811,15 +811,19 @@ END_FTR_SECTION_IFCLR(CPU_FTR_ARCH_207S)
 	mtspr	SPRN_CIABR, r7
 	mtspr	SPRN_TAR, r8
 	ld	r5, VCPU_IC(r4)
-	ld	r8, VCPU_EBBHR(r4)
 	mtspr	SPRN_IC, r5
-	mtspr	SPRN_EBBHR, r8
-	ld	r5, VCPU_EBBRR(r4)
-	ld	r6, VCPU_BESCR(r4)
+
+BEGIN_FTR_SECTION
+	ld	r5, VCPU_EBBHR(r4)
+	ld	r6, VCPU_EBBRR(r4)
+	ld	r7, VCPU_BESCR(r4)
+	mtspr	SPRN_EBBHR, r5
+	mtspr	SPRN_EBBRR, r6
+	mtspr	SPRN_BESCR, r7
+END_FW_FTR_SECTION_IFCLR(FW_FEATURE_SVM)
+
 	lwz	r7, VCPU_GUEST_PID(r4)
 	ld	r8, VCPU_WORT(r4)
-	mtspr	SPRN_EBBRR, r5
-	mtspr	SPRN_BESCR, r6
 	mtspr	SPRN_PID, r7
 	mtspr	SPRN_WORT, r8
 BEGIN_FTR_SECTION
@@ -1623,14 +1627,18 @@ END_FTR_SECTION_IFCLR(CPU_FTR_ARCH_207S)
 	mfspr	r7, SPRN_TAR
 	std	r5, VCPU_IC(r9)
 	std	r7, VCPU_TAR(r9)
-	mfspr	r8, SPRN_EBBHR
-	std	r8, VCPU_EBBHR(r9)
-	mfspr	r5, SPRN_EBBRR
-	mfspr	r6, SPRN_BESCR
+
+BEGIN_FTR_SECTION
+	mfspr	r5, SPRN_EBBHR
+	mfspr	r6, SPRN_EBBRR
+	mfspr	r7, SPRN_BESCR
+	std	r5, VCPU_EBBHR(r9)
+	std	r6, VCPU_EBBRR(r9)
+	std	r7, VCPU_BESCR(r9)
+END_FW_FTR_SECTION_IFCLR(FW_FEATURE_SVM)
+
 	mfspr	r7, SPRN_PID
 	mfspr	r8, SPRN_WORT
-	std	r5, VCPU_EBBRR(r9)
-	std	r6, VCPU_BESCR(r9)
 	stw	r7, VCPU_GUEST_PID(r9)
 	std	r8, VCPU_WORT(r9)
 BEGIN_FTR_SECTION

@@ -206,14 +206,35 @@ __init_PMU_HV_ISA207:
 	blr
 
 __init_PMU:
+#ifdef CONFIG_PPC_SVM
+	/*
+	 * SVM's are restricted from accessing PMU, so skip.
+	 */
+	mfmsr   r5
+	rldicl  r5, r5, 64-MSR_S_LG, 62
+	cmpwi   r5,1
+	beq     skip1
+#endif
 	li	r5,0
 	mtspr	SPRN_MMCRA,r5
 	mtspr	SPRN_MMCR0,r5
 	mtspr	SPRN_MMCR1,r5
 	mtspr	SPRN_MMCR2,r5
+skip1:
 	blr
 
 __init_PMU_ISA207:
+
+#ifdef CONFIG_PPC_SVM
+	/*
+	 * SVM's are restricted from accessing PMU, so skip.
+	*/
+	mfmsr   r5
+	rldicl  r5, r5, 64-MSR_S_LG, 62
+	cmpwi   r5,1
+	beq     skip2
+#endif
 	li	r5,0
 	mtspr	SPRN_MMCRS,r5
+skip2:
 	blr

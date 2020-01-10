@@ -17,6 +17,7 @@
 #include <asm/firmware.h>
 #include <asm/ptrace.h>
 #include <asm/code-patching.h>
+#include <asm/svm.h>
 
 #ifdef CONFIG_PPC64
 #include "internal.h"
@@ -808,6 +809,11 @@ void perf_event_print_debug(void)
 
 	if (!ppmu) {
 		pr_info("Performance monitor hardware not registered.\n");
+		return;
+	}
+
+	if (is_secure_guest()) {
+		pr_info("Performance monitor access disabled in SVM.\n");
 		return;
 	}
 

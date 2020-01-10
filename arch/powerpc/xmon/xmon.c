@@ -54,6 +54,7 @@
 #include <asm/firmware.h>
 #include <asm/code-patching.h>
 #include <asm/sections.h>
+#include <asm/svm.h>
 
 #ifdef CONFIG_PPC64
 #include <asm/hvcall.h>
@@ -1916,17 +1917,24 @@ static void dump_207_sprs(void)
 			mfspr(SPRN_TEXASR));
 	}
 
-	printf("mmcr0  = %.16lx  mmcr1 = %.16lx mmcr2  = %.16lx\n",
-		mfspr(SPRN_MMCR0), mfspr(SPRN_MMCR1), mfspr(SPRN_MMCR2));
-	printf("pmc1   = %.8lx pmc2 = %.8lx  pmc3 = %.8lx  pmc4   = %.8lx\n",
-		mfspr(SPRN_PMC1), mfspr(SPRN_PMC2),
-		mfspr(SPRN_PMC3), mfspr(SPRN_PMC4));
-	printf("mmcra  = %.16lx   siar = %.16lx pmc5   = %.8lx\n",
-		mfspr(SPRN_MMCRA), mfspr(SPRN_SIAR), mfspr(SPRN_PMC5));
-	printf("sdar   = %.16lx   sier = %.16lx pmc6   = %.8lx\n",
-		mfspr(SPRN_SDAR), mfspr(SPRN_SIER), mfspr(SPRN_PMC6));
-	printf("ebbhr  = %.16lx  ebbrr = %.16lx bescr  = %.16lx\n",
-		mfspr(SPRN_EBBHR), mfspr(SPRN_EBBRR), mfspr(SPRN_BESCR));
+	if (!is_secure_guest()) {
+		printf("mmcr0  = %.16lx  mmcr1 = %.16lx mmcr2  = %.16lx\n",
+			mfspr(SPRN_MMCR0), mfspr(SPRN_MMCR1),
+			mfspr(SPRN_MMCR2));
+		printf("pmc1   = %.8lx pmc2 = %.8lx  pmc3 = %.8lx  pmc4   = %.8lx\n",
+			mfspr(SPRN_PMC1), mfspr(SPRN_PMC2),
+			mfspr(SPRN_PMC3), mfspr(SPRN_PMC4));
+		printf("mmcra  = %.16lx   siar = %.16lx pmc5   = %.8lx\n",
+			mfspr(SPRN_MMCRA), mfspr(SPRN_SIAR), mfspr(SPRN_PMC5));
+		printf("sdar   = %.16lx   sier = %.16lx pmc6   = %.8lx\n",
+			mfspr(SPRN_SDAR), mfspr(SPRN_SIER), mfspr(SPRN_PMC6));
+
+		printf("ebbhr  = %.16lx  ebbrr = %.16lx bescr  = %.16lx\n",
+			mfspr(SPRN_EBBHR), mfspr(SPRN_EBBRR),
+			mfspr(SPRN_BESCR));
+	}
+
+
 	printf("iamr   = %.16lx\n", mfspr(SPRN_IAMR));
 
 	if (!(msr & MSR_HV))
