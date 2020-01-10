@@ -29,6 +29,7 @@
 #include <asm/fixmap.h>
 #include <asm/setup.h>
 #include <asm/sections.h>
+#include <asm/ptdump.h>
 
 #include <mm/mmu_decl.h>
 

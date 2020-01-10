@@ -45,6 +45,7 @@
 #include <asm/sections.h>
 #include <asm/firmware.h>
 #include <asm/dma.h>
+#include <asm/ptdump.h>
 
 #include <mm/mmu_decl.h>
 
