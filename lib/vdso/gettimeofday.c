@@ -104,9 +104,15 @@ static __always_inline int do_coarse(const struct vdso_data *vd, clockid_t clk,
 }
 
 static __maybe_unused int
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+__cvdso_clock_gettime_common(const struct vdso_data *vd, clockid_t clock,
+		      struct __kernel_timespec *ts)
+{
+#else
 __cvdso_clock_gettime_common(clockid_t clock, struct __kernel_timespec *ts)
 {
 	const struct vdso_data *vd = __arch_get_vdso_data();
+#endif
 	u32 msk;
 
 	/* Check for negative values or invalid clocks */
@@ -131,9 +137,16 @@ __cvdso_clock_gettime_common(clockid_t clock, struct __kernel_timespec *ts)
 }
 
 static __maybe_unused int
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+__cvdso_clock_gettime(const struct vdso_data *vd, clockid_t clock,
+		      struct __kernel_timespec *ts)
+{
+	int ret = __cvdso_clock_gettime_common(vd, clock, ts);
+#else
 __cvdso_clock_gettime(clockid_t clock, struct __kernel_timespec *ts)
 {
 	int ret = __cvdso_clock_gettime_common(clock, ts);
+#endif
 
 	if (unlikely(ret))
 		return clock_gettime_fallback(clock, ts);
@@ -141,12 +154,21 @@ __cvdso_clock_gettime(clockid_t clock, struct __kernel_timespec *ts)
 }
 
 static __maybe_unused int
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+__cvdso_clock_gettime32(const struct vdso_data *vd, clockid_t clock,
+			struct old_timespec32 *res)
+#else
 __cvdso_clock_gettime32(clockid_t clock, struct old_timespec32 *res)
+#endif
 {
 	struct __kernel_timespec ts;
 	int ret;
 
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+	ret = __cvdso_clock_gettime_common(vd, clock, &ts);
+#else
 	ret = __cvdso_clock_gettime_common(clock, &ts);
+#endif
 
 #ifdef VDSO_HAS_32BIT_FALLBACK
 	if (unlikely(ret))
@@ -164,9 +186,15 @@ __cvdso_clock_gettime32(clockid_t clock, struct old_timespec32 *res)
 }
 
 static __maybe_unused int
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+__cvdso_gettimeofday(const struct vdso_data *vd, struct __kernel_old_timeval *tv,
+		     struct timezone *tz)
+{
+#else
 __cvdso_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz)
 {
 	const struct vdso_data *vd = __arch_get_vdso_data();
+#endif
 
 	if (likely(tv != NULL)) {
 		struct __kernel_timespec ts;
@@ -187,9 +215,15 @@ __cvdso_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz)
 }
 
 #ifdef VDSO_HAS_TIME
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+static __maybe_unused __kernel_old_time_t
+__cvdso_time(const struct vdso_data *vd, __kernel_old_time_t *time)
+{
+#else
 static __maybe_unused __kernel_old_time_t __cvdso_time(__kernel_old_time_t *time)
 {
 	const struct vdso_data *vd = __arch_get_vdso_data();
+#endif
 	__kernel_old_time_t t = READ_ONCE(vd[CS_HRES_COARSE].basetime[CLOCK_REALTIME].sec);
 
 	if (time)
@@ -201,9 +235,15 @@ static __maybe_unused __kernel_old_time_t __cvdso_time(__kernel_old_time_t *time
 
 #ifdef VDSO_HAS_CLOCK_GETRES
 static __maybe_unused
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+int __cvdso_clock_getres_common(const struct vdso_data *vd, clockid_t clock,
+				struct __kernel_timespec *res)
+{
+#else
 int __cvdso_clock_getres_common(clockid_t clock, struct __kernel_timespec *res)
 {
 	const struct vdso_data *vd = __arch_get_vdso_data();
+#endif
 	u32 msk;
 	u64 ns;
 
@@ -238,9 +278,16 @@ int __cvdso_clock_getres_common(clockid_t clock, struct __kernel_timespec *res)
 }
 
 static __maybe_unused
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+int __cvdso_clock_getres(const struct vdso_data *vd, clockid_t clock,
+			 struct __kernel_timespec *res)
+{
+	int ret = __cvdso_clock_getres_common(vd, clock, res);
+#else
 int __cvdso_clock_getres(clockid_t clock, struct __kernel_timespec *res)
 {
 	int ret = __cvdso_clock_getres_common(clock, res);
+#endif
 
 	if (unlikely(ret))
 		return clock_getres_fallback(clock, res);
@@ -248,12 +295,21 @@ int __cvdso_clock_getres(clockid_t clock, struct __kernel_timespec *res)
 }
 
 static __maybe_unused int
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+__cvdso_clock_getres_time32(const struct vdso_data *vd, clockid_t clock,
+			    struct old_timespec32 *res)
+#else
 __cvdso_clock_getres_time32(clockid_t clock, struct old_timespec32 *res)
+#endif
 {
 	struct __kernel_timespec ts;
 	int ret;
 
+#ifdef VDSO_GETS_VD_PTR_FROM_ARCH
+	ret = __cvdso_clock_getres_common(vd, clock, &ts);
+#else
 	ret = __cvdso_clock_getres_common(clock, &ts);
+#endif
 
 #ifdef VDSO_HAS_32BIT_FALLBACK
 	if (unlikely(ret))
