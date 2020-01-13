@@ -69,15 +69,18 @@ int clock_getres32_fallback(clockid_t _clkid, struct old_timespec32 *_ts)
 }
 #endif
 
-static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
+static __always_inline bool __arch_is_hw_counter_valid(s32 clock_mode)
 {
 	/*
 	 * clock_mode == 0 implies that vDSO are enabled otherwise
 	 * fallback on syscall.
 	 */
-	if (clock_mode != 0)
-		return U64_MAX;
+	return clock_mode == 0 ? true : false;
+}
+#define __arch_is_hw_counter_valid __arch_is_hw_counter_valid
 
+static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
+{
 	return get_tb();
 }
 
