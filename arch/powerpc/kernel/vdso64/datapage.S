@@ -16,7 +16,7 @@
 __kernel_datapage_offset:
 	.long	0
 
-V_FUNCTION_BEGIN(__get_datapage)
+_GLOBAL(__get_datapage)
   .cfi_startproc
 	/* We don't want that exposed or overridable as we want other objects
 	 * to be able to bl directly to here
@@ -37,7 +37,6 @@ data_page_branch:
 	add	r3,r0,r3
 	blr
   .cfi_endproc
-V_FUNCTION_END(__get_datapage)
 
 /*
  * void *__kernel_get_syscall_map(unsigned int *syscall_count) ;
