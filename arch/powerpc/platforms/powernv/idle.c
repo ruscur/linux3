@@ -32,9 +32,112 @@
 #define P9_STOP_SPR_MSR 2000
 #define P9_STOP_SPR_PSSCR      855
 
+/* Interface for the stop state supported and preference */
+#define SELF_RESTORE_TYPE    0
+#define SELF_SAVE_TYPE       1
+
+#define NR_PREFERENCES    2
+#define PREFERENCE_SHIFT  4
+#define PREFERENCE_MASK   0xf
+
+#define UNSUPPORTED         0x0
+#define SELF_RESTORE_STRICT 0x1
+#define SELF_SAVE_STRICT    0x2
+
+/*
+ * Bitmask defining the kind of preferences available.
+ * Note : The higher to lower preference is from LSB to MSB, with a shift of
+ * 4 bits.
+ * ----------------------------
+ * |    | 2nd pref | 1st pref |
+ * ----------------------------
+ * MSB			      LSB
+ */
+/* Prefer Restore if available, otherwise unsupported */
+#define PREFER_SELF_RESTORE_ONLY	SELF_RESTORE_STRICT
+/* Prefer Save if available, otherwise unsupported */
+#define PREFER_SELF_SAVE_ONLY		SELF_SAVE_STRICT
+/* Prefer Restore when available, otherwise prefer Save */
+#define PREFER_RESTORE_SAVE		((SELF_SAVE_STRICT << \
+					  PREFERENCE_SHIFT)\
+					  | SELF_RESTORE_STRICT)
+/* Prefer Save when available, otherwise prefer Restore*/
+#define PREFER_SAVE_RESTORE		((SELF_RESTORE_STRICT <<\
+					  PREFERENCE_SHIFT)\
+					  | SELF_SAVE_STRICT)
 static u32 supported_cpuidle_states;
 struct pnv_idle_states_t *pnv_idle_states;
 int nr_pnv_idle_states;
+/* Caching the lpcr & ptcr support to use later */
+static bool is_lpcr_self_save;
+static bool is_ptcr_self_save;
+
+struct preferred_sprs {
+	u64 spr;
+	u32 preferred_mode;
+	u32 supported_mode;
+};
+
+/*
+ * Preferred mode: Order of precedence when both self-save and self-restore
+ *		   supported
+ * Supported mode: Default support. Can be overwritten during system
+ *		   initialization
+ */
+struct preferred_sprs preferred_sprs[] = {
+	{
+		.spr = SPRN_HSPRG0,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_LPCR,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_PTCR,
+		.preferred_mode = PREFER_SAVE_RESTORE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_HMEER,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_HID0,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = P9_STOP_SPR_MSR,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = P9_STOP_SPR_PSSCR,
+		.preferred_mode = PREFER_SAVE_RESTORE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_HID1,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_HID4,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	},
+	{
+		.spr = SPRN_HID5,
+		.preferred_mode = PREFER_RESTORE_SAVE,
+		.supported_mode = SELF_RESTORE_STRICT,
+	}
+};
+
+const int nr_preferred_sprs = ARRAY_SIZE(preferred_sprs);
 
 /*
  * The default stop state that will be used by ppc_md.power_save
@@ -61,78 +164,170 @@ static bool deepest_stop_found;
 
 static unsigned long power7_offline_type;
 
-static int pnv_save_sprs_for_deep_states(void)
+static int pnv_self_restore_sprs(u64 pir, int cpu, u64 spr)
 {
-	int cpu;
+	u64 reg_val;
 	int rc;
 
-	/*
-	 * hid0, hid1, hid4, hid5, hmeer and lpcr values are symmetric across
-	 * all cpus at boot. Get these reg values of current cpu and use the
-	 * same across all cpus.
-	 */
-	uint64_t lpcr_val	= mfspr(SPRN_LPCR);
-	uint64_t hid0_val	= mfspr(SPRN_HID0);
-	uint64_t hid1_val	= mfspr(SPRN_HID1);
-	uint64_t hid4_val	= mfspr(SPRN_HID4);
-	uint64_t hid5_val	= mfspr(SPRN_HID5);
-	uint64_t hmeer_val	= mfspr(SPRN_HMEER);
-	uint64_t msr_val = MSR_IDLE;
-	uint64_t psscr_val = pnv_deepest_stop_psscr_val;
-
-	for_each_present_cpu(cpu) {
-		uint64_t pir = get_hard_smp_processor_id(cpu);
-		uint64_t hsprg0_val = (uint64_t)paca_ptrs[cpu];
-
-		rc = opal_slw_set_reg(pir, SPRN_HSPRG0, hsprg0_val);
+	switch (spr) {
+	case SPRN_HSPRG0:
+		reg_val = (uint64_t)paca_ptrs[cpu];
+		rc = opal_slw_set_reg(pir, SPRN_HSPRG0, reg_val);
 		if (rc != 0)
 			return rc;
-
-		rc = opal_slw_set_reg(pir, SPRN_LPCR, lpcr_val);
+		break;
+	case SPRN_LPCR:
+		reg_val = mfspr(SPRN_LPCR);
+		rc = opal_slw_set_reg(pir, SPRN_LPCR, reg_val);
 		if (rc != 0)
 			return rc;
-
+		break;
+	case P9_STOP_SPR_MSR:
+		reg_val = MSR_IDLE;
 		if (cpu_has_feature(CPU_FTR_ARCH_300)) {
-			rc = opal_slw_set_reg(pir, P9_STOP_SPR_MSR, msr_val);
-			if (rc)
-				return rc;
-
-			rc = opal_slw_set_reg(pir,
-					      P9_STOP_SPR_PSSCR, psscr_val);
-
+			rc = opal_slw_set_reg(pir, P9_STOP_SPR_MSR, reg_val);
 			if (rc)
 				return rc;
 		}
-
-		/* HIDs are per core registers */
+		break;
+	case P9_STOP_SPR_PSSCR:
+		reg_val = pnv_deepest_stop_psscr_val;
+		if (cpu_has_feature(CPU_FTR_ARCH_300)) {
+			rc = opal_slw_set_reg(pir, P9_STOP_SPR_PSSCR, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_HMEER:
+		reg_val = mfspr(SPRN_HMEER);
 		if (cpu_thread_in_core(cpu) == 0) {
-
-			rc = opal_slw_set_reg(pir, SPRN_HMEER, hmeer_val);
-			if (rc != 0)
+			rc = opal_slw_set_reg(pir, SPRN_HMEER, reg_val);
+			if (rc)
 				return rc;
-
-			rc = opal_slw_set_reg(pir, SPRN_HID0, hid0_val);
-			if (rc != 0)
+		}
+		break;
+	case SPRN_HID0:
+		reg_val = mfspr(SPRN_HID0);
+		if (cpu_thread_in_core(cpu) == 0) {
+			rc = opal_slw_set_reg(pir, SPRN_HID0, reg_val);
+			if (rc)
 				return rc;
+		}
+		break;
+	case SPRN_HID1:
+		reg_val = mfspr(SPRN_HID1);
+		if (cpu_thread_in_core(cpu) == 0 &&
+		    !cpu_has_feature(CPU_FTR_ARCH_300)) {
+			rc = opal_slw_set_reg(pir, SPRN_HID1, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_HID4:
+		reg_val = mfspr(SPRN_HID4);
+		if (cpu_thread_in_core(cpu) == 0 &&
+		    !cpu_has_feature(CPU_FTR_ARCH_300)) {
+			rc = opal_slw_set_reg(pir, SPRN_HID4, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_HID5:
+		reg_val = mfspr(SPRN_HID5);
+		if (cpu_thread_in_core(cpu) == 0 &&
+		    !cpu_has_feature(CPU_FTR_ARCH_300)) {
+			rc = opal_slw_set_reg(pir, SPRN_HID5, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_PTCR:
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
 
-			/* Only p8 needs to set extra HID regiters */
-			if (!cpu_has_feature(CPU_FTR_ARCH_300)) {
+static int pnv_self_save_restore_sprs(void)
+{
+	int rc, index, cpu, k;
+	u64 pir;
+	struct preferred_sprs curr_spr;
+	bool is_initialized;
+	u32 preferred;
 
-				rc = opal_slw_set_reg(pir, SPRN_HID1, hid1_val);
-				if (rc != 0)
-					return rc;
-
-				rc = opal_slw_set_reg(pir, SPRN_HID4, hid4_val);
-				if (rc != 0)
-					return rc;
-
-				rc = opal_slw_set_reg(pir, SPRN_HID5, hid5_val);
-				if (rc != 0)
-					return rc;
+	is_lpcr_self_save = false;
+	is_ptcr_self_save = false;
+	for_each_present_cpu(cpu) {
+		pir = get_hard_smp_processor_id(cpu);
+		for (index = 0; index < nr_preferred_sprs; index++) {
+			curr_spr = preferred_sprs[index];
+			is_initialized = false;
+			/*
+			 * Go through each of the preferences
+			 * Check if it is preferred as well as supported
+			 */
+			for (k = 0; k < NR_PREFERENCES; k++) {
+				preferred = curr_spr.preferred_mode
+						& PREFERENCE_MASK;
+				if (preferred & curr_spr.supported_mode
+				    & SELF_RESTORE_STRICT) {
+					is_initialized = true;
+					rc = pnv_self_restore_sprs(pir, cpu,
+								curr_spr.spr);
+					if (rc != 0)
+						return rc;
+					break;
+				}
+				preferred_sprs[index].preferred_mode =
+					preferred_sprs[index].preferred_mode >>
+					PREFERENCE_SHIFT;
+				curr_spr = preferred_sprs[index];
+			}
+			if (!is_initialized) {
+				if (preferred_sprs[index].spr == SPRN_PTCR ||
+				    (cpu_has_feature(CPU_FTR_ARCH_300) &&
+				    (preferred_sprs[index].spr == SPRN_HID1 ||
+				     preferred_sprs[index].spr == SPRN_HID4 ||
+				     preferred_sprs[index].spr == SPRN_HID5)))
+					continue;
+				return OPAL_UNSUPPORTED;
 			}
 		}
 	}
+	return 0;
+}
 
+static int pnv_save_sprs_for_deep_states(void)
+{
+	int rc;
+	int index;
+
+	/*
+	 * Iterate over the preffered SPRs and if even one of them is
+	 * still unsupported We cut support for deep stop states
+	 */
+	for (index = 0; index < nr_preferred_sprs; index++) {
+		if (preferred_sprs[index].supported_mode == UNSUPPORTED) {
+			if (preferred_sprs[index].spr == SPRN_PTCR ||
+			    (cpu_has_feature(CPU_FTR_ARCH_300) &&
+			    (preferred_sprs[index].spr == SPRN_HID1 ||
+			     preferred_sprs[index].spr == SPRN_HID4 ||
+			     preferred_sprs[index].spr == SPRN_HID5)))
+				continue;
+			return OPAL_UNSUPPORTED;
+		}
+	}
+	/*
+	 * Try to self-restore the registers that can be self restored if self
+	 * restore is active, try the same for the registers that
+	 * can be self saved too.
+	 * Note : If both are supported, self restore is given more priority
+	 */
+	rc = pnv_self_save_restore_sprs();
+	if (rc != 0)
+		return rc;
 	return 0;
 }
 
@@ -658,7 +853,8 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		mmcr0		= mfspr(SPRN_MMCR0);
 	}
 	if ((psscr & PSSCR_RL_MASK) >= pnv_first_spr_loss_level) {
-		sprs.lpcr	= mfspr(SPRN_LPCR);
+		if (!is_lpcr_self_save)
+			sprs.lpcr	= mfspr(SPRN_LPCR);
 		sprs.hfscr	= mfspr(SPRN_HFSCR);
 		sprs.fscr	= mfspr(SPRN_FSCR);
 		sprs.pid	= mfspr(SPRN_PID);
@@ -672,7 +868,8 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		sprs.mmcr1	= mfspr(SPRN_MMCR1);
 		sprs.mmcr2	= mfspr(SPRN_MMCR2);
 
-		sprs.ptcr	= mfspr(SPRN_PTCR);
+		if (!is_ptcr_self_save)
+			sprs.ptcr	= mfspr(SPRN_PTCR);
 		sprs.rpr	= mfspr(SPRN_RPR);
 		sprs.tscr	= mfspr(SPRN_TSCR);
 		if (!firmware_has_feature(FW_FEATURE_ULTRAVISOR))
@@ -756,7 +953,8 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		goto core_woken;
 
 	/* Per-core SPRs */
-	mtspr(SPRN_PTCR,	sprs.ptcr);
+	if (!is_ptcr_self_save)
+		mtspr(SPRN_PTCR,	sprs.ptcr);
 	mtspr(SPRN_RPR,		sprs.rpr);
 	mtspr(SPRN_TSCR,	sprs.tscr);
 
@@ -777,7 +975,8 @@ core_woken:
 	atomic_unlock_and_stop_thread_idle();
 
 	/* Per-thread SPRs */
-	mtspr(SPRN_LPCR,	sprs.lpcr);
+	if (!is_lpcr_self_save)
+		mtspr(SPRN_LPCR,	sprs.lpcr);
 	mtspr(SPRN_HFSCR,	sprs.hfscr);
 	mtspr(SPRN_FSCR,	sprs.fscr);
 	mtspr(SPRN_PID,		sprs.pid);
@@ -956,8 +1155,11 @@ void pnv_program_cpu_hotplug_lpcr(unsigned int cpu, u64 lpcr_val)
 	 * Program the LPCR via stop-api only if the deepest stop state
 	 * can lose hypervisor context.
 	 */
-	if (supported_cpuidle_states & OPAL_PM_LOSE_FULL_CONTEXT)
-		opal_slw_set_reg(pir, SPRN_LPCR, lpcr_val);
+	if (supported_cpuidle_states & OPAL_PM_LOSE_FULL_CONTEXT) {
+		if (!is_lpcr_self_save)
+			opal_slw_set_reg(pir, SPRN_LPCR,
+					 lpcr_val);
+	}
 }
 
 /*
