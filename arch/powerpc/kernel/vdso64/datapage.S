@@ -12,9 +12,6 @@
 #include <asm/vdso.h>
 
 	.text
-.global	__kernel_datapage_offset;
-__kernel_datapage_offset:
-	.long	0
 
 _GLOBAL(__get_datapage)
   .cfi_startproc
@@ -31,10 +28,11 @@ _GLOBAL(__get_datapage)
 data_page_branch:
 	mflr	r3
 	mtlr	r0
-	addi	r3, r3, __kernel_datapage_offset-data_page_branch
-	lwz	r0,0(r3)
+#if CONFIG_PPC_PAGE_SHIFT > 14
+	addis	r3, r3, (_vdso_datapage - data_page_branch)@ha
+#endif
+	addi	r3, r3, (_vdso_datapage - data_page_branch)@l
   .cfi_restore lr
-	add	r3,r0,r3
 	blr
   .cfi_endproc
 
