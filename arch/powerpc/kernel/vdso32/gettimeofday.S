@@ -9,6 +9,7 @@
 #include <asm/processor.h>
 #include <asm/ppc_asm.h>
 #include <asm/vdso.h>
+#include <asm/vdso_datapage.h>
 #include <asm/asm-offsets.h>
 #include <asm/unistd.h>
 
@@ -18,6 +19,7 @@
 	stwu	r1, -16(r1)
 	mflr	r0
 	stw	r0, 20(r1)
+	get_datapage	r5, VDSO_DATA_OFFSET
 	bl	\funct
 	lwz	r0, 20(r1)
 	cmpwi	r3, 0
@@ -79,6 +81,7 @@ V_FUNCTION_BEGIN(__kernel_time)
 	stwu	r1, -16(r1)
 	mflr	r0
 	stw	r0, 20(r1)
+	get_datapage	r4, VDSO_DATA_OFFSET
 	bl	__c_kernel_time
 	lwz	r0, 20(r1)
 	crclr	cr0*4+so

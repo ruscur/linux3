@@ -9,6 +9,7 @@
 #include <asm/processor.h>
 #include <asm/ppc_asm.h>
 #include <asm/vdso.h>
+#include <asm/vdso_datapage.h>
 #include <asm/asm-offsets.h>
 #include <asm/unistd.h>
 
@@ -18,6 +19,7 @@
 	mflr	r0
 	std	r0, 16(r1)
 	stdu	r1, -128(r1)
+	get_datapage	r5, VDSO_DATA_OFFSET
 	bl	\funct
 	addi	r1, r1, 128
 	ld	r0, 16(r1)
@@ -79,6 +81,7 @@ V_FUNCTION_BEGIN(__kernel_time)
 	mflr	r0
 	std	r0, 16(r1)
 	stdu	r1, -128(r1)
+	get_datapage	r4, VDSO_DATA_OFFSET
 	bl	__c_kernel_time
 	addi	r1, r1, 128
 	ld	r0, 16(r1)

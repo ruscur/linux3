@@ -6,12 +6,13 @@
 
 #include <asm/time.h>
 #include <asm/unistd.h>
-#include <asm/vdso_datapage.h>
 #include <uapi/linux/time.h>
 
 #define VDSO_HAS_CLOCK_GETRES		1
 
 #define VDSO_HAS_TIME			1
+
+#define VDSO_GETS_VD_PTR_FROM_ARCH	1
 
 static __always_inline int do_syscall_2(const unsigned long _r0, const unsigned long _r3,
 					const unsigned long _r4)
@@ -78,15 +79,6 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 		return U64_MAX;
 
 	return get_tb();
-}
-
-void *__get_datapage(void);
-
-static __always_inline const struct vdso_data *__arch_get_vdso_data(void)
-{
-	struct vdso_arch_data *vdso_data = __get_datapage();
-
-	return vdso_data->data;
 }
 
 /*
