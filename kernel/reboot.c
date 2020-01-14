@@ -7,6 +7,7 @@
 
 #define pr_fmt(fmt)	"reboot: " fmt
 
+#include <linux/cpu.h>
 #include <linux/ctype.h>
 #include <linux/export.h>
 #include <linux/kexec.h>
@@ -220,7 +221,9 @@ void migrate_to_reboot_cpu(void)
 	/* The boot cpu is always logical cpu 0 */
 	int cpu = reboot_cpu;
 
+#if !IS_ENABLED(CONFIG_ARCH_OFFLINE_CPUS_ON_REBOOT)
 	cpu_hotplug_disable();
+#endif
 
 	/* Make certain the cpu I'm about to reboot on is online */
 	if (!cpu_online(cpu))
@@ -231,6 +234,11 @@ void migrate_to_reboot_cpu(void)
 
 	/* Make certain I only run on the appropriate processor */
 	set_cpus_allowed_ptr(current, cpumask_of(cpu));
+
+#if IS_ENABLED(CONFIG_ARCH_OFFLINE_CPUS_ON_REBOOT)
+	/* Offline other cpus if possible */
+	freeze_secondary_cpus(cpu, true);
+#endif
 }
 
 /**

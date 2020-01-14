@@ -1209,10 +1209,10 @@ int cpu_up(unsigned int cpu)
 }
 EXPORT_SYMBOL_GPL(cpu_up);
 
-#ifdef CONFIG_PM_SLEEP_SMP
+#if defined(CONFIG_PM_SLEEP_SMP) || defined(CONFIG_ARCH_OFFLINE_CPUS_ON_REBOOT)
 static cpumask_var_t frozen_cpus;
 
-int freeze_secondary_cpus(int primary)
+int freeze_secondary_cpus(int primary, bool reboot)
 {
 	int cpu, error = 0;
 
@@ -1237,11 +1237,13 @@ int freeze_secondary_cpus(int primary)
 		if (cpu == primary)
 			continue;
 
-		if (pm_wakeup_pending()) {
+#ifdef CONFIG_PM_SLEEP
+		if (!reboot && pm_wakeup_pending()) {
 			pr_info("Wakeup pending. Abort CPU freeze\n");
 			error = -EBUSY;
 			break;
 		}
+#endif
 
 		trace_suspend_resume(TPS("CPU_OFF"), cpu, true);
 		error = _cpu_down(cpu, 1, CPUHP_OFFLINE);
@@ -1250,7 +1252,9 @@ int freeze_secondary_cpus(int primary)
 			cpumask_set_cpu(cpu, frozen_cpus);
 		else {
 			pr_err("Error taking CPU%d down: %d\n", cpu, error);
-			break;
+			/* When rebooting, offline as many CPUs as possible. */
+			if (!reboot)
+				break;
 		}
 	}
 

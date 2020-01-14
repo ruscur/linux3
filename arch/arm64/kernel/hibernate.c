@@ -581,5 +581,5 @@ int hibernate_resume_nonboot_cpu_disable(void)
 		return -ENODEV;
 	}
 
-	return freeze_secondary_cpus(sleep_cpu);
+	return freeze_secondary_cpus(sleep_cpu, false);
 }
