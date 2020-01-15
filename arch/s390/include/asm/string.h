@@ -75,10 +75,6 @@ extern void *__memmove(void *dest, const void *src, size_t n);
 
 #define __no_sanitize_prefix_strfunc(x) __##x
 
-#ifndef __NO_FORTIFY
-#define __NO_FORTIFY /* FORTIFY_SOURCE uses __builtin_memcpy, etc. */
-#endif
-
 #else
 #define __no_sanitize_prefix_strfunc(x) x
 #endif /* defined(CONFIG_KASAN) && !defined(__SANITIZE_ADDRESS__) */

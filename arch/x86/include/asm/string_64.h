@@ -76,10 +76,6 @@ int strcmp(const char *cs, const char *ct);
 #define memmove(dst, src, len) __memmove(dst, src, len)
 #define memset(s, c, n) __memset(s, c, n)
 
-#ifndef __NO_FORTIFY
-#define __NO_FORTIFY /* FORTIFY_SOURCE uses __builtin_memcpy, etc. */
-#endif
-
 #endif
 
 #define __HAVE_ARCH_MEMCPY_MCSAFE 1
