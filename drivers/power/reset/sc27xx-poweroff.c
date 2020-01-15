@@ -30,7 +30,7 @@ static void sc27xx_poweroff_shutdown(void)
 #ifdef CONFIG_PM_SLEEP_SMP
 	int cpu = smp_processor_id();
 
-	freeze_secondary_cpus(cpu);
+	freeze_secondary_cpus(cpu, false);
 #endif
 }
 

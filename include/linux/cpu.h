@@ -137,11 +137,14 @@ static inline void cpu_hotplug_done(void) { cpus_write_unlock(); }
 static inline void get_online_cpus(void) { cpus_read_lock(); }
 static inline void put_online_cpus(void) { cpus_read_unlock(); }
 
+#if defined(CONFIG_PM_SLEEP_SMP) || defined(CONFIG_ARCH_OFFLINE_CPUS_ON_REBOOT)
+extern int freeze_secondary_cpus(int primary, bool reboot);
+#endif
+
 #ifdef CONFIG_PM_SLEEP_SMP
-extern int freeze_secondary_cpus(int primary);
 static inline int disable_nonboot_cpus(void)
 {
-	return freeze_secondary_cpus(0);
+	return freeze_secondary_cpus(0, false);
 }
 extern void enable_nonboot_cpus(void);
 
@@ -152,7 +155,7 @@ static inline int suspend_disable_secondary_cpus(void)
 	if (IS_ENABLED(CONFIG_PM_SLEEP_SMP_NONZERO_CPU))
 		cpu = -1;
 
-	return freeze_secondary_cpus(cpu);
+	return freeze_secondary_cpus(cpu, false);
 }
 static inline void suspend_enable_secondary_cpus(void)
 {
