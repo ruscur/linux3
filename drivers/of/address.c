@@ -990,6 +990,14 @@ out:
 	return ret;
 }
 
+/*
+ * arch_of_dma_is_coherent - Arch hook to determine if device is coherent for DMA
+ */
+bool __weak arch_of_dma_is_coherent(struct device_node *np)
+{
+	return false;
+}
+
 /**
  * of_dma_is_coherent - Check if device is coherent
  * @np:	device node
@@ -999,8 +1007,12 @@ out:
  */
 bool of_dma_is_coherent(struct device_node *np)
 {
-	struct device_node *node = of_node_get(np);
+	struct device_node *node;
 
+	if (arch_of_dma_is_coherent(np))
+		return true;
+
+	np = of_node_get(np);
 	while (node) {
 		if (of_property_read_bool(node, "dma-coherent")) {
 			of_node_put(node);

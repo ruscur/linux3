@@ -780,6 +780,22 @@ static int __init check_cache_coherency(void)
 late_initcall(check_cache_coherency);
 #endif /* CONFIG_CHECK_CACHE_COHERENCY */
 
+#ifndef CONFIG_NOT_COHERENT_CACHE
+/*
+ * For historical reasons powerpc kernels are built with hard wired knowledge of
+ * whether or not DMA accesses are cache coherent. Additionally device trees on
+ * powerpc do not typically support the dma-coherent property.
+ *
+ * So when we know that DMA is coherent, override arch_of_dma_is_coherent() to
+ * tell the drivers/of code that all devices are coherent regardless of whether
+ * they have a dma-coherent property.
+ */
+bool arch_of_dma_is_coherent(struct device_node *np)
+{
+	return true;
+}
+#endif
+
 #ifdef CONFIG_DEBUG_FS
 struct dentry *powerpc_debugfs_root;
 EXPORT_SYMBOL(powerpc_debugfs_root);
