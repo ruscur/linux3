@@ -337,34 +337,24 @@ static int pseries_remove_mem_node(struct device_node *np)
 
 static bool lmb_is_removable(struct drmem_lmb *lmb)
 {
-	int i, scns_per_block;
-	bool rc = true;
-	unsigned long pfn, block_sz;
-	u64 phys_addr;
+	struct memory_block *mem;
+	bool rc = false;
 
 	if (!(lmb->flags & DRCONF_MEM_ASSIGNED))
 		return false;
-
-	block_sz = memory_block_size_bytes();
-	scns_per_block = block_sz / MIN_MEMORY_BLOCK_SIZE;
-	phys_addr = lmb->base_addr;
 
 #ifdef CONFIG_FA_DUMP
 	/*
 	 * Don't hot-remove memory that falls in fadump boot memory area
 	 * and memory that is reserved for capturing old kernel memory.
 	 */
-	if (is_fadump_memory_area(phys_addr, block_sz))
+	if (is_fadump_memory_area(lmb->base_addr,  memory_block_size_bytes()))
 		return false;
 #endif
-
-	for (i = 0; i < scns_per_block; i++) {
-		pfn = PFN_DOWN(phys_addr);
-		if (!pfn_present(pfn))
-			continue;
-
-		rc = rc && is_mem_section_removable(pfn, PAGES_PER_SECTION);
-		phys_addr += MIN_MEMORY_BLOCK_SIZE;
+	mem = lmb_to_memblock(lmb);
+	if (mem) {
+		rc = is_memory_block_offlineable(mem);
+		put_device(&mem->dev);
 	}
 
 	return rc;

@@ -306,15 +306,14 @@ static inline void pgdat_resize_init(struct pglist_data *pgdat) {}
 
 #ifdef CONFIG_MEMORY_HOTREMOVE
 
-extern bool is_mem_section_removable(unsigned long pfn, unsigned long nr_pages);
+extern bool is_mem_section_offlineable(unsigned long nr);
 extern void try_offline_node(int nid);
 extern int offline_pages(unsigned long start_pfn, unsigned long nr_pages);
 extern int remove_memory(int nid, u64 start, u64 size);
 extern void __remove_memory(int nid, u64 start, u64 size);
 
 #else
-static inline bool is_mem_section_removable(unsigned long pfn,
-					unsigned long nr_pages)
+static inline bool is_mem_section_offlineable(unsigned long nr)
 {
 	return false;
 }

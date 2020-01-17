@@ -1128,46 +1128,51 @@ static unsigned long next_active_pageblock(unsigned long pfn)
 	return pfn + pageblock_nr_pages;
 }
 
-static bool is_pageblock_removable_nolock(unsigned long pfn)
+static int count_system_ram_pages_cb(unsigned long start_pfn,
+				     unsigned long nr_pages, void *data)
 {
-	struct page *page = pfn_to_page(pfn);
-	struct zone *zone;
+	unsigned long *nr_system_ram_pages = data;
 
-	/*
-	 * We have to be careful here because we are iterating over memory
-	 * sections which are not zone aware so we might end up outside of
-	 * the zone but still within the section.
-	 * We have to take care about the node as well. If the node is offline
-	 * its NODE_DATA will be NULL - see page_zone.
-	 */
-	if (!node_online(page_to_nid(page)))
-		return false;
-
-	zone = page_zone(page);
-	pfn = page_to_pfn(page);
-	if (!zone_spans_pfn(zone, pfn))
-		return false;
-
-	return !has_unmovable_pages(zone, page, MIGRATE_MOVABLE,
-				    MEMORY_OFFLINE);
+	*nr_system_ram_pages += nr_pages;
+	return 0;
 }
 
-/* Checks if this range of memory is likely to be hot-removable. */
-bool is_mem_section_removable(unsigned long start_pfn, unsigned long nr_pages)
+/*
+ * Check if a section is likely to be offlineable.
+ *
+ * Called with device_hotplug_lock.
+ */
+bool is_mem_section_offlineable(unsigned long nr)
 {
-	unsigned long end_pfn, pfn;
+	const unsigned long start_pfn = section_nr_to_pfn(nr);
+	const unsigned long end_pfn = start_pfn + PAGES_PER_SECTION;
+	unsigned long pfn, nr_pages = 0;
+	struct zone *zone;
 
-	end_pfn = min(start_pfn + nr_pages,
-			zone_end_pfn(page_zone(pfn_to_page(start_pfn))));
+	if (!present_section_nr(nr))
+		return false;
+	if (!online_section_nr(nr))
+		return false;
 
-	/* Check the starting page of each pageblock within the range */
+	/* we don't allow to offline sections with holes */
+	walk_system_ram_range(start_pfn, PAGES_PER_SECTION, &nr_pages,
+			      count_system_ram_pages_cb);
+	if (nr_pages != PAGES_PER_SECTION)
+		return false;
+
+	/* we don't allow to offline sections with mixed zones/nodes */
+	zone = test_pages_in_a_zone(start_pfn, end_pfn);
+	if (!zone)
+		return false;
+
+	/* check each pageblock if it contains unmovable pages */
 	for (pfn = start_pfn; pfn < end_pfn; pfn = next_active_pageblock(pfn)) {
-		if (!is_pageblock_removable_nolock(pfn))
+		if (has_unmovable_pages(zone, pfn_to_page(pfn), MIGRATE_MOVABLE,
+					MEMORY_OFFLINE))
 			return false;
 		cond_resched();
 	}
 
-	/* All pageblocks in the memory block are likely to be hot-removable */
 	return true;
 }
 
@@ -1434,15 +1439,6 @@ static void node_states_clear_node(int node, struct memory_notify *arg)
 
 	if (arg->status_change_nid >= 0)
 		node_clear_state(node, N_MEMORY);
-}
-
-static int count_system_ram_pages_cb(unsigned long start_pfn,
-				     unsigned long nr_pages, void *data)
-{
-	unsigned long *nr_system_ram_pages = data;
-
-	*nr_system_ram_pages += nr_pages;
-	return 0;
 }
 
 static int __ref __offline_pages(unsigned long start_pfn,

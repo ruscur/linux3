@@ -105,6 +105,25 @@ static ssize_t phys_index_show(struct device *dev,
 }
 
 /*
+ * Test if a memory block is likely to be offlineable. Returns true if
+ * the block is already offline.
+ *
+ * Called under device_hotplug_lock.
+ */
+bool is_memory_block_offlineable(struct memory_block *mem)
+{
+	int i;
+
+	if (mem->state != MEM_ONLINE)
+		return true;
+
+	for (i = 0; i < sections_per_block; i++)
+		if (!is_mem_section_offlineable(mem->start_section_nr + i))
+			return false;
+	return true;
+}
+
+/*
  * Show whether the memory block is likely to be offlineable (or is already
  * offline). Once offline, the memory block could be removed. The return
  * value does, however, not indicate that there is a way to remove the
@@ -114,20 +133,14 @@ static ssize_t removable_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
 	struct memory_block *mem = to_memory_block(dev);
-	unsigned long pfn;
-	int ret = 1, i;
+	int ret;
 
-	if (mem->state != MEM_ONLINE)
-		goto out;
+	ret = lock_device_hotplug_sysfs();
+	if (ret)
+		return ret;
+	ret = is_memory_block_offlineable(mem);
+	unlock_device_hotplug();
 
-	for (i = 0; i < sections_per_block; i++) {
-		if (!present_section_nr(mem->start_section_nr + i))
-			continue;
-		pfn = section_nr_to_pfn(mem->start_section_nr + i);
-		ret &= is_mem_section_removable(pfn, PAGES_PER_SECTION);
-	}
-
-out:
 	return sprintf(buf, "%d\n", ret);
 }
 
