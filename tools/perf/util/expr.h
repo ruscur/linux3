@@ -15,6 +15,7 @@ struct parse_ctx {
 	struct parse_id ids[MAX_PARSE_ID];
 };
 
+extern int expr__runtimeparam;
 void expr__ctx_init(struct parse_ctx *ctx);
 void expr__add_id(struct parse_ctx *ctx, const char *id, double val);
 #ifndef IN_EXPR_Y
