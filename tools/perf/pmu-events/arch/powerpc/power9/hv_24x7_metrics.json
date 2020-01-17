@@ -1,0 +1,64 @@
+[
+    {
+        "MetricExpr": "(hv_24x7@PM_MCS01_128B_RD_DISP_PORT01\\,chip\\=?@ + hv_24x7@PM_MCS01_128B_RD_DISP_PORT23\\,chip\\=?@ + hv_24x7@PM_MCS23_128B_RD_DISP_PORT01\\,chip\\=?@ + hv_24x7@PM_MCS23_128B_RD_DISP_PORT23\\,chip\\=?@)",
+        "MetricName": "Memory_RD_BW_Chip?",
+        "MetricGroup": "Memory_BW",
+        "ScaleUnit": "1.6e-2MB"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_MCS01_128B_WR_DISP_PORT01\\,chip\\=?@ + hv_24x7@PM_MCS01_128B_WR_DISP_PORT23\\,chip\\=?@ + hv_24x7@PM_MCS23_128B_WR_DISP_PORT01\\,chip\\=?@ + hv_24x7@PM_MCS23_128B_WR_DISP_PORT23\\,chip\\=?@ )",
+        "MetricName": "Memory_WR_BW_Chip?",
+        "MetricGroup": "Memory_BW",
+        "ScaleUnit": "1.6e-2MB"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK0_OUT_ODD_DATA_COUNT\\,chip\\=?@ + hv_24x7@PM_XLINK0_OUT_EVEN_DATA_COUNT\\,chip\\=?@ )",
+        "MetricName": "XBUS0_OUT_DATA_THRUPUT?",
+        "ScaleUnit": "6.5e-2MB"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK0_OUT_ODD_DATA_COUNT\\,chip\\=?@ + hv_24x7@PM_XLINK0_OUT_EVEN_DATA_COUNT\\,chip\\=?@ )",
+        "MetricName": "XBUS0_OUT_DATA_UTILIZATION?",
+        "ScaleUnit": "53.125%"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK0_OUT_ODD_TOTAL_UTIL\\,chip\\=?@ + hv_24x7@PM_XLINK0_OUT_EVEN_TOTAL_UTIL\\,chip\\=?@ )",
+        "MetricName": "XBUS0_OUT_TOTAL_UTILIZATION?",
+        "ScaleUnit": "50%"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK1_OUT_ODD_DATA_COUNT\\,chip\\=?@ + hv_24x7@PM_XLINK1_OUT_EVEN_DATA_COUNT\\,chip\\=?@ )",
+        "MetricName": "XBUS1_OUT_DATA_THRUPUT?",
+        "ScaleUnit": "6.5e-2MB"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK1_OUT_ODD_DATA_COUNT\\,chip\\=?@ + hv_24x7@PM_XLINK1_OUT_EVEN_DATA_COUNT\\,chip\\=?@ )",
+        "MetricName": "XBUS1_OUT_DATA_UTILIZATION?",
+        "ScaleUnit": "53.125%"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK1_OUT_ODD_TOTAL_UTIL\\,chip\\=?@ + hv_24x7@PM_XLINK1_OUT_EVEN_TOTAL_UTIL\\,chip\\=?@ )",
+        "MetricName": "XBUS1_OUT_TOTAL_UTILIZATION?",
+        "ScaleUnit": "50%"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK2_OUT_ODD_DATA_COUNT\\,chip\\=?@ + hv_24x7@PM_XLINK2_OUT_EVEN_DATA_COUNT\\,chip\\=?@ )",
+        "MetricName": "XBUS2_OUT_DATA_THRUPUT?",
+        "ScaleUnit": "6.5e-2MB"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK2_OUT_ODD_DATA_COUNT\\,chip\\=?@ + hv_24x7@PM_XLINK2_OUT_EVEN_DATA_COUNT\\,chip\\=?@ )",
+        "MetricName": "XBUS2_OUT_DATA_UTILIZATION?",
+        "ScaleUnit": "53.125%"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_XLINK2_OUT_ODD_TOTAL_UTIL\\,chip\\=?@ + hv_24x7@PM_XLINK2_OUT_EVEN_TOTAL_UTIL\\,chip\\=?@ )",
+        "MetricName": "XBUS2_OUT_TOTAL_UTILIZATION?",
+        "ScaleUnit": "50%"
+    },
+    {
+    "MetricExpr": "(hv_24x7@PM_PB_CYC\\,chip\\=?@ )",
+        "MetricName": "PowerBUS_Frequency?",
+        "ScaleUnit": "2.56e-7GHz"
+    }
+]
