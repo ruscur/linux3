@@ -251,6 +251,18 @@ extern bool privileged_wrt_inode_uidgid(struct user_namespace *ns, const struct 
 extern bool capable_wrt_inode_uidgid(const struct inode *inode, int cap);
 extern bool file_ns_capable(const struct file *file, struct user_namespace *ns, int cap);
 extern bool ptracer_capable(struct task_struct *tsk, struct user_namespace *ns);
+static inline bool perfmon_capable(void)
+{
+	struct user_namespace *ns = &init_user_ns;
+
+	if (ns_capable_noaudit(ns, CAP_PERFMON))
+		return ns_capable(ns, CAP_PERFMON);
+
+	if (ns_capable_noaudit(ns, CAP_SYS_ADMIN))
+		return ns_capable(ns, CAP_SYS_ADMIN);
+
+	return false;
+}
 
 /* audit system wants to get cap info from files as well */
 extern int get_vfs_caps_from_disk(const struct dentry *dentry, struct cpu_vfs_cap_data *cpu_caps);
