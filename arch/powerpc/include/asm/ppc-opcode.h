@@ -339,6 +339,8 @@
 #define PPC_INST_DIVWU			0x7c000396
 #define PPC_INST_DIVD			0x7c0003d2
 #define PPC_INST_DIVDU			0x7c000392
+#define PPC_INST_DIVDE			0x7c000352
+#define PPC_INST_DIVDEU			0x7c000312
 #define PPC_INST_RLWINM			0x54000000
 #define PPC_INST_RLWINM_DOT		0x54000001
 #define PPC_INST_RLWIMI			0x50000000
@@ -439,6 +441,12 @@
 					__PPC_RA(a) | __PPC_RB(b))
 #define	PPC_DCBZL(a, b)		stringify_in_c(.long PPC_INST_DCBZL | \
 					__PPC_RA(a) | __PPC_RB(b))
+#define PPC_DIVDE(t, a, b)	stringify_in_c(.long PPC_INST_DIVDE	| \
+					___PPC_RT(t) | ___PPC_RA(a)	| \
+					___PPC_RB(b))
+#define PPC_DIVDEU(t, a, b)	stringify_in_c(.long PPC_INST_DIVDEU	| \
+					___PPC_RT(t) | ___PPC_RA(a)	| \
+					___PPC_RB(b))
 #define PPC_LQARX(t, a, b, eh)	stringify_in_c(.long PPC_INST_LQARX | \
 					___PPC_RT(t) | ___PPC_RA(a) | \
 					___PPC_RB(b) | __PPC_EH(eh))
