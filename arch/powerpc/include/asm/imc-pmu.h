@@ -87,8 +87,9 @@ struct trace_imc_data {
 /* Event attribute array index */
 #define IMC_FORMAT_ATTR		0
 #define IMC_EVENT_ATTR		1
-#define IMC_CPUMASK_ATTR	2
-#define IMC_NULL_ATTR		3
+#define IMC_INTERFACE_ATTR	2
+#define IMC_CPUMASK_ATTR	3
+#define IMC_NULL_ATTR		4
 
 /* PMU Format attribute macros */
 #define IMC_EVENT_OFFSET_MASK	0xffffffffULL
@@ -114,10 +115,10 @@ struct imc_pmu {
 	/*
 	 * Attribute groups for the PMU. Slot 0 used for
 	 * format attribute, slot 1 used for cpusmask attribute,
-	 * slot 2 used for event attribute. Slot 3 keep as
-	 * NULL.
+	 * slot 2 used for event attribute. Slot 3 used for interface
+	 * attribute and Slot 4 is NULL.
 	 */
-	const struct attribute_group *attr_groups[4];
+	const struct attribute_group *attr_groups[5];
 	u32 counter_mem_size;
 	int domain;
 	/*

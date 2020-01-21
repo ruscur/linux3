@@ -54,6 +54,24 @@ static struct imc_pmu_ref imc_global_refc = {
 	.refc = 0,
 };
 
+static ssize_t glob_lck_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", 1);
+}
+
+static DEVICE_ATTR_RO(glob_lck);
+
+static struct attribute *imc_interface_attrs[] = {
+	&dev_attr_glob_lck.attr,
+	NULL,
+};
+
+static struct attribute_group imc_interface_group = {
+	.name = "interface",
+	.attrs = imc_interface_attrs,
+};
+
 static struct imc_pmu *imc_event_to_pmu(struct perf_event *event)
 {
 	return container_of(event->pmu, struct imc_pmu, pmu);
@@ -1462,6 +1480,7 @@ static int update_pmu_ops(struct imc_pmu *pmu)
 	pmu->pmu.attr_groups = pmu->attr_groups;
 	pmu->pmu.capabilities = PERF_PMU_CAP_NO_EXCLUDE;
 	pmu->attr_groups[IMC_FORMAT_ATTR] = &imc_format_group;
+	pmu->attr_groups[IMC_INTERFACE_ATTR] = &imc_interface_group;
 
 	switch (pmu->domain) {
 	case IMC_DOMAIN_NEST:
