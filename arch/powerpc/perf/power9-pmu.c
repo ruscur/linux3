@@ -10,6 +10,7 @@
 #define pr_fmt(fmt)	"power9-pmu: " fmt
 
 #include "isa207-common.h"
+#include <asm/svm.h>
 
 /*
  * Raw event encoding for Power9:
@@ -445,6 +446,15 @@ int init_power9_pmu(void)
 	if (!cur_cpu_spec->oprofile_cpu_type ||
 	    strcmp(cur_cpu_spec->oprofile_cpu_type, "ppc64/power9"))
 		return -ENODEV;
+
+	/*
+	 * Disable PMUs in secure guests until we evaluate security
+	 * exposure and add relevant functionality in Ultravisor.
+	 */
+	if (is_secure_guest()) {
+		printk("Not registering Performance Monitor in secure guest\n");
+		return 0;
+	}
 
 	/* Blacklist events */
 	if (!(pvr & PVR_POWER9_CUMULUS)) {
