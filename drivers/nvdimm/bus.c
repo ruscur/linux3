@@ -1153,6 +1153,11 @@ static int __nd_ioctl(struct nvdimm_bus *nvdimm_bus, struct nvdimm *nvdimm,
 	if (rc < 0)
 		goto out_unlock;
 
+	if (cmd_rc < 0) {
+		rc = cmd_rc;
+		goto out_unlock;
+	}
+
 	if (!nvdimm && cmd == ND_CMD_CLEAR_ERROR && cmd_rc >= 0) {
 		struct nd_cmd_clear_error *clear_err = buf;
 
