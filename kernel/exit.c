@@ -1553,6 +1553,7 @@ SYSCALL_DEFINE5(waitid, int, which, pid_t, upid, struct siginfo __user *,
 	struct waitid_info info = {.status = 0};
 	long err = kernel_waitid(which, upid, &info, options, ru ? &r : NULL);
 	int signo = 0;
+	unsigned long key;
 
 	if (err > 0) {
 		signo = SIGCHLD;
@@ -1563,7 +1564,8 @@ SYSCALL_DEFINE5(waitid, int, which, pid_t, upid, struct siginfo __user *,
 	if (!infop)
 		return err;
 
-	if (!user_access_begin(infop, sizeof(*infop)))
+	key = user_access_begin(infop, sizeof(*infop), true);
+	if (!key)
 		return -EFAULT;
 
 	unsafe_put_user(signo, &infop->si_signo, Efault);
@@ -1572,10 +1574,10 @@ SYSCALL_DEFINE5(waitid, int, which, pid_t, upid, struct siginfo __user *,
 	unsafe_put_user(info.pid, &infop->si_pid, Efault);
 	unsafe_put_user(info.uid, &infop->si_uid, Efault);
 	unsafe_put_user(info.status, &infop->si_status, Efault);
-	user_access_end();
+	user_access_end(key);
 	return err;
 Efault:
-	user_access_end();
+	user_access_end(key);
 	return -EFAULT;
 }
 
@@ -1673,6 +1675,8 @@ COMPAT_SYSCALL_DEFINE5(waitid,
 	struct waitid_info info = {.status = 0};
 	long err = kernel_waitid(which, pid, &info, options, uru ? &ru : NULL);
 	int signo = 0;
+	unsigned long key;
+
 	if (err > 0) {
 		signo = SIGCHLD;
 		err = 0;
@@ -1690,7 +1694,8 @@ COMPAT_SYSCALL_DEFINE5(waitid,
 	if (!infop)
 		return err;
 
-	if (!user_access_begin(infop, sizeof(*infop)))
+	key = user_access_begin(infop, sizeof(*infop), true);
+	if (!key)
 		return -EFAULT;
 
 	unsafe_put_user(signo, &infop->si_signo, Efault);
@@ -1699,10 +1704,10 @@ COMPAT_SYSCALL_DEFINE5(waitid,
 	unsafe_put_user(info.pid, &infop->si_pid, Efault);
 	unsafe_put_user(info.uid, &infop->si_uid, Efault);
 	unsafe_put_user(info.status, &infop->si_status, Efault);
-	user_access_end();
+	user_access_end(key);
 	return err;
 Efault:
-	user_access_end();
+	user_access_end(key);
 	return -EFAULT;
 }
 #endif

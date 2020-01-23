@@ -113,12 +113,14 @@ long strncpy_from_user(char *dst, const char __user *src, long count)
 	if (likely(src_addr < max_addr)) {
 		unsigned long max = max_addr - src_addr;
 		long retval;
+		unsigned long key;
 
 		kasan_check_write(dst, count);
 		check_object_size(dst, count, false);
-		if (user_access_begin(src, max)) {
+		key = user_access_begin(src, max, false);
+		if (key) {
 			retval = do_strncpy_from_user(dst, src, count, max);
-			user_access_end();
+			user_access_end(key);
 			return retval;
 		}
 	}

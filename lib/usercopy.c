@@ -51,6 +51,7 @@ int check_zeroed_user(const void __user *from, size_t size)
 {
 	unsigned long val;
 	uintptr_t align = (uintptr_t) from % sizeof(unsigned long);
+	unsigned long key;
 
 	if (unlikely(size == 0))
 		return 1;
@@ -58,7 +59,8 @@ int check_zeroed_user(const void __user *from, size_t size)
 	from -= align;
 	size += align;
 
-	if (!user_access_begin(from, size))
+	key = user_access_begin(from, size, false);
+	if (!key)
 		return -EFAULT;
 
 	unsafe_get_user(val, (unsigned long __user *) from, err_fault);
@@ -79,10 +81,10 @@ int check_zeroed_user(const void __user *from, size_t size)
 		val &= aligned_byte_mask(size);
 
 done:
-	user_access_end();
+	user_access_end(key);
 	return (val == 0);
 err_fault:
-	user_access_end();
+	user_access_end(key);
 	return -EFAULT;
 }
 EXPORT_SYMBOL(check_zeroed_user);

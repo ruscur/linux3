@@ -108,10 +108,12 @@ long strnlen_user(const char __user *str, long count)
 	if (likely(src_addr < max_addr)) {
 		unsigned long max = max_addr - src_addr;
 		long retval;
+		unsigned long key;
 
-		if (user_access_begin(str, max)) {
+		key = user_access_begin(str, max, false);
+		if (key) {
 			retval = do_strnlen_user(str, count, max);
-			user_access_end();
+			user_access_end(key);
 			return retval;
 		}
 	}

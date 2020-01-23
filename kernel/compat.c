@@ -258,12 +258,14 @@ long compat_get_bitmap(unsigned long *mask, const compat_ulong_t __user *umask,
 		       unsigned long bitmap_size)
 {
 	unsigned long nr_compat_longs;
+	unsigned long key;
 
 	/* align bitmap up to nearest compat_long_t boundary */
 	bitmap_size = ALIGN(bitmap_size, BITS_PER_COMPAT_LONG);
 	nr_compat_longs = BITS_TO_COMPAT_LONGS(bitmap_size);
 
-	if (!user_access_begin(umask, bitmap_size / 8))
+	key = user_access_begin(umask, bitmap_size / 8, false);
+	if (!key)
 		return -EFAULT;
 
 	while (nr_compat_longs > 1) {
@@ -275,11 +277,11 @@ long compat_get_bitmap(unsigned long *mask, const compat_ulong_t __user *umask,
 	}
 	if (nr_compat_longs)
 		unsafe_get_user(*mask, umask++, Efault);
-	user_access_end();
+	user_access_end(key);
 	return 0;
 
 Efault:
-	user_access_end();
+	user_access_end(key);
 	return -EFAULT;
 }
 
@@ -287,12 +289,14 @@ long compat_put_bitmap(compat_ulong_t __user *umask, unsigned long *mask,
 		       unsigned long bitmap_size)
 {
 	unsigned long nr_compat_longs;
+	unsigned long key;
 
 	/* align bitmap up to nearest compat_long_t boundary */
 	bitmap_size = ALIGN(bitmap_size, BITS_PER_COMPAT_LONG);
 	nr_compat_longs = BITS_TO_COMPAT_LONGS(bitmap_size);
 
-	if (!user_access_begin(umask, bitmap_size / 8))
+	key = user_access_begin(umask, bitmap_size / 8, true);
+	if (!key)
 		return -EFAULT;
 
 	while (nr_compat_longs > 1) {
@@ -303,10 +307,10 @@ long compat_put_bitmap(compat_ulong_t __user *umask, unsigned long *mask,
 	}
 	if (nr_compat_longs)
 		unsafe_put_user((compat_ulong_t)*mask, umask++, Efault);
-	user_access_end();
+	user_access_end(key);
 	return 0;
 Efault:
-	user_access_end();
+	user_access_end(key);
 	return -EFAULT;
 }
 

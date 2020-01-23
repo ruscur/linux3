@@ -709,7 +709,8 @@ extern struct movsl_mask {
  * checking before using them, but you have to surround them with the
  * user_access_begin/end() pair.
  */
-static __must_check __always_inline bool user_access_begin(const void __user *ptr, size_t len)
+static __must_check __always_inline unsigned long
+user_access_begin(const void __user *ptr, size_t len, bool write)
 {
 	if (unlikely(!access_ok(ptr,len)))
 		return 0;
@@ -717,7 +718,7 @@ static __must_check __always_inline bool user_access_begin(const void __user *pt
 	return 1;
 }
 #define user_access_begin(a,b)	user_access_begin(a,b)
-#define user_access_end()	__uaccess_end()
+#define user_access_end(x)	__uaccess_end()
 
 #define user_access_save()	smap_save()
 #define user_access_restore(x)	smap_restore(x)

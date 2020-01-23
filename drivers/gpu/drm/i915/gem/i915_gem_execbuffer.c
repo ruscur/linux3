@@ -1615,6 +1615,7 @@ static int eb_copy_relocations(const struct i915_execbuffer *eb)
 	const unsigned int count = eb->buffer_count;
 	unsigned int i;
 	int err;
+	unsigned long key;
 
 	for (i = 0; i < count; i++) {
 		const unsigned int nreloc = eb->exec[i].relocation_count;
@@ -1662,14 +1663,15 @@ static int eb_copy_relocations(const struct i915_execbuffer *eb)
 		 * happened we would make the mistake of assuming that the
 		 * relocations were valid.
 		 */
-		if (!user_access_begin(urelocs, size))
+		key = user_access_begin(urelocs, size, true);
+		if (!key)
 			goto end;
 
 		for (copied = 0; copied < nreloc; copied++)
 			unsafe_put_user(-1,
 					&urelocs[copied].presumed_offset,
 					end_user);
-		user_access_end();
+		user_access_end(key);
 
 		eb->exec[i].relocs_ptr = (uintptr_t)relocs;
 	}
@@ -1677,7 +1679,7 @@ static int eb_copy_relocations(const struct i915_execbuffer *eb)
 	return 0;
 
 end_user:
-	user_access_end();
+	user_access_end(key);
 end:
 	kvfree(relocs);
 	err = -EFAULT;
@@ -2906,6 +2908,7 @@ i915_gem_execbuffer2_ioctl(struct drm_device *dev, void *data,
 		struct drm_i915_gem_exec_object2 __user *user_exec_list =
 			u64_to_user_ptr(args->buffers_ptr);
 		unsigned int i;
+		unsigned long key;
 
 		/* Copy the new buffer offsets back to the user's exec list. */
 		/*
@@ -2915,7 +2918,9 @@ i915_gem_execbuffer2_ioctl(struct drm_device *dev, void *data,
 		 * And this range already got effectively checked earlier
 		 * when we did the "copy_from_user()" above.
 		 */
-		if (!user_access_begin(user_exec_list, count * sizeof(*user_exec_list)))
+		key = user_access_begin(user_exec_list,
+					count * sizeof(*user_exec_list), true);
+		if (!key)
 			goto end;
 
 		for (i = 0; i < args->buffer_count; i++) {
@@ -2929,7 +2934,7 @@ i915_gem_execbuffer2_ioctl(struct drm_device *dev, void *data,
 					end_user);
 		}
 end_user:
-		user_access_end();
+		user_access_end(key);
 end:;
 	}
 
