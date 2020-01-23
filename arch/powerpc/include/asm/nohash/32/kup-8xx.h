@@ -34,10 +34,12 @@
 
 #include <asm/reg.h>
 
-static inline void allow_user_access(void __user *to, const void __user *from,
-				     unsigned long size, unsigned long dir)
+static inline unsigned long allow_user_access(void __user *to, const void __user *from,
+					      unsigned long size, unsigned long dir)
 {
 	mtspr(SPRN_MD_AP, MD_APG_INIT);
+
+	return 1;
 }
 
 static inline void prevent_user_access(void __user *to, const void __user *from,

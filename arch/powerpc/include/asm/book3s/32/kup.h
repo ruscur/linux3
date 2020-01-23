@@ -102,23 +102,28 @@ static inline void kuap_update_sr(u32 sr, u32 addr, u32 end)
 	isync();	/* Context sync required after mtsrin() */
 }
 
-static __always_inline void allow_user_access(void __user *to, const void __user *from,
-					      u32 size, unsigned long dir)
+/* Make sure we never return 0. We only use top and bottom 4 bits */
+static __always_inline unsigned long
+allow_user_access(void __user *to, const void __user *from, u32 size, unsigned long dir)
 {
 	u32 addr, end;
+	unsigned long kuap;
 
 	BUILD_BUG_ON(!__builtin_constant_p(dir));
 	if (!(dir & KUAP_W))
-		return;
+		return 0x100;
 
 	addr = (__force u32)to;
 
 	if (unlikely(addr >= TASK_SIZE || !size))
-		return;
+		return 0x100;
 
 	end = min(addr + size, TASK_SIZE);
-	current->thread.kuap = (addr & 0xf0000000) | ((((end - 1) >> 28) + 1) & 0xf);
+	kuap = (addr & 0xf0000000) | ((((end - 1) >> 28) + 1) & 0xf);
+	current->thread.kuap = kuap;
 	kuap_update_sr(mfsrin(addr) & ~SR_KS, addr, end);	/* Clear Ks */
+
+	return kuap;
 }
 
 static __always_inline void prevent_user_access(void __user *to, const void __user *from,

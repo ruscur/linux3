@@ -77,8 +77,9 @@ static inline void set_kuap(unsigned long value)
 	isync();
 }
 
-static __always_inline void allow_user_access(void __user *to, const void __user *from,
-					      unsigned long size, unsigned long dir)
+static __always_inline unsigned long
+allow_user_access(void __user *to, const void __user *from,
+		  unsigned long size, unsigned long dir)
 {
 	// This is written so we can resolve to a single case at build time
 	BUILD_BUG_ON(!__builtin_constant_p(dir));
@@ -88,6 +89,8 @@ static __always_inline void allow_user_access(void __user *to, const void __user
 		set_kuap(AMR_KUAP_BLOCK_READ);
 	else
 		set_kuap(0);
+
+	return 1;
 }
 
 static inline void prevent_user_access(void __user *to, const void __user *from,
