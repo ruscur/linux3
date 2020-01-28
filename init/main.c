@@ -1197,6 +1197,7 @@ static noinline void __init kernel_init_freeable(void)
 	sched_init_smp();
 
 	page_alloc_init_late();
+	debug_vm_pgtable();
 	/* Initialize page ext after all struct pages are initialized. */
 	page_ext_init();
 
