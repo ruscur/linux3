@@ -958,27 +958,21 @@ early_param("topology_updates", early_topology_updates);
 static int hot_add_drconf_scn_to_nid(unsigned long scn_addr)
 {
 	struct drmem_lmb *lmb;
-	unsigned long lmb_size;
-	int nid = NUMA_NO_NODE;
 
-	lmb_size = drmem_lmb_size();
+	lmb = drmem_find_lmb_by_base_addr(scn_addr);
+	if (lmb == NULL)
+		return NUMA_NO_NODE;
 
-	for_each_drmem_lmb(lmb) {
-		/* skip this block if it is reserved or not assigned to
-		 * this partition */
-		if ((lmb->flags & DRCONF_MEM_RESERVED)
-		    || !(lmb->flags & DRCONF_MEM_ASSIGNED))
-			continue;
+	/*
+	 * We can't use it if it is reserved or not assigned to
+	 * this partition.
+	 */
+	if (lmb->flags & DRCONF_MEM_RESERVED)
+		return NUMA_NO_NODE;
+	if (!(lmb->flags & DRCONF_MEM_ASSIGNED))
+		return NUMA_NO_NODE;
 
-		if ((scn_addr < lmb->base_addr)
-		    || (scn_addr >= (lmb->base_addr + lmb_size)))
-			continue;
-
-		nid = of_drconf_to_nid_single(lmb);
-		break;
-	}
-
-	return nid;
+	return of_drconf_to_nid_single(lmb);
 }
 
 /*

@@ -222,17 +222,10 @@ static int get_lmb_range(u32 drc_index, int n_lmbs,
 			 struct drmem_lmb **start_lmb,
 			 struct drmem_lmb **end_lmb)
 {
-	struct drmem_lmb *lmb, *start, *end;
+	struct drmem_lmb *start, *end;
 	struct drmem_lmb *last_lmb;
 
-	start = NULL;
-	for_each_drmem_lmb(lmb) {
-		if (lmb->drc_index == drc_index) {
-			start = lmb;
-			break;
-		}
-	}
-
+	start = drmem_find_lmb_by_drc_index(drc_index);
 	if (!start)
 		return -EINVAL;
 

@@ -88,6 +88,9 @@ static inline bool drmem_lmb_reserved(struct drmem_lmb *lmb)
 	return lmb->flags & DRMEM_LMB_RESERVED;
 }
 
+struct drmem_lmb *drmem_find_lmb_by_base_addr(unsigned long);
+struct drmem_lmb *drmem_find_lmb_by_drc_index(unsigned long);
+
 u64 drmem_lmb_memory_max(void);
 void __init walk_drmem_lmbs(struct device_node *dn,
 			void (*func)(struct drmem_lmb *, const __be32 **));

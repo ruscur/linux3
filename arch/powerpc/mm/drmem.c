@@ -11,9 +11,12 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/memblock.h>
+#include <linux/xarray.h>
 #include <asm/prom.h>
 #include <asm/drmem.h>
 
+static DEFINE_XARRAY(drmem_lmb_base_addr);
+static DEFINE_XARRAY(drmem_lmb_drc_index);
 static struct drmem_lmb_info __drmem_info;
 struct drmem_lmb_info *drmem_info = &__drmem_info;
 
@@ -23,6 +26,31 @@ u64 drmem_lmb_memory_max(void)
 
 	last_lmb = &drmem_info->lmbs[drmem_info->n_lmbs - 1];
 	return last_lmb->base_addr + drmem_lmb_size();
+}
+
+struct drmem_lmb *drmem_find_lmb_by_base_addr(unsigned long base_addr)
+{
+	return xa_load(&drmem_lmb_base_addr, base_addr);
+}
+
+struct drmem_lmb *drmem_find_lmb_by_drc_index(unsigned long drc_index)
+{
+	return xa_load(&drmem_lmb_drc_index, drc_index);
+}
+
+static int drmem_lmb_cache_for_lookup(struct drmem_lmb *lmb)
+{
+	void *ret;
+
+	ret = xa_store(&drmem_lmb_base_addr, lmb->base_addr, lmb,  GFP_KERNEL);
+	if (xa_err(ret))
+		return xa_err(ret);
+
+	ret = xa_store(&drmem_lmb_drc_index, lmb->drc_index, lmb, GFP_KERNEL);
+	if (xa_err(ret))
+		return xa_err(ret);
+
+	return 0;
 }
 
 static u32 drmem_lmb_flags(struct drmem_lmb *lmb)
@@ -364,6 +392,8 @@ static void __init init_drmem_v1_lmbs(const __be32 *prop)
 
 	for_each_drmem_lmb(lmb) {
 		read_drconf_v1_cell(lmb, &prop);
+		if (drmem_lmb_cache_for_lookup(lmb) != 0)
+			return;
 		lmb_set_nid(lmb);
 	}
 }
@@ -410,6 +440,9 @@ static void __init init_drmem_v2_lmbs(const __be32 *prop)
 
 			lmb->aa_index = dr_cell.aa_index;
 			lmb->flags = dr_cell.flags;
+
+			if (drmem_lmb_cache_for_lookup(lmb) != 0)
+				return;
 
 			lmb_set_nid(lmb);
 		}
