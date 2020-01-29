@@ -29,16 +29,14 @@
 #define USER_DS		MAKE_MM_SEG(TASK_SIZE - 1)
 #endif
 
-#define get_fs()	(current->thread.addr_limit)
+#define segment_eq(a, b)	((a).seg == (b).seg)
+
+#define get_fs()	(test_thread_flag(TIF_KERNEL_DS) ? KERNEL_DS : USER_DS)
 
 static inline void set_fs(mm_segment_t fs)
 {
-	current->thread.addr_limit = fs;
-	/* On user-mode return check addr_limit (fs) is correct */
-	set_thread_flag(TIF_FSCHECK);
+	update_thread_flag(TIF_KERNEL_DS, segment_eq(fs, KERNEL_DS));
 }
-
-#define segment_eq(a, b)	((a).seg == (b).seg)
 
 #define user_addr_max()	(get_fs().seg)
 
