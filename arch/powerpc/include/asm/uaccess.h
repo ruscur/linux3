@@ -21,43 +21,44 @@
 
 #define MAKE_MM_SEG(s)  ((mm_segment_t) { (s) })
 
-#define KERNEL_DS	MAKE_MM_SEG(~0UL)
-#ifdef __powerpc64__
-/* We use TASK_SIZE_USER64 as TASK_SIZE is not constant */
-#define USER_DS		MAKE_MM_SEG(TASK_SIZE_USER64 - 1)
-#else
-#define USER_DS		MAKE_MM_SEG(TASK_SIZE - 1)
-#endif
+#define KERNEL_DS	MAKE_MM_SEG(true)
+#define USER_DS		MAKE_MM_SEG(false)
 
-#define get_fs()	(current->thread.addr_limit)
+#define get_fs()	(MAKE_MM_SEG(test_thread_flag(TIF_KERNEL_DS)))
+
+#define segment_eq(a, b)	((a).is_kernel_ds == (b).is_kernel_ds)
 
 static inline void set_fs(mm_segment_t fs)
 {
-	current->thread.addr_limit = fs;
-	/* On user-mode return check addr_limit (fs) is correct */
-	set_thread_flag(TIF_FSCHECK);
+	update_thread_flag(TIF_KERNEL_DS, segment_eq(fs, KERNEL_DS));
 }
 
-#define segment_eq(a, b)	((a).seg == (b).seg)
-
-#define user_addr_max()	(get_fs().seg)
+#define user_addr_max()	(segment_eq(get_fs(), KERNEL_DS) ? ~0UL : END_OF_USER_DS - 1)
 
 #ifdef __powerpc64__
+
+#define END_OF_USER_DS		TASK_SIZE_USER64
+
 /*
  * This check is sufficient because there is a large enough
  * gap between user addresses and the kernel addresses
  */
 #define __access_ok(addr, size, segment)	\
-	(((addr) <= (segment).seg) && ((size) <= (segment).seg))
+	segment_eq(segment, KERNEL_DS) ?	\
+	1 : (addr) < END_OF_USER_DS && ((size) < END_OF_USER_DS)
 
 #else
+
+#define END_OF_USER_DS		TASK_SIZE
 
 static inline int __access_ok(unsigned long addr, unsigned long size,
 			mm_segment_t seg)
 {
-	if (addr > seg.seg)
+	if (segment_eq(seg, KERNEL_DS))
+		return 1;
+	if (addr >= END_OF_USER_DS)
 		return 0;
-	return (size == 0 || size - 1 <= seg.seg - addr);
+	return addr + size <= END_OF_USER_DS;
 }
 
 #endif

@@ -110,7 +110,7 @@ static nokprobe_inline long address_ok(struct pt_regs *regs,
 		return 1;
 	if (__access_ok(ea, 1, USER_DS))
 		/* Access overlaps the end of the user region */
-		regs->dar = USER_DS.seg;
+		regs->dar = END_OF_USER_DS;
 	else
 		regs->dar = ea;
 	return 0;
