@@ -1185,10 +1185,34 @@ static inline void add_cpu_to_smallcore_masks(int cpu)
 	}
 }
 
+int get_physical_package_id(int cpu)
+{
+	int ppid = cpu_to_chip_id(cpu);
+
+#ifdef CONFIG_PPC_SPLPAR
+	/*
+	 * If the platform is PowerNV or Guest on KVM, ibm,chip-id is
+	 * defined. Hence we would return the chip-id as the
+	 * get_physical_package_id.
+	 */
+	if (ppid == -1 && firmware_has_feature(FW_FEATURE_LPAR)) {
+		struct device_node *np = of_get_cpu_node(cpu, NULL);
+
+		if (np) {
+			ppid = of_node_to_nid(np);
+			of_node_put(np);
+		}
+	}
+#endif /* CONFIG_PPC_SPLPAR */
+
+	return ppid;
+}
+EXPORT_SYMBOL_GPL(get_physical_package_id);
+
 static void add_cpu_to_masks(int cpu)
 {
 	int first_thread = cpu_first_thread_sibling(cpu);
-	int chipid = cpu_to_chip_id(cpu);
+	int ppid = get_physical_package_id(cpu);
 	int i;
 
 	/*
@@ -1217,11 +1241,11 @@ static void add_cpu_to_masks(int cpu)
 	for_each_cpu(i, cpu_l2_cache_mask(cpu))
 		set_cpus_related(cpu, i, cpu_core_mask);
 
-	if (chipid == -1)
+	if (ppid == -1)
 		return;
 
 	for_each_cpu(i, cpu_online_mask)
-		if (cpu_to_chip_id(i) == chipid)
+		if (get_physical_package_id(i) == ppid)
 			set_cpus_related(cpu, i, cpu_core_mask);
 }
 
