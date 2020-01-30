@@ -120,12 +120,18 @@ static __always_inline int do_hres(const struct vdso_data *vd, clockid_t clk,
 			cpu_relax();
 		}
 		smp_rmb();
+#ifdef __arch_vdso_capable
+		if (unlikely(!__arch_vdso_capable(vd->clock_mode)))
+			return -1;
+#endif
 
 		cycles = __arch_get_hw_counter(vd->clock_mode);
 		ns = vdso_ts->nsec;
 		last = vd->cycle_last;
+#ifndef __arch_vdso_capable
 		if (unlikely((s64)cycles < 0))
 			return -1;
+#endif
 
 		ns += vdso_calc_delta(cycles, last, vd->mask, vd->mult);
 		ns >>= vd->shift;
