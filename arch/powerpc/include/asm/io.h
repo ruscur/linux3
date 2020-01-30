@@ -731,6 +731,16 @@ extern void __iomem * __ioremap_at(phys_addr_t pa, void *ea,
 				   unsigned long size, pgprot_t prot);
 extern void __iounmap_at(void *ea, unsigned long size);
 
+#ifdef CONFIG_SPARSEMEM
+static inline unsigned long memremap_compat_align(void)
+{
+	if (radix_enabled())
+		return SUBSECTION_SIZE;
+	return (1UL << mmu_psize_defs[mmu_linear_psize].shift);
+}
+#define memremap_compat_align memremap_compat_align
+#endif
+
 /*
  * When CONFIG_PPC_INDIRECT_PIO is set, we use the generic iomap implementation
  * which needs some additional definitions here. They basically allow PIO

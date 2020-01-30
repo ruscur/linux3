@@ -6,6 +6,7 @@
 #ifndef _LINUX_IO_H
 #define _LINUX_IO_H
 
+#include <linux/mmzone.h>
 #include <linux/types.h>
 #include <linux/init.h>
 #include <linux/bug.h>
@@ -76,6 +77,28 @@ void devm_ioremap_release(struct device *dev, void *res);
 void *devm_memremap(struct device *dev, resource_size_t offset,
 		size_t size, unsigned long flags);
 void devm_memunmap(struct device *dev, void *addr);
+
+#ifndef memremap_compat_align
+#ifdef CONFIG_SPARSEMEM
+/*
+ * Minimum compatible alignment of the resource (start, end) across
+ * memremap interfaces (i.e. memremap + memremap_pages)
+ */
+static inline unsigned long memremap_compat_align(void)
+{
+	return SUBSECTION_SIZE;
+}
+#else /* CONFIG_SPARSEMEM */
+/*
+ * No ZONE_DEVICE / memremap_pages() support so the minimum mapping
+ * granularity is a single page.
+ */
+static inline unsigned long memremap_compat_align(void)
+{
+	return PAGE_SIZE;
+}
+#endif /* CONFIG_SPARSEMEM */
+#endif /* memremap_compat_align */
 
 #ifdef CONFIG_PCI
 /*
