@@ -116,12 +116,13 @@ extern struct vdso_data *vdso_data;
 
 #else /* __ASSEMBLY__ */
 
-.macro get_datapage ptr, tmp
+.macro get_datapage ptr, offset=0
 	bcl	20, 31, .+4
-	mflr	\ptr
-	addi	\ptr, \ptr, (__kernel_datapage_offset - (.-4))@l
-	lwz	\tmp, 0(\ptr)
-	add	\ptr, \tmp, \ptr
+999:	mflr	\ptr
+#if CONFIG_PPC_PAGE_SHIFT > 14
+	addis	\ptr, \ptr, (_vdso_datapage + \offset - 999b)@ha
+#endif
+	addi	\ptr, \ptr, (_vdso_datapage + \offset - 999b)@l
 .endm
 
 #endif /* __ASSEMBLY__ */
