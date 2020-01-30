@@ -1739,6 +1739,16 @@ struct nd_namespace_common *nvdimm_namespace_common_probe(struct device *dev)
 		return ERR_PTR(-ENODEV);
 	}
 
+	if (pmem_should_map_pages(dev) || nd_pfn || nd_dax) {
+		struct nd_namespace_io *nsio = to_nd_namespace_io(&ndns->dev);
+		resource_size_t start = nsio->res.start;
+
+		if (!IS_ALIGNED(start | size, memremap_compat_align())) {
+			dev_dbg(&ndns->dev, "misaligned, unable to map\n");
+			return ERR_PTR(-EOPNOTSUPP);
+		}
+	}
+
 	if (is_namespace_pmem(&ndns->dev)) {
 		struct nd_namespace_pmem *nspm;
 
