@@ -362,13 +362,32 @@ void __init early_init_mmu_47x(void)
  */
 void flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
+	int tsize = mmu_get_tsize(mmu_virtual_psize);
+
 #ifdef CONFIG_SMP
 	preempt_disable();
-	smp_call_function(do_flush_tlb_mm_ipi, NULL, 1);
-	_tlbil_pid(0);
+#endif
+	start = ALIGN_DOWN(start, PAGE_SIZE);
+	end = ALIGN(end, PAGE_SIZE);
+	if (end - start == PAGE_SIZE) {
+#ifdef CONFIG_SMP
+		struct tlb_flush_param p = {
+			.pid = 0,
+			.addr = start,
+			.tsize = tsize,
+			.ind = 0,
+		};
+		smp_call_function(do_flush_tlb_page_ipi, &p, 1);
+#endif
+		_tlbil_va(start, 0, tsize, 0);
+	} else {
+#ifdef CONFIG_SMP
+		smp_call_function(do_flush_tlb_mm_ipi, NULL, 1);
+#endif
+		_tlbil_pid(0);
+	}
+#ifdef CONFIG_SMP
 	preempt_enable();
-#else
-	_tlbil_pid(0);
 #endif
 }
 EXPORT_SYMBOL(flush_tlb_kernel_range);
