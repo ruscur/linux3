@@ -57,6 +57,9 @@ void lkdtm_EXEC_RODATA(void);
 void lkdtm_EXEC_USERSPACE(void);
 void lkdtm_EXEC_NULL(void);
 void lkdtm_ACCESS_USERSPACE(void);
+#ifdef CONFIG_PPC_KUAP
+void lkdtm_ACCESS_USERSPACE_KUAP(void);
+#endif
 void lkdtm_ACCESS_NULL(void);
 
 /* lkdtm_refcount.c */

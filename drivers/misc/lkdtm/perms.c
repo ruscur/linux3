@@ -10,6 +10,9 @@
 #include <linux/mman.h>
 #include <linux/uaccess.h>
 #include <asm/cacheflush.h>
+#ifdef CONFIG_PPC_KUAP
+#include <asm/uaccess.h>
+#endif
 
 /* Whether or not to fill the target memory area with do_nothing(). */
 #define CODE_WRITE	true
@@ -199,6 +202,46 @@ void lkdtm_ACCESS_USERSPACE(void)
 
 	vm_munmap(user_addr, PAGE_SIZE);
 }
+
+/* Test that KUAP's directional user access unlocks work as intended */
+#ifdef CONFIG_PPC_KUAP
+void lkdtm_ACCESS_USERSPACE_KUAP(void)
+{
+	unsigned long user_addr, tmp = 0;
+	unsigned long *ptr;
+
+	user_addr = vm_mmap(NULL, 0, PAGE_SIZE,
+			    PROT_READ | PROT_WRITE | PROT_EXEC,
+			    MAP_ANONYMOUS | MAP_PRIVATE, 0);
+	if (user_addr >= TASK_SIZE) {
+		pr_warn("Failed to allocate user memory\n");
+		return;
+	}
+
+	if (copy_to_user((void __user *)user_addr, &tmp, sizeof(tmp))) {
+		pr_warn("copy_to_user failed\n");
+		vm_munmap(user_addr, PAGE_SIZE);
+		return;
+	}
+
+	ptr = (unsigned long *)user_addr;
+
+	/* Allowing "write to" should not allow "read from" */
+	allow_write_to_user(ptr, sizeof(unsigned long));
+	pr_info("attempting bad read at %px with write allowed\n", ptr);
+	tmp = *ptr;
+	tmp += 0xc0dec0de;
+	prevent_write_to_user(ptr, sizeof(unsigned long));
+
+	/* Allowing "read from" should not allow "write to" */
+	allow_read_from_user(ptr, sizeof(unsigned long));
+	pr_info("attempting bad write at %px with read allowed\n", ptr);
+	*ptr = tmp;
+	prevent_read_from_user(ptr, sizeof(unsigned long));
+
+	vm_munmap(user_addr, PAGE_SIZE);
+}
+#endif
 
 void lkdtm_ACCESS_NULL(void)
 {
