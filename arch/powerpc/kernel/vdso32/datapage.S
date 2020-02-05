@@ -13,7 +13,8 @@
 #include <asm/vdso_datapage.h>
 
 	.text
-	.global	__kernel_datapage_offset;
+	.global	__kernel_datapage_offset
+	.protected	__kernel_datapage_offset
 __kernel_datapage_offset:
 	.long	0
 
