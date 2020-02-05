@@ -378,8 +378,10 @@ notrace void __init kaslr_early_init(void *dt_ptr, phys_addr_t size)
 	unsigned int *__kaslr_offset = (unsigned int *)(KERNELBASE + 0x58);
 	unsigned int *__run_at_load = (unsigned int *)(KERNELBASE + 0x5c);
 
-	if (*__run_at_load == 1)
+	if (*__run_at_load == 1) {
+		kaslr_late_init();
 		return;
+	}
 
 	/* Setup flat device-tree pointer */
 	initial_boot_params = dt_ptr;
