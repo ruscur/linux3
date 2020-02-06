@@ -100,7 +100,7 @@ static pte_t set_pte_filter_hash(pte_t pte) { return pte; }
  * as we don't have two bits to spare for _PAGE_EXEC and _PAGE_HWEXEC so
  * instead we "filter out" the exec permission for non clean pages.
  */
-static pte_t set_pte_filter(pte_t pte)
+static inline pte_t set_pte_filter(pte_t pte)
 {
 	struct page *pg;
 
@@ -259,6 +259,23 @@ int huge_ptep_set_access_flags(struct vm_area_struct *vma,
 	return changed;
 #endif
 }
+
+#if defined(CONFIG_PPC_8xx) && defined(CONFIG_PPC_16K_PAGES)
+void set_huge_pte_at(struct mm_struct *mm, unsigned long addr, pte_t *ptep, pte_t pte)
+{
+	/*
+	 * Make sure hardware valid bit is not set. We don't do
+	 * tlb flush for this update.
+	 */
+	VM_WARN_ON(pte_hw_valid(*ptep) && !pte_protnone(*ptep));
+
+	pte = pte_mkpte(pte);
+
+	pte = set_pte_filter(pte);
+
+	ptep->pte = pte_val(pte);
+}
+#endif
 #endif /* CONFIG_HUGETLB_PAGE */
 
 #ifdef CONFIG_DEBUG_VM
