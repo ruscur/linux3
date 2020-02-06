@@ -215,9 +215,8 @@ typedef struct {
 	unsigned char low_slices_psize[SLICE_ARRAY_SIZE];
 	unsigned char high_slices_psize[0];
 	unsigned long slb_addr_limit;
-	struct slice_mask mask_base_psize; /* 4k or 16k */
+	struct slice_mask mask_base_psize; /* 4k or 16k or 8M */
 	struct slice_mask mask_512k;
-	struct slice_mask mask_8m;
 #endif
 	void *pte_frag;
 } mm_context_t;
@@ -257,10 +256,8 @@ static inline struct slice_mask *slice_mask_for_size(mm_context_t *ctx, int psiz
 {
 	if (psize == MMU_PAGE_512K)
 		return &ctx->mask_512k;
-	if (psize == MMU_PAGE_8M)
-		return &ctx->mask_8m;
 
-	BUG_ON(psize != mmu_virtual_psize);
+	BUG_ON(psize != mmu_virtual_psize && psize != MMU_PAGE_8M);
 
 	return &ctx->mask_base_psize;
 }

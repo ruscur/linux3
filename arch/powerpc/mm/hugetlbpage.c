@@ -544,7 +544,8 @@ unsigned long hugetlb_get_unmapped_area(struct file *file, unsigned long addr,
 unsigned long vma_mmu_pagesize(struct vm_area_struct *vma)
 {
 	/* With radix we don't use slice, so derive it from vma*/
-	if (IS_ENABLED(CONFIG_PPC_MM_SLICES) && !radix_enabled()) {
+	if (IS_ENABLED(CONFIG_PPC_MM_SLICES) && !IS_ENABLED(CONFIG_PPC_8xx) &&
+	    !radix_enabled()) {
 		unsigned int psize = get_slice_psize(vma->vm_mm, vma->vm_start);
 
 		return 1UL << mmu_psize_to_shift(psize);
