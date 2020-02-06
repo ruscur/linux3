@@ -147,14 +147,6 @@ void reloc_kernel_entry(void *fdt, long addr);
 extern void loadcam_entry(unsigned int index);
 extern void loadcam_multi(int first_idx, int num, int tmp_idx);
 
-#ifdef CONFIG_RANDOMIZE_BASE
-void kaslr_early_init(void *dt_ptr, phys_addr_t size);
-void kaslr_late_init(void);
-#else
-static inline void kaslr_early_init(void *dt_ptr, phys_addr_t size) {}
-static inline void kaslr_late_init(void) {}
-#endif
-
 struct tlbcam {
 	u32	MAS0;
 	u32	MAS1;
@@ -162,6 +154,14 @@ struct tlbcam {
 	u32	MAS3;
 	u32	MAS7;
 };
+#endif
+
+#ifdef CONFIG_RANDOMIZE_BASE
+void kaslr_early_init(void *dt_ptr, phys_addr_t size);
+void kaslr_late_init(void);
+#else
+static inline void kaslr_early_init(void *dt_ptr, phys_addr_t size) {}
+static inline void kaslr_late_init(void) {}
 #endif
 
 #if defined(CONFIG_PPC_BOOK3S_32) || defined(CONFIG_FSL_BOOKE) || defined(CONFIG_PPC_8xx)
