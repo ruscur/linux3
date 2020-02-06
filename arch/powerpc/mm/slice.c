@@ -422,6 +422,8 @@ static inline void slice_andnot_mask(struct slice_mask *dst,
 
 #ifdef CONFIG_PPC_64K_PAGES
 #define MMU_PAGE_BASE	MMU_PAGE_64K
+#elif defined(CONFIG_PPC_16K_PAGES)
+#define MMU_PAGE_BASE	MMU_PAGE_16K
 #else
 #define MMU_PAGE_BASE	MMU_PAGE_4K
 #endif
@@ -514,9 +516,19 @@ unsigned long slice_get_unmapped_area(unsigned long addr, unsigned long len,
 	 * If we support combo pages, we can allow 64k pages in 4k slices
 	 * The mask copies could be avoided in most cases here if we had
 	 * a pointer to good mask for the next code to use.
+	 *
+	 * On 8xx, slices are used because hugepages (512k or 8M) and small
+	 * pages (4k or 16k) cannot share the same PGD entry. However, as 8M
+	 * entirely covers two PGD entries, there will implicitely be no
+	 * conflict between 8M pages and any other size. So 8M is compatible
+	 * with the 512k page slice as well.
 	 */
-	if (IS_ENABLED(CONFIG_PPC_64K_PAGES) && psize == MMU_PAGE_64K) {
-		compat_maskp = slice_mask_for_size(&mm->context, MMU_PAGE_4K);
+	if ((IS_ENABLED(CONFIG_PPC_64K_PAGES) && psize == MMU_PAGE_64K) ||
+	    (IS_ENABLED(CONFIG_PPC_8xx) && psize == MMU_PAGE_8M)) {
+		if (IS_ENABLED(CONFIG_PPC_8xx))
+			compat_maskp = slice_mask_for_size(&mm->context, MMU_PAGE_512K);
+		else
+			compat_maskp = slice_mask_for_size(&mm->context, MMU_PAGE_4K);
 		if (fixed)
 			slice_or_mask(&good_mask, maskp, compat_maskp);
 		else
@@ -593,9 +605,8 @@ unsigned long slice_get_unmapped_area(unsigned long addr, unsigned long len,
 	newaddr = slice_find_area(mm, len, &potential_mask,
 				  psize, topdown, high_limit);
 
-	if (IS_ENABLED(CONFIG_PPC_64K_PAGES) && newaddr == -ENOMEM &&
-	    psize == MMU_PAGE_64K) {
-		/* retry the search with 4k-page slices included */
+	if (compat_maskp && newaddr == -ENOMEM) {
+		/* retry the search with compatible slices included */
 		slice_or_mask(&potential_mask, &potential_mask, compat_maskp);
 		newaddr = slice_find_area(mm, len, &potential_mask,
 					  psize, topdown, high_limit);
@@ -767,12 +778,16 @@ int slice_is_hugepage_only_range(struct mm_struct *mm, unsigned long addr,
 
 	maskp = slice_mask_for_size(&mm->context, psize);
 
-	/* We need to account for 4k slices too */
-	if (IS_ENABLED(CONFIG_PPC_64K_PAGES) && psize == MMU_PAGE_64K) {
+	/* We need to account for compatible slices too */
+	if ((IS_ENABLED(CONFIG_PPC_64K_PAGES) && psize == MMU_PAGE_64K) ||
+	    (IS_ENABLED(CONFIG_PPC_8xx) && psize == MMU_PAGE_8M)) {
 		const struct slice_mask *compat_maskp;
 		struct slice_mask available;
 
-		compat_maskp = slice_mask_for_size(&mm->context, MMU_PAGE_4K);
+		if (IS_ENABLED(CONFIG_PPC_8xx))
+			compat_maskp = slice_mask_for_size(&mm->context, MMU_PAGE_512K);
+		else
+			compat_maskp = slice_mask_for_size(&mm->context, MMU_PAGE_4K);
 		slice_or_mask(&available, maskp, compat_maskp);
 		return !slice_check_range_fits(mm, &available, addr, len);
 	}
