@@ -467,7 +467,7 @@ EXPORT_SYMBOL(generic_block_fiemap);
  * Only the l_start, l_len and l_whence fields of the 'struct space_resv'
  * are used here, rest are ignored.
  */
-static int ioctl_preallocate(struct file *filp, int mode, void __user *argp)
+int ioctl_preallocate(struct file *filp, int mode, void __user *argp)
 {
 	struct inode *inode = file_inode(filp);
 	struct space_resv sr;
@@ -495,8 +495,8 @@ static int ioctl_preallocate(struct file *filp, int mode, void __user *argp)
 /* on ia32 l_start is on a 32-bit boundary */
 #if defined CONFIG_COMPAT && defined(CONFIG_X86_64)
 /* just account for different alignment */
-static int compat_ioctl_preallocate(struct file *file, int mode,
-				    struct space_resv_32 __user *argp)
+int compat_ioctl_preallocate(struct file *file, int mode,
+				struct space_resv_32 __user *argp)
 {
 	struct inode *inode = file_inode(file);
 	struct space_resv_32 sr;
@@ -521,9 +521,11 @@ static int compat_ioctl_preallocate(struct file *file, int mode,
 }
 #endif
 
-static int file_ioctl(struct file *filp, unsigned int cmd, int __user *p)
+static int file_ioctl(struct file *filp, unsigned int cmd,
+		unsigned long arg)
 {
 	struct inode *inode = file_inode(filp);
+	int __user *p = (int __user *)arg;
 
 	switch (cmd) {
 	case FIBMAP:
@@ -540,7 +542,7 @@ static int file_ioctl(struct file *filp, unsigned int cmd, int __user *p)
 		return ioctl_preallocate(filp, FALLOC_FL_ZERO_RANGE, p);
 	}
 
-	return -ENOIOCTLCMD;
+	return vfs_ioctl(filp, cmd, arg);
 }
 
 static int ioctl_fionbio(struct file *filp, int __user *argp)
@@ -659,48 +661,53 @@ out:
 }
 
 /*
+ * When you add any new common ioctls to the switches above and below
+ * please update compat_sys_ioctl() too.
+ *
  * do_vfs_ioctl() is not for drivers and not intended to be EXPORT_SYMBOL()'d.
  * It's just a simple helper for sys_ioctl and compat_sys_ioctl.
- *
- * When you add any new common ioctls to the switches above and below,
- * please ensure they have compatible arguments in compat mode.
  */
-static int do_vfs_ioctl(struct file *filp, unsigned int fd,
-			unsigned int cmd, unsigned long arg)
+int do_vfs_ioctl(struct file *filp, unsigned int fd, unsigned int cmd,
+	     unsigned long arg)
 {
+	int error = 0;
 	void __user *argp = (void __user *)arg;
 	struct inode *inode = file_inode(filp);
 
 	switch (cmd) {
 	case FIOCLEX:
 		set_close_on_exec(fd, 1);
-		return 0;
+		break;
 
 	case FIONCLEX:
 		set_close_on_exec(fd, 0);
-		return 0;
+		break;
 
 	case FIONBIO:
-		return ioctl_fionbio(filp, argp);
+		error = ioctl_fionbio(filp, argp);
+		break;
 
 	case FIOASYNC:
-		return ioctl_fioasync(fd, filp, argp);
+		error = ioctl_fioasync(fd, filp, argp);
+		break;
 
 	case FIOQSIZE:
 		if (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode) ||
 		    S_ISLNK(inode->i_mode)) {
 			loff_t res = inode_get_bytes(inode);
-			return copy_to_user(argp, &res, sizeof(res)) ?
-					    -EFAULT : 0;
-		}
-
-		return -ENOTTY;
+			error = copy_to_user(argp, &res, sizeof(res)) ?
+					-EFAULT : 0;
+		} else
+			error = -ENOTTY;
+		break;
 
 	case FIFREEZE:
-		return ioctl_fsfreeze(filp);
+		error = ioctl_fsfreeze(filp);
+		break;
 
 	case FITHAW:
-		return ioctl_fsthaw(filp);
+		error = ioctl_fsthaw(filp);
+		break;
 
 	case FS_IOC_FIEMAP:
 		return ioctl_fiemap(filp, argp);
@@ -709,7 +716,6 @@ static int do_vfs_ioctl(struct file *filp, unsigned int fd,
 		/* anon_bdev filesystems may not have a block size */
 		if (!inode->i_sb->s_blocksize)
 			return -EINVAL;
-
 		return put_user(inode->i_sb->s_blocksize, (int __user *)argp);
 
 	case FICLONE:
@@ -723,30 +729,24 @@ static int do_vfs_ioctl(struct file *filp, unsigned int fd,
 
 	default:
 		if (S_ISREG(inode->i_mode))
-			return file_ioctl(filp, cmd, argp);
+			error = file_ioctl(filp, cmd, arg);
+		else
+			error = vfs_ioctl(filp, cmd, arg);
 		break;
 	}
-
-	return -ENOIOCTLCMD;
+	return error;
 }
 
 int ksys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
 {
-	struct fd f = fdget(fd);
 	int error;
+	struct fd f = fdget(fd);
 
 	if (!f.file)
 		return -EBADF;
-
 	error = security_file_ioctl(f.file, cmd, arg);
-	if (error)
-		goto out;
-
-	error = do_vfs_ioctl(f.file, fd, cmd, arg);
-	if (error == -ENOIOCTLCMD)
-		error = vfs_ioctl(f.file, cmd, arg);
-
-out:
+	if (!error)
+		error = do_vfs_ioctl(f.file, fd, cmd, arg);
 	fdput(f);
 	return error;
 }
@@ -790,63 +790,92 @@ long compat_ptr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 EXPORT_SYMBOL(compat_ptr_ioctl);
 
 COMPAT_SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd,
-		       compat_ulong_t, arg)
+		       compat_ulong_t, arg32)
 {
+	unsigned long arg = arg32;
 	struct fd f = fdget(fd);
-	int error;
-
+	int error = -EBADF;
 	if (!f.file)
-		return -EBADF;
+		goto out;
 
 	/* RED-PEN how should LSM module know it's handling 32bit? */
 	error = security_file_ioctl(f.file, cmd, arg);
 	if (error)
-		goto out;
+		goto out_fput;
 
 	switch (cmd) {
-	/* FICLONE takes an int argument, so don't use compat_ptr() */
+	/* these are never seen by ->ioctl(), no argument or int argument */
+	case FIOCLEX:
+	case FIONCLEX:
+	case FIFREEZE:
+	case FITHAW:
 	case FICLONE:
-		error = ioctl_file_clone(f.file, arg, 0, 0, 0);
-		break;
-
-#if defined(CONFIG_X86_64)
+		goto do_ioctl;
+	/* these are never seen by ->ioctl(), pointer argument */
+	case FIONBIO:
+	case FIOASYNC:
+	case FIOQSIZE:
+	case FS_IOC_FIEMAP:
+	case FIGETBSZ:
+	case FICLONERANGE:
+	case FIDEDUPERANGE:
+		goto found_handler;
+	/*
+	 * The next group is the stuff handled inside file_ioctl().
+	 * For regular files these never reach ->ioctl(); for
+	 * devices, sockets, etc. they do and one (FIONREAD) is
+	 * even accepted in some cases.  In all those cases
+	 * argument has the same type, so we can handle these
+	 * here, shunting them towards do_vfs_ioctl().
+	 * ->compat_ioctl() will never see any of those.
+	 */
+	/* pointer argument, never actually handled by ->ioctl() */
+	case FIBMAP:
+		goto found_handler;
+	/* handled by some ->ioctl(); always a pointer to int */
+	case FIONREAD:
+		goto found_handler;
 	/* these get messy on amd64 due to alignment differences */
+#if defined(CONFIG_X86_64)
 	case FS_IOC_RESVSP_32:
 	case FS_IOC_RESVSP64_32:
 		error = compat_ioctl_preallocate(f.file, 0, compat_ptr(arg));
-		break;
+		goto out_fput;
 	case FS_IOC_UNRESVSP_32:
 	case FS_IOC_UNRESVSP64_32:
 		error = compat_ioctl_preallocate(f.file, FALLOC_FL_PUNCH_HOLE,
 				compat_ptr(arg));
-		break;
+		goto out_fput;
 	case FS_IOC_ZERO_RANGE_32:
 		error = compat_ioctl_preallocate(f.file, FALLOC_FL_ZERO_RANGE,
 				compat_ptr(arg));
-		break;
+		goto out_fput;
+#else
+	case FS_IOC_RESVSP:
+	case FS_IOC_RESVSP64:
+	case FS_IOC_UNRESVSP:
+	case FS_IOC_UNRESVSP64:
+	case FS_IOC_ZERO_RANGE:
+		goto found_handler;
 #endif
 
-	/*
-	 * everything else in do_vfs_ioctl() takes either a compatible
-	 * pointer argument or no argument -- call it with a modified
-	 * argument.
-	 */
 	default:
-		error = do_vfs_ioctl(f.file, fd, cmd,
-				     (unsigned long)compat_ptr(arg));
-		if (error != -ENOIOCTLCMD)
-			break;
-
-		if (f.file->f_op->compat_ioctl)
+		if (f.file->f_op->compat_ioctl) {
 			error = f.file->f_op->compat_ioctl(f.file, cmd, arg);
-		if (error == -ENOIOCTLCMD)
-			error = -ENOTTY;
-		break;
+			if (error != -ENOIOCTLCMD)
+				goto out_fput;
+		}
+		error = -ENOTTY;
+		goto out_fput;
 	}
 
- out:
+ found_handler:
+	arg = (unsigned long)compat_ptr(arg);
+ do_ioctl:
+	error = do_vfs_ioctl(f.file, fd, cmd, arg);
+ out_fput:
 	fdput(f);
-
+ out:
 	return error;
 }
 #endif
