@@ -38,12 +38,13 @@ extern kprobe_opcode_t optprobe_template_entry[];
 extern kprobe_opcode_t optprobe_template_op_address[];
 extern kprobe_opcode_t optprobe_template_call_handler[];
 extern kprobe_opcode_t optprobe_template_insn[];
+extern kprobe_opcode_t optprobe_template_suffix[];
 extern kprobe_opcode_t optprobe_template_call_emulate[];
 extern kprobe_opcode_t optprobe_template_ret[];
 extern kprobe_opcode_t optprobe_template_end[];
 
-/* Fixed instruction size for powerpc */
-#define MAX_INSN_SIZE		1
+/* Prefixed instructions are two words */
+#define MAX_INSN_SIZE		2
 #define MAX_OPTIMIZED_LENGTH	sizeof(kprobe_opcode_t)	/* 4 bytes */
 #define MAX_OPTINSN_SIZE	(optprobe_template_end - optprobe_template_entry)
 #define RELATIVEJUMP_SIZE	sizeof(kprobe_opcode_t)	/* 4 bytes */

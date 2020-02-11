@@ -27,6 +27,8 @@
 	(optprobe_template_op_address - optprobe_template_entry)
 #define TMPL_INSN_IDX		\
 	(optprobe_template_insn - optprobe_template_entry)
+#define TMPL_SUFX_IDX		\
+	(optprobe_template_suffix - optprobe_template_entry)
 #define TMPL_END_IDX		\
 	(optprobe_template_end - optprobe_template_entry)
 
@@ -100,8 +102,8 @@ static unsigned long can_optimize(struct kprobe *p)
 	 * and that can be emulated.
 	 */
 	if (!is_conditional_branch(*p->ainsn.insn) &&
-			analyse_instr(&op, &regs, *p->ainsn.insn,
-				      PPC_NO_SUFFIX) == 1) {
+			analyse_instr(&op, &regs, p->ainsn.insn[0],
+				      p->ainsn.insn[1]) == 1) {
 		emulate_update_regs(&regs, &op);
 		nip = regs.nip;
 	}
@@ -141,27 +143,27 @@ void arch_remove_optimized_kprobe(struct optimized_kprobe *op)
 }
 
 /*
- * emulate_step() requires insn to be emulated as
- * second parameter. Load register 'r4' with the
- * instruction.
+ * emulate_step() requires insn to be emulated as second parameter, and the
+ * suffix as the third parameter. Load these into registers.
  */
-void patch_imm32_load_insns(unsigned int val, kprobe_opcode_t *addr)
+static void patch_imm32_load_insns(int reg, unsigned int val,
+				   kprobe_opcode_t *addr)
 {
-	/* addis r4,0,(insn)@h */
-	patch_instruction(addr, PPC_INST_ADDIS | ___PPC_RT(4) |
+	/* addis reg,0,(insn)@h */
+	patch_instruction(addr, PPC_INST_ADDIS | ___PPC_RT(reg) |
 			  ((val >> 16) & 0xffff));
 	addr++;
 
-	/* ori r4,r4,(insn)@l */
-	patch_instruction(addr, PPC_INST_ORI | ___PPC_RA(4) |
-			  ___PPC_RS(4) | (val & 0xffff));
+	/* ori reg,reg,(insn)@l */
+	patch_instruction(addr, PPC_INST_ORI | ___PPC_RA(reg) |
+			  ___PPC_RS(reg) | (val & 0xffff));
 }
 
 /*
  * Generate instructions to load provided immediate 64-bit value
  * to register 'r3' and patch these instructions at 'addr'.
  */
-void patch_imm64_load_insns(unsigned long val, kprobe_opcode_t *addr)
+static void patch_imm64_load_insns(unsigned long val, kprobe_opcode_t *addr)
 {
 	/* lis r3,(op)@highest */
 	patch_instruction(addr, PPC_INST_ADDIS | ___PPC_RT(3) |
@@ -267,9 +269,11 @@ int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
 	patch_instruction(buff + TMPL_EMULATE_IDX, branch_emulate_step);
 
 	/*
-	 * 3. load instruction to be emulated into relevant register, and
+	 * 3. load instruction and suffix to be emulated into the relevant
+	 * registers, and
 	 */
-	patch_imm32_load_insns(*p->ainsn.insn, buff + TMPL_INSN_IDX);
+	patch_imm32_load_insns(4, p->ainsn.insn[0], buff + TMPL_INSN_IDX);
+	patch_imm32_load_insns(5, p->ainsn.insn[1], buff + TMPL_SUFX_IDX);
 
 	/*
 	 * 4. branch back from trampoline

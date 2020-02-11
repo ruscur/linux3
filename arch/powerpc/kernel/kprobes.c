@@ -104,16 +104,29 @@ kprobe_opcode_t *kprobe_lookup_name(const char *name, unsigned int offset)
 
 int arch_prepare_kprobe(struct kprobe *p)
 {
+	int len;
 	int ret = 0;
+	struct kprobe *prev;
 	kprobe_opcode_t insn = *p->addr;
+	kprobe_opcode_t prefix = *(p->addr - 1);
 
+	preempt_disable();
 	if ((unsigned long)p->addr & 0x03) {
 		printk("Attempt to register kprobe at an unaligned address\n");
 		ret = -EINVAL;
 	} else if (IS_MTMSRD(insn) || IS_RFID(insn) || IS_RFI(insn)) {
 		printk("Cannot register a kprobe on rfi/rfid or mtmsr[d]\n");
 		ret = -EINVAL;
+	} else if (IS_PREFIX(prefix)) {
+		printk("Cannot register a kprobe on the second word of prefixed instruction\n");
+		ret = -EINVAL;
 	}
+	prev = get_kprobe(p->addr - 1);
+	if (prev && IS_PREFIX(*prev->ainsn.insn)) {
+		printk("Cannot register a kprobe on the second word of prefixed instruction\n");
+		ret = -EINVAL;
+	}
+
 
 	/* insn must be on a special executable page on ppc64.  This is
 	 * not explicitly required on ppc32 (right now), but it doesn't hurt */
@@ -124,14 +137,18 @@ int arch_prepare_kprobe(struct kprobe *p)
 	}
 
 	if (!ret) {
-		memcpy(p->ainsn.insn, p->addr,
-				MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
+		if (IS_PREFIX(insn))
+			len = MAX_INSN_SIZE * sizeof(kprobe_opcode_t);
+		else
+			len = sizeof(kprobe_opcode_t);
+		memcpy(p->ainsn.insn, p->addr, len);
 		p->opcode = *p->addr;
 		flush_icache_range((unsigned long)p->ainsn.insn,
 			(unsigned long)p->ainsn.insn + sizeof(kprobe_opcode_t));
 	}
 
 	p->ainsn.boostable = 0;
+	preempt_enable_no_resched();
 	return ret;
 }
 NOKPROBE_SYMBOL(arch_prepare_kprobe);
@@ -216,10 +233,11 @@ NOKPROBE_SYMBOL(arch_prepare_kretprobe);
 static int try_to_emulate(struct kprobe *p, struct pt_regs *regs)
 {
 	int ret;
-	unsigned int insn = *p->ainsn.insn;
+	unsigned int insn = p->ainsn.insn[0];
+	unsigned int suffix = p->ainsn.insn[1];
 
 	/* regs->nip is also adjusted if emulate_step returns 1 */
-	ret = emulate_step(regs, insn, PPC_NO_SUFFIX);
+	ret = emulate_step(regs, insn, suffix);
 	if (ret > 0) {
 		/*
 		 * Once this instruction has been boosted
@@ -233,7 +251,11 @@ static int try_to_emulate(struct kprobe *p, struct pt_regs *regs)
 		 * So, we should never get here... but, its still
 		 * good to catch them, just in case...
 		 */
-		printk("Can't step on instruction %x\n", insn);
+		if (!IS_PREFIX(insn))
+			printk("Can't step on instruction %x\n", insn);
+		else
+			printk("Can't step on instruction %x %x\n", insn,
+			       suffix);
 		BUG();
 	} else {
 		/*
@@ -275,7 +297,7 @@ int kprobe_handler(struct pt_regs *regs)
 	if (kprobe_running()) {
 		p = get_kprobe(addr);
 		if (p) {
-			kprobe_opcode_t insn = *p->ainsn.insn;
+			kprobe_opcode_t insn = p->ainsn.insn[0];
 			if (kcb->kprobe_status == KPROBE_HIT_SS &&
 					is_trap(insn)) {
 				/* Turn off 'trace' bits */
@@ -448,9 +470,10 @@ static int trampoline_probe_handler(struct kprobe *p, struct pt_regs *regs)
 	 * the link register properly so that the subsequent 'blr' in
 	 * kretprobe_trampoline jumps back to the right instruction.
 	 *
-	 * For nip, we should set the address to the previous instruction since
-	 * we end up emulating it in kprobe_handler(), which increments the nip
-	 * again.
+	 * To keep the nip at the correct address we need to counter the
+	 * increment that happens when we emulate the kretprobe_trampoline noop
+	 * in kprobe_handler(). We do this by decrementing the address by the
+	 * length of the noop which is always 4 bytes.
 	 */
 	regs->nip = orig_ret_address - 4;
 	regs->link = orig_ret_address;
@@ -478,12 +501,14 @@ int kprobe_post_handler(struct pt_regs *regs)
 {
 	struct kprobe *cur = kprobe_running();
 	struct kprobe_ctlblk *kcb = get_kprobe_ctlblk();
+	kprobe_opcode_t insn;
 
 	if (!cur || user_mode(regs))
 		return 0;
 
+	insn = *cur->ainsn.insn;
 	/* make sure we got here for instruction we have a kprobe on */
-	if (((unsigned long)cur->ainsn.insn + 4) != regs->nip)
+	if ((unsigned long)cur->ainsn.insn + PPC_INST_LENGTH(insn) != regs->nip)
 		return 0;
 
 	if ((kcb->kprobe_status != KPROBE_REENTER) && cur->post_handler) {
@@ -492,7 +517,7 @@ int kprobe_post_handler(struct pt_regs *regs)
 	}
 
 	/* Adjust nip to after the single-stepped instruction */
-	regs->nip = (unsigned long)cur->addr + 4;
+	regs->nip = (unsigned long)cur->addr + PPC_INST_LENGTH(insn);
 	regs->msr |= kcb->kprobe_saved_msr;
 
 	/*Restore back the original saved kprobes variables and continue. */
