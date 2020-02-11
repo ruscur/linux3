@@ -2777,6 +2777,10 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 				break;
 			op->ea = mlsd_8lsd_ea(instr, suffix, regs);
 			switch (suffixopcode) {
+			case 14:	/* paddi */
+				op->type = COMPUTE | PREFIXED;
+				op->val = op->ea;
+				goto compute_done;
 			case 32:	/* plwz */
 				op->type = MKOP(LOAD, PREFIXED, 4);
 				break;
