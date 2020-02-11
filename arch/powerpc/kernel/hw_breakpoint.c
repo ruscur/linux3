@@ -243,15 +243,15 @@ dar_range_overlaps(unsigned long dar, int size, struct arch_hw_breakpoint *info)
 static bool stepping_handler(struct pt_regs *regs, struct perf_event *bp,
 			     struct arch_hw_breakpoint *info)
 {
-	unsigned int instr = 0;
+	unsigned int instr = 0, suffix = 0;
 	int ret, type, size;
 	struct instruction_op op;
 	unsigned long addr = info->address;
 
-	if (__get_user_inatomic(instr, (unsigned int *)regs->nip))
+	if (__get_user_instr_inatomic(instr, suffix, (unsigned int *)regs->nip))
 		goto fail;
 
-	ret = analyse_instr(&op, regs, instr, PPC_NO_SUFFIX);
+	ret = analyse_instr(&op, regs, instr, suffix);
 	type = GETTYPE(op.type);
 	size = GETSIZE(op.type);
 
@@ -275,7 +275,7 @@ static bool stepping_handler(struct pt_regs *regs, struct perf_event *bp,
 		return false;
 	}
 
-	if (!emulate_step(regs, instr, PPC_NO_SUFFIX))
+	if (!emulate_step(regs, instr, suffix))
 		goto fail;
 
 	return true;
