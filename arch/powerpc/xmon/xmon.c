@@ -97,7 +97,8 @@ static long *xmon_fault_jmp[NR_CPUS];
 /* Breakpoint stuff */
 struct bpt {
 	unsigned long	address;
-	unsigned int	instr[2];
+	/* Prefixed instructions can not cross 64-byte boundaries */
+	unsigned int	instr[3] __aligned(64);
 	atomic_t	ref_count;
 	int		enabled;
 	unsigned long	pad;
@@ -113,6 +114,7 @@ static struct bpt bpts[NBPTS];
 static struct bpt dabr;
 static struct bpt *iabr;
 static unsigned bpinstr = 0x7fe00008;	/* trap */
+static unsigned nopinstr = 0x60000000;	/* nop */
 
 #define BP_NUM(bp)	((bp) - bpts + 1)
 
@@ -120,6 +122,7 @@ static unsigned bpinstr = 0x7fe00008;	/* trap */
 static int cmds(struct pt_regs *);
 static int mread(unsigned long, void *, int);
 static int mwrite(unsigned long, void *, int);
+static int read_instr(unsigned long, unsigned int *, unsigned int *);
 static int handle_fault(struct pt_regs *);
 static void byterev(unsigned char *, int);
 static void memex(void);
@@ -706,7 +709,7 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 		bp = at_breakpoint(regs->nip);
 		if (bp != NULL) {
 			int stepped = emulate_step(regs, bp->instr[0],
-						   PPC_NO_SUFFIX);
+						   bp->instr[1]);
 			if (stepped == 0) {
 				regs->nip = (unsigned long) &bp->instr[0];
 				atomic_inc(&bp->ref_count);
@@ -761,8 +764,8 @@ static int xmon_bpt(struct pt_regs *regs)
 
 	/* Are we at the trap at bp->instr[1] for some bp? */
 	bp = in_breakpoint_table(regs->nip, &offset);
-	if (bp != NULL && offset == 4) {
-		regs->nip = bp->address + 4;
+	if (bp != NULL && (offset == 4 || offset == 8)) {
+		regs->nip = bp->address + offset;
 		atomic_dec(&bp->ref_count);
 		return 1;
 	}
@@ -864,7 +867,8 @@ static struct bpt *in_breakpoint_table(unsigned long nip, unsigned long *offp)
 		return NULL;
 	off %= sizeof(struct bpt);
 	if (off != offsetof(struct bpt, instr[0])
-	    && off != offsetof(struct bpt, instr[1]))
+	    && off != offsetof(struct bpt, instr[1])
+	    && off != offsetof(struct bpt, instr[2]))
 		return NULL;
 	*offp = off - offsetof(struct bpt, instr[0]);
 	return (struct bpt *) (nip - off);
@@ -881,9 +885,18 @@ static struct bpt *new_breakpoint(unsigned long a)
 
 	for (bp = bpts; bp < &bpts[NBPTS]; ++bp) {
 		if (!bp->enabled && atomic_read(&bp->ref_count) == 0) {
+			/*
+			 * Prefixed instructions are two words, but regular
+			 * instructions are only one. Use a nop to pad out the
+			 * regular instructions so that we can place the trap
+			 * at the same plac. For prefixed instructions the nop
+			 * will get overwritten during insert_bpts().
+			 */
 			bp->address = a;
-			bp->instr[1] = bpinstr;
+			bp->instr[1] = nopinstr;
 			store_inst(&bp->instr[1]);
+			bp->instr[2] = bpinstr;
+			store_inst(&bp->instr[2]);
 			return bp;
 		}
 	}
@@ -895,13 +908,15 @@ static struct bpt *new_breakpoint(unsigned long a)
 static void insert_bpts(void)
 {
 	int i;
-	struct bpt *bp;
+	unsigned int prefix;
+	struct bpt *bp, *bp2;
 
 	bp = bpts;
 	for (i = 0; i < NBPTS; ++i, ++bp) {
 		if ((bp->enabled & (BP_TRAP|BP_CIABR)) == 0)
 			continue;
-		if (mread(bp->address, &bp->instr[0], 4) != 4) {
+		if (!read_instr(bp->address, &bp->instr[0],
+			       &bp->instr[1])) {
 			printf("Couldn't read instruction at %lx, "
 			       "disabling breakpoint there\n", bp->address);
 			bp->enabled = 0;
@@ -913,7 +928,34 @@ static void insert_bpts(void)
 			bp->enabled = 0;
 			continue;
 		}
+		/*
+		 * Check the address is not a suffix by looking for a prefix in
+		 * front of it.
+		 */
+		if ((mread(bp->address - 4, &prefix, 4) == 4) &&
+		    IS_PREFIX(prefix)) {
+			printf("Breakpoint at %lx is on the second word of a "
+			       "prefixed instruction, disabling it\n",
+			       bp->address);
+			bp->enabled = 0;
+			continue;
+		}
+		/*
+		 * We might still be a suffix - if the prefix has already been
+		 * replaced by a breakpoint we won't catch it with the above
+		 * test.
+		 */
+		bp2 = at_breakpoint(bp->address - 4);
+		if (bp2 && IS_PREFIX(bp2->instr[0])) {
+			printf("Breakpoint at %lx is on the second word of a "
+			       "prefixed instruction, disabling it\n",
+			       bp->address);
+			bp->enabled = 0;
+			continue;
+		}
 		store_inst(&bp->instr[0]);
+		if (IS_PREFIX(bp->instr[0]))
+			store_inst(&bp->instr[1]);
 		if (bp->enabled & BP_CIABR)
 			continue;
 		if (patch_instruction((unsigned int *)bp->address,
@@ -1164,14 +1206,14 @@ static int do_step(struct pt_regs *regs)
  */
 static int do_step(struct pt_regs *regs)
 {
-	unsigned int instr;
+	unsigned int instr, suffix;
 	int stepped;
 
 	force_enable_xmon();
 	/* check we are in 64-bit kernel mode, translation enabled */
 	if ((regs->msr & (MSR_64BIT|MSR_PR|MSR_IR)) == (MSR_64BIT|MSR_IR)) {
-		if (mread(regs->nip, &instr, 4) == 4) {
-			stepped = emulate_step(regs, instr, PPC_NO_SUFFIX);
+		if (read_instr(regs->nip, &instr, &suffix)) {
+			stepped = emulate_step(regs, instr, suffix);
 			if (stepped < 0) {
 				printf("Couldn't single-step %s instruction\n",
 				       (IS_RFID(instr)? "rfid": "mtmsrd"));
@@ -2129,6 +2171,24 @@ mwrite(unsigned long adrs, void *buf, int size)
 	catch_memory_errors = 0;
 	return n;
 }
+
+static int read_instr(unsigned long addr, unsigned int *instr,
+		      unsigned int *suffix)
+{
+	int r;
+
+	r = mread(addr, instr, 4);
+	if (r != 4)
+		return 0;
+	if (!IS_PREFIX(*instr))
+		return 4;
+	r = mread(addr + 4, suffix, 4);
+	if (r != 4)
+		return 0;
+
+	return 8;
+}
+
 
 static int fault_type;
 static int fault_except;
