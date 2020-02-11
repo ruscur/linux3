@@ -2903,6 +2903,21 @@ prdump(unsigned long adrs, long ndump)
 	}
 }
 
+static bool instrs_are_equal(unsigned long insta, unsigned long suffixa,
+			     unsigned long instb, unsigned long suffixb)
+{
+	if (insta != instb)
+		return false;
+
+	if (!IS_PREFIX(insta) && !IS_PREFIX(instb))
+		return true;
+
+	if (IS_PREFIX(insta) && IS_PREFIX(instb))
+		return suffixa == suffixb;
+
+	return false;
+}
+
 typedef int (*instruction_dump_func)(unsigned long inst, unsigned long addr);
 
 static int
@@ -2911,12 +2926,11 @@ generic_inst_dump(unsigned long adr, long count, int praddr,
 {
 	int nr, dotted;
 	unsigned long first_adr;
-	unsigned int inst, last_inst = 0;
-	unsigned char val[4];
+	unsigned int inst, suffix, last_inst = 0, last_suffix = 0;
 
 	dotted = 0;
-	for (first_adr = adr; count > 0; --count, adr += 4) {
-		nr = mread(adr, val, 4);
+	for (first_adr = adr; count > 0; --count, adr += nr) {
+		nr = read_instr(adr, &inst, &suffix);
 		if (nr == 0) {
 			if (praddr) {
 				const char *x = fault_chars[fault_type];
@@ -2924,8 +2938,9 @@ generic_inst_dump(unsigned long adr, long count, int praddr,
 			}
 			break;
 		}
-		inst = GETWORD(val);
-		if (adr > first_adr && inst == last_inst) {
+		if (adr > first_adr && instrs_are_equal(inst, suffix,
+							last_inst,
+							last_suffix)) {
 			if (!dotted) {
 				printf(" ...\n");
 				dotted = 1;
@@ -2934,11 +2949,24 @@ generic_inst_dump(unsigned long adr, long count, int praddr,
 		}
 		dotted = 0;
 		last_inst = inst;
-		if (praddr)
-			printf(REG"  %.8x", adr, inst);
-		printf("\t");
-		dump_func(inst, adr);
-		printf("\n");
+		last_suffix = suffix;
+		if (IS_PREFIX(inst)) {
+			if (praddr)
+				printf(REG"  %.8x:%.8x", adr, inst, suffix);
+			printf("\t");
+			/*
+			 * Just use this until binutils ppc disassembly
+			 * prints prefixed instructions.
+			 */
+			printf("%.8x:%.8x", inst, suffix);
+			printf("\n");
+		} else {
+			if (praddr)
+				printf(REG"  %.8x", adr, inst);
+			printf("\t");
+			dump_func(inst, adr);
+			printf("\n");
+		}
 	}
 	return adr - first_adr;
 }
