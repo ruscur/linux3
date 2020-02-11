@@ -377,6 +377,11 @@
 #define PPC_INST_VCMPEQUD		0x100000c7
 #define PPC_INST_VCMPEQUB		0x10000006
 
+/* macro to check if a word is a prefix */
+#define IS_PREFIX(x)	(((x) >> 26) == 1)
+#define	PPC_NO_SUFFIX	0
+#define	PPC_INST_LENGTH(x)	(IS_PREFIX(x) ? 8 : 4)
+
 /* macros to insert fields into opcodes */
 #define ___PPC_RA(a)	(((a) & 0x1f) << 16)
 #define ___PPC_RB(b)	(((b) & 0x1f) << 11)

@@ -1163,7 +1163,7 @@ static nokprobe_inline int trap_compare(long v1, long v2)
  * otherwise.
  */
 int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
-		  unsigned int instr)
+		  unsigned int instr, unsigned int suffix)
 {
 	unsigned int opcode, ra, rb, rc, rd, spr, u;
 	unsigned long int imm;
@@ -2756,7 +2756,8 @@ void emulate_update_regs(struct pt_regs *regs, struct instruction_op *op)
 {
 	unsigned long next_pc;
 
-	next_pc = truncate_if_32bit(regs->msr, regs->nip + 4);
+	next_pc = truncate_if_32bit(regs->msr,
+				    regs->nip + OP_LENGTH(op->type));
 	switch (GETTYPE(op->type)) {
 	case COMPUTE:
 		if (op->type & SETREG)
@@ -3101,14 +3102,14 @@ NOKPROBE_SYMBOL(emulate_loadstore);
  * or -1 if the instruction is one that should not be stepped,
  * such as an rfid, or a mtmsrd that would clear MSR_RI.
  */
-int emulate_step(struct pt_regs *regs, unsigned int instr)
+int emulate_step(struct pt_regs *regs, unsigned int instr, unsigned int suffix)
 {
 	struct instruction_op op;
 	int r, err, type;
 	unsigned long val;
 	unsigned long ea;
 
-	r = analyse_instr(&op, regs, instr);
+	r = analyse_instr(&op, regs, instr, suffix);
 	if (r < 0)
 		return r;
 	if (r > 0) {
@@ -3200,7 +3201,8 @@ int emulate_step(struct pt_regs *regs, unsigned int instr)
 	return 0;
 
  instr_done:
-	regs->nip = truncate_if_32bit(regs->msr, regs->nip + 4);
+	regs->nip = truncate_if_32bit(regs->msr,
+				      regs->nip + OP_LENGTH(op.type));
 	return 1;
 }
 NOKPROBE_SYMBOL(emulate_step);

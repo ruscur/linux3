@@ -103,7 +103,7 @@ static void __init test_ld(void)
 	regs.gpr[3] = (unsigned long) &a;
 
 	/* ld r5, 0(r3) */
-	stepped = emulate_step(&regs, TEST_LD(5, 3, 0));
+	stepped = emulate_step(&regs, TEST_LD(5, 3, 0), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && regs.gpr[5] == a)
 		show_result("ld", "PASS");
@@ -121,7 +121,7 @@ static void __init test_lwz(void)
 	regs.gpr[3] = (unsigned long) &a;
 
 	/* lwz r5, 0(r3) */
-	stepped = emulate_step(&regs, TEST_LWZ(5, 3, 0));
+	stepped = emulate_step(&regs, TEST_LWZ(5, 3, 0), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && regs.gpr[5] == a)
 		show_result("lwz", "PASS");
@@ -141,7 +141,7 @@ static void __init test_lwzx(void)
 	regs.gpr[5] = 0x8765;
 
 	/* lwzx r5, r3, r4 */
-	stepped = emulate_step(&regs, TEST_LWZX(5, 3, 4));
+	stepped = emulate_step(&regs, TEST_LWZX(5, 3, 4), PPC_NO_SUFFIX);
 	if (stepped == 1 && regs.gpr[5] == a[2])
 		show_result("lwzx", "PASS");
 	else
@@ -159,7 +159,7 @@ static void __init test_std(void)
 	regs.gpr[5] = 0x5678;
 
 	/* std r5, 0(r3) */
-	stepped = emulate_step(&regs, TEST_STD(5, 3, 0));
+	stepped = emulate_step(&regs, TEST_STD(5, 3, 0), PPC_NO_SUFFIX);
 	if (stepped == 1 || regs.gpr[5] == a)
 		show_result("std", "PASS");
 	else
@@ -184,7 +184,7 @@ static void __init test_ldarx_stdcx(void)
 	regs.gpr[5] = 0x5678;
 
 	/* ldarx r5, r3, r4, 0 */
-	stepped = emulate_step(&regs, TEST_LDARX(5, 3, 4, 0));
+	stepped = emulate_step(&regs, TEST_LDARX(5, 3, 4, 0), PPC_NO_SUFFIX);
 
 	/*
 	 * Don't touch 'a' here. Touching 'a' can do Load/store
@@ -202,7 +202,7 @@ static void __init test_ldarx_stdcx(void)
 	regs.gpr[5] = 0x9ABC;
 
 	/* stdcx. r5, r3, r4 */
-	stepped = emulate_step(&regs, TEST_STDCX(5, 3, 4));
+	stepped = emulate_step(&regs, TEST_STDCX(5, 3, 4), PPC_NO_SUFFIX);
 
 	/*
 	 * Two possible scenarios that indicates successful emulation
@@ -242,7 +242,7 @@ static void __init test_lfsx_stfsx(void)
 	regs.gpr[4] = 0;
 
 	/* lfsx frt10, r3, r4 */
-	stepped = emulate_step(&regs, TEST_LFSX(10, 3, 4));
+	stepped = emulate_step(&regs, TEST_LFSX(10, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1)
 		show_result("lfsx", "PASS");
@@ -255,7 +255,7 @@ static void __init test_lfsx_stfsx(void)
 	c.a = 678.91;
 
 	/* stfsx frs10, r3, r4 */
-	stepped = emulate_step(&regs, TEST_STFSX(10, 3, 4));
+	stepped = emulate_step(&regs, TEST_STFSX(10, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && c.b == cached_b)
 		show_result("stfsx", "PASS");
@@ -285,7 +285,7 @@ static void __init test_lfdx_stfdx(void)
 	regs.gpr[4] = 0;
 
 	/* lfdx frt10, r3, r4 */
-	stepped = emulate_step(&regs, TEST_LFDX(10, 3, 4));
+	stepped = emulate_step(&regs, TEST_LFDX(10, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1)
 		show_result("lfdx", "PASS");
@@ -298,7 +298,7 @@ static void __init test_lfdx_stfdx(void)
 	c.a = 987654.32;
 
 	/* stfdx frs10, r3, r4 */
-	stepped = emulate_step(&regs, TEST_STFDX(10, 3, 4));
+	stepped = emulate_step(&regs, TEST_STFDX(10, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && c.b == cached_b)
 		show_result("stfdx", "PASS");
@@ -344,7 +344,7 @@ static void __init test_lvx_stvx(void)
 	regs.gpr[4] = 0;
 
 	/* lvx vrt10, r3, r4 */
-	stepped = emulate_step(&regs, TEST_LVX(10, 3, 4));
+	stepped = emulate_step(&regs, TEST_LVX(10, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1)
 		show_result("lvx", "PASS");
@@ -360,7 +360,7 @@ static void __init test_lvx_stvx(void)
 	c.b[3] = 498532;
 
 	/* stvx vrs10, r3, r4 */
-	stepped = emulate_step(&regs, TEST_STVX(10, 3, 4));
+	stepped = emulate_step(&regs, TEST_STVX(10, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && cached_b[0] == c.b[0] && cached_b[1] == c.b[1] &&
 	    cached_b[2] == c.b[2] && cached_b[3] == c.b[3])
@@ -401,7 +401,7 @@ static void __init test_lxvd2x_stxvd2x(void)
 	regs.gpr[4] = 0;
 
 	/* lxvd2x vsr39, r3, r4 */
-	stepped = emulate_step(&regs, TEST_LXVD2X(39, 3, 4));
+	stepped = emulate_step(&regs, TEST_LXVD2X(39, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && cpu_has_feature(CPU_FTR_VSX)) {
 		show_result("lxvd2x", "PASS");
@@ -421,7 +421,7 @@ static void __init test_lxvd2x_stxvd2x(void)
 	c.b[3] = 4;
 
 	/* stxvd2x vsr39, r3, r4 */
-	stepped = emulate_step(&regs, TEST_STXVD2X(39, 3, 4));
+	stepped = emulate_step(&regs, TEST_STXVD2X(39, 3, 4), PPC_NO_SUFFIX);
 
 	if (stepped == 1 && cached_b[0] == c.b[0] && cached_b[1] == c.b[1] &&
 	    cached_b[2] == c.b[2] && cached_b[3] == c.b[3] &&
@@ -848,7 +848,7 @@ static int __init emulate_compute_instr(struct pt_regs *regs,
 	if (!regs || !instr)
 		return -EINVAL;
 
-	if (analyse_instr(&op, regs, instr) != 1 ||
+	if (analyse_instr(&op, regs, instr, PPC_NO_SUFFIX) != 1 ||
 	    GETTYPE(op.type) != COMPUTE) {
 		pr_info("emulation failed, instruction = 0x%08x\n", instr);
 		return -EFAULT;

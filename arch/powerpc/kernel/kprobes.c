@@ -219,7 +219,7 @@ static int try_to_emulate(struct kprobe *p, struct pt_regs *regs)
 	unsigned int insn = *p->ainsn.insn;
 
 	/* regs->nip is also adjusted if emulate_step returns 1 */
-	ret = emulate_step(regs, insn);
+	ret = emulate_step(regs, insn, PPC_NO_SUFFIX);
 	if (ret > 0) {
 		/*
 		 * Once this instruction has been boosted

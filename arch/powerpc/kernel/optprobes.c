@@ -100,7 +100,8 @@ static unsigned long can_optimize(struct kprobe *p)
 	 * and that can be emulated.
 	 */
 	if (!is_conditional_branch(*p->ainsn.insn) &&
-			analyse_instr(&op, &regs, *p->ainsn.insn) == 1) {
+			analyse_instr(&op, &regs, *p->ainsn.insn,
+				      PPC_NO_SUFFIX) == 1) {
 		emulate_update_regs(&regs, &op);
 		nip = regs.nip;
 	}

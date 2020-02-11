@@ -251,7 +251,7 @@ static bool stepping_handler(struct pt_regs *regs, struct perf_event *bp,
 	if (__get_user_inatomic(instr, (unsigned int *)regs->nip))
 		goto fail;
 
-	ret = analyse_instr(&op, regs, instr);
+	ret = analyse_instr(&op, regs, instr, PPC_NO_SUFFIX);
 	type = GETTYPE(op.type);
 	size = GETSIZE(op.type);
 
@@ -275,7 +275,7 @@ static bool stepping_handler(struct pt_regs *regs, struct perf_event *bp,
 		return false;
 	}
 
-	if (!emulate_step(regs, instr))
+	if (!emulate_step(regs, instr, PPC_NO_SUFFIX))
 		goto fail;
 
 	return true;

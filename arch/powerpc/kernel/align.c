@@ -334,7 +334,7 @@ int fix_alignment(struct pt_regs *regs)
 	if ((instr & 0xfc0006fe) == (PPC_INST_COPY & 0xfc0006fe))
 		return -EIO;
 
-	r = analyse_instr(&op, regs, instr);
+	r = analyse_instr(&op, regs, instr, PPC_NO_SUFFIX);
 	if (r < 0)
 		return -EINVAL;
 
