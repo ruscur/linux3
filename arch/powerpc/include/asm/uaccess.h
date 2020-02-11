@@ -474,4 +474,34 @@ static __must_check inline bool user_access_begin(const void __user *ptr, size_t
 #define unsafe_copy_to_user(d, s, l, e) \
 	unsafe_op_wrap(raw_copy_to_user_allowed(d, s, l), e)
 
+/*
+ * When reading an instruction iff it is a prefix, the suffix needs to be also
+ * loaded.
+ */
+#define __get_user_instr(x, y, ptr)			\
+({							\
+	long __gui_ret = 0;				\
+	y = 0;						\
+	__gui_ret = __get_user(x, ptr);			\
+	if (!__gui_ret) {				\
+		if (IS_PREFIX(x))			\
+			__gui_ret = __get_user(y, ptr + 1);	\
+	}						\
+							\
+	__gui_ret;					\
+})
+
+#define __get_user_instr_inatomic(x, y, ptr)		\
+({							\
+	long __gui_ret = 0;				\
+	y = 0;						\
+	__gui_ret = __get_user_inatomic(x, ptr);	\
+	if (!__gui_ret) {				\
+		if (IS_PREFIX(x))			\
+			__gui_ret = __get_user_inatomic(y, ptr + 1);	\
+	}						\
+							\
+	__gui_ret;					\
+})
+
 #endif	/* _ARCH_POWERPC_UACCESS_H */

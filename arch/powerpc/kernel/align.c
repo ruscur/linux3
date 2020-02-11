@@ -293,7 +293,7 @@ static int emulate_spe(struct pt_regs *regs, unsigned int reg,
 
 int fix_alignment(struct pt_regs *regs)
 {
-	unsigned int instr;
+	unsigned int instr, suffix;
 	struct instruction_op op;
 	int r, type;
 
@@ -303,13 +303,15 @@ int fix_alignment(struct pt_regs *regs)
 	 */
 	CHECK_FULL_REGS(regs);
 
-	if (unlikely(__get_user(instr, (unsigned int __user *)regs->nip)))
+	if (unlikely(__get_user_instr(instr, suffix,
+				 (unsigned int __user *)regs->nip)))
 		return -EFAULT;
 	if ((regs->msr & MSR_LE) != (MSR_KERNEL & MSR_LE)) {
 		/* We don't handle PPC little-endian any more... */
 		if (cpu_has_feature(CPU_FTR_PPC_LE))
 			return -EIO;
 		instr = swab32(instr);
+		suffix = swab32(suffix);
 	}
 
 #ifdef CONFIG_SPE
@@ -334,7 +336,7 @@ int fix_alignment(struct pt_regs *regs)
 	if ((instr & 0xfc0006fe) == (PPC_INST_COPY & 0xfc0006fe))
 		return -EIO;
 
-	r = analyse_instr(&op, regs, instr, PPC_NO_SUFFIX);
+	r = analyse_instr(&op, regs, instr, suffix);
 	if (r < 0)
 		return -EINVAL;
 
