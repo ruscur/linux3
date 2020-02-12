@@ -301,6 +301,36 @@ MachineCheck:
 	. = 0x300
 	DO_KVM  0x300
 DataAccess:
+#ifdef CONFIG_VMAP_STACK
+	mtspr	SPRN_SPRG_SCRATCH0,r10
+	mtspr	SPRN_SPRG_SCRATCH1,r11
+	mfspr	r10, SPRN_SPRG_THREAD
+	mfspr	r11, SPRN_DAR
+	stw	r11, DAR(r10)
+	mfspr	r11, SPRN_DSISR
+	stw	r11, DSISR(r10)
+	mfspr	r11, SPRN_SRR0
+	stw	r11, SRR0(r10)
+	mfspr	r11, SPRN_SRR1		/* check whether user or kernel */
+	stw	r11, SRR1(r10)
+	mfcr	r10
+BEGIN_MMU_FTR_SECTION
+	mfspr	r11, SPRN_DSISR
+#ifdef CONFIG_PPC_KUAP
+	andis.	r11, r11, (DSISR_BAD_FAULT_32S | DSISR_DABRMATCH | DSISR_PROTFAULT)@h
+#else
+	andis.	r11, r11, (DSISR_BAD_FAULT_32S | DSISR_DABRMATCH)@h
+#endif
+	beq	hash_page_dsi
+.Lhash_page_dsi_cont:
+	mfspr	r11, SPRN_SRR1		/* check whether user or kernel */
+END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
+	andi.	r11, r11, MSR_PR
+
+	EXCEPTION_PROLOG_1
+	EXCEPTION_PROLOG_2 handle_dar_dsisr=1
+	b	handle_page_fault_tramp_1
+#else	/* CONFIG_VMAP_STACK */
 	EXCEPTION_PROLOG handle_dar_dsisr=1
 	get_and_save_dar_dsisr_on_stack	r4, r5, r11
 BEGIN_MMU_FTR_SECTION
@@ -316,11 +346,32 @@ BEGIN_MMU_FTR_SECTION
 FTR_SECTION_ELSE
 	b	handle_page_fault_tramp_2
 ALT_MMU_FTR_SECTION_END_IFSET(MMU_FTR_HPTE_TABLE)
+#endif	/* CONFIG_VMAP_STACK */
 
 /* Instruction access exception. */
 	. = 0x400
 	DO_KVM  0x400
 InstructionAccess:
+#ifdef CONFIG_VMAP_STACK
+	mtspr	SPRN_SPRG_SCRATCH0,r10
+	mtspr	SPRN_SPRG_SCRATCH1,r11
+	mfspr	r10, SPRN_SPRG_THREAD
+	mfspr	r11, SPRN_SRR0
+	stw	r11, SRR0(r10)
+	mfspr	r11, SPRN_SRR1		/* check whether user or kernel */
+	stw	r11, SRR1(r10)
+	mfcr	r10
+BEGIN_MMU_FTR_SECTION
+	andis.	r11, r11, SRR1_ISI_NOPT@h	/* no pte found? */
+	bne	hash_page_isi
+.Lhash_page_isi_cont:
+	mfspr	r11, SPRN_SRR1		/* check whether user or kernel */
+END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
+	andi.	r11, r11, MSR_PR
+
+	EXCEPTION_PROLOG_1
+	EXCEPTION_PROLOG_2
+#else	/* CONFIG_VMAP_STACK */
 	EXCEPTION_PROLOG
 	andis.	r0,r9,SRR1_ISI_NOPT@h	/* no pte found? */
 	beq	1f			/* if so, try to put a PTE */
@@ -329,6 +380,7 @@ InstructionAccess:
 BEGIN_MMU_FTR_SECTION
 	bl	hash_page
 END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
+#endif	/* CONFIG_VMAP_STACK */
 1:	mr	r4,r12
 	andis.	r5,r9,DSISR_SRR1_MATCH_32S@h /* Filter relevant SRR1 bits */
 	stw	r4, _DAR(r11)
@@ -652,8 +704,75 @@ handle_page_fault_tramp_1:
 handle_page_fault_tramp_2:
 	EXC_XFER_LITE(0x300, handle_page_fault)
 
+#ifdef CONFIG_VMAP_STACK
+.macro save_regs_thread		thread
+	stw	r0, THR0(\thread)
+	stw	r3, THR3(\thread)
+	stw	r4, THR4(\thread)
+	stw	r5, THR5(\thread)
+	stw	r6, THR6(\thread)
+	stw	r8, THR8(\thread)
+	stw	r9, THR9(\thread)
+	mflr	r0
+	stw	r0, THLR(\thread)
+	mfctr	r0
+	stw	r0, THCTR(\thread)
+.endm
+
+.macro restore_regs_thread	thread
+	lwz	r0, THLR(\thread)
+	mtlr	r0
+	lwz	r0, THCTR(\thread)
+	mtctr	r0
+	lwz	r0, THR0(\thread)
+	lwz	r3, THR3(\thread)
+	lwz	r4, THR4(\thread)
+	lwz	r5, THR5(\thread)
+	lwz	r6, THR6(\thread)
+	lwz	r8, THR8(\thread)
+	lwz	r9, THR9(\thread)
+.endm
+
+hash_page_dsi:
+	mr	r11, r10
+	mfspr	r10, SPRN_SPRG_THREAD
+	save_regs_thread	r10
+	lwz	r3, DSISR(r10)
+	mfdar	r4
+	lwz	r9, SRR1(r10)
+	rlwinm	r3, r3, 32 - 15, 21, 21		/* DSISR_STORE -> _PAGE_RW */
+	bl	hash_page
+	mfspr	r10, SPRN_SPRG_THREAD
+	restore_regs_thread r10
+	mr	r10, r11
+	b	.Lhash_page_dsi_cont
+
+hash_page_isi:
+	mr	r11, r10
+	mfspr	r10, SPRN_SPRG_THREAD
+	save_regs_thread	r10
+	li	r3, 0
+	lwz	r4, SRR0(r10)
+	lwz	r9, SRR1(r10)
+	bl	hash_page
+	mfspr	r10, SPRN_SPRG_THREAD
+	restore_regs_thread r10
+	mr	r10, r11
+	b	.Lhash_page_isi_cont
+
+	.globl fast_hash_page_return
+fast_hash_page_return:
+	mfspr	r10, SPRN_SPRG_THREAD
+	restore_regs_thread r10
+	mtcr	r11
+	mfspr	r10, SPRN_SPRG_SCRATCH0
+	mfspr	r11, SPRN_SPRG_SCRATCH1
+	SYNC
+	RFI
+
 stack_overflow:
 	vmap_stack_overflow_exception
+#endif
 
 AltiVecUnavailable:
 	EXCEPTION_PROLOG
