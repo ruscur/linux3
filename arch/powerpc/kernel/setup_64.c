@@ -281,7 +281,18 @@ void __init record_spr_defaults(void)
 
 void __init early_setup(unsigned long dt_ptr)
 {
-	static __initdata struct paca_struct boot_paca;
+	/*
+	 * We need to get something valid into local_paca/r13 asap if we
+	 * are using kcov. dt_cpu_ftrs_init will call coverage-enabled code
+	 * in the generic dt library, and that will try to call in_task().
+	 * We need a minimal paca that at least provides a valid __current.
+	 * We can't use the usual initialise/setup/fixup path as that relies
+	 * on a CPU feature.
+	 */
+	static __initdata struct task_struct task = {};
+	static __initdata struct paca_struct boot_paca = { .__current = &task };
+
+	local_paca = &boot_paca;
 
 	/* -------- printk is _NOT_ safe to use here ! ------- */
 
