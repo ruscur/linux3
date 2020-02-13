@@ -2,6 +2,7 @@
 
 #include <linux/io.h>
 #include <linux/slab.h>
+#include <linux/mmzone.h>
 #include <linux/vmalloc.h>
 #include <asm/io-workarounds.h>
 
@@ -97,3 +98,14 @@ void __iomem *do_ioremap(phys_addr_t pa, phys_addr_t offset, unsigned long size,
 
 	return NULL;
 }
+
+#ifdef CONFIG_ZONE_DEVICE
+/* override of the generic version in mm/memremap.c */
+unsigned long memremap_compat_align(void)
+{
+       if (radix_enabled())
+               return SUBSECTION_SIZE;
+       return (1UL << mmu_psize_defs[mmu_linear_psize].shift);
+}
+EXPORT_SYMBOL_GPL(memremap_compat_align);
+#endif
