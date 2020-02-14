@@ -23,6 +23,7 @@
 #include <asm/cacheflush.h>
 #include <asm/sstep.h>
 #include <asm/sections.h>
+#include <asm/io.h>
 #include <linux/uaccess.h>
 
 DEFINE_PER_CPU(struct kprobe *, current_kprobe) = NULL;
@@ -263,6 +264,9 @@ int kprobe_handler(struct pt_regs *regs)
 
 	if (user_mode(regs))
 		return 0;
+
+	if (!(regs->msr & MSR_IR))
+		addr = phys_to_virt(regs->nip);
 
 	/*
 	 * We don't want to be preempted for the entire
