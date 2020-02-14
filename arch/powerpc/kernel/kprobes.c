@@ -273,38 +273,36 @@ int kprobe_handler(struct pt_regs *regs)
 
 	/* Check we're not actually recursing */
 	p = get_kprobe(addr);
-	if (kprobe_running()) {
-		if (p) {
-			kprobe_opcode_t insn = *p->ainsn.insn;
-			if (kcb->kprobe_status == KPROBE_HIT_SS &&
-					is_trap(insn)) {
-				/* Turn off 'trace' bits */
-				regs->msr &= ~MSR_SINGLESTEP;
-				regs->msr |= kcb->kprobe_saved_msr;
-				goto no_kprobe;
-			}
-			/* We have reentered the kprobe_handler(), since
-			 * another probe was hit while within the handler.
-			 * We here save the original kprobes variables and
-			 * just single step on the instruction of the new probe
-			 * without calling any user handlers.
-			 */
-			save_previous_kprobe(kcb);
-			set_current_kprobe(p, regs, kcb);
-			kprobes_inc_nmissed_count(p);
-			kcb->kprobe_status = KPROBE_REENTER;
-			if (p->ainsn.boostable >= 0) {
-				ret = try_to_emulate(p, regs);
+	if (kprobe_running() && p) {
+		kprobe_opcode_t insn = *p->ainsn.insn;
 
-				if (ret > 0) {
-					restore_previous_kprobe(kcb);
-					preempt_enable_no_resched();
-					return 1;
-				}
-			}
-			prepare_singlestep(p, regs);
-			return 1;
+		if (kcb->kprobe_status == KPROBE_HIT_SS && is_trap(insn)) {
+			/* Turn off 'trace' bits */
+			regs->msr &= ~MSR_SINGLESTEP;
+			regs->msr |= kcb->kprobe_saved_msr;
+			goto no_kprobe;
 		}
+		/* We have reentered the kprobe_handler(), since
+		 * another probe was hit while within the handler.
+		 * We here save the original kprobes variables and
+		 * just single step on the instruction of the new probe
+		 * without calling any user handlers.
+		 */
+		save_previous_kprobe(kcb);
+		set_current_kprobe(p, regs, kcb);
+		kprobes_inc_nmissed_count(p);
+		kcb->kprobe_status = KPROBE_REENTER;
+		if (p->ainsn.boostable >= 0) {
+			ret = try_to_emulate(p, regs);
+
+			if (ret > 0) {
+				restore_previous_kprobe(kcb);
+				preempt_enable_no_resched();
+				return 1;
+			}
+		}
+		prepare_singlestep(p, regs);
+		return 1;
 	}
 
 	if (!p) {
