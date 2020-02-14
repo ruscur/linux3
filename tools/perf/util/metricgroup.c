@@ -399,6 +399,11 @@ void metricgroup__print(bool metrics, bool metricgroups, char *filter,
 	strlist__delete(metriclist);
 }
 
+int __weak arch_get_runtimeparam(void)
+{
+	return 1;
+}
+
 static int metricgroup__add_metric(const char *metric, struct strbuf *events,
 				   struct list_head *group_list)
 {
@@ -419,52 +424,77 @@ static int metricgroup__add_metric(const char *metric, struct strbuf *events,
 			continue;
 		if (match_metric(pe->metric_group, metric) ||
 		    match_metric(pe->metric_name, metric)) {
-			const char **ids;
-			int idnum;
-			struct egroup *eg;
-			bool no_group = false;
+			int k, count;
 
-			pr_debug("metric expr %s for %s\n", pe->metric_expr, pe->metric_name);
+			if (strstr(pe->metric_expr, "?"))
+				count = arch_get_runtimeparam();
+			else
+				count = 1;
 
-			if (expr__find_other(pe->metric_expr,
-					     NULL, &ids, &idnum) < 0)
-				continue;
-			if (events->len > 0)
-				strbuf_addf(events, ",");
-			for (j = 0; j < idnum; j++) {
-				pr_debug("found event %s\n", ids[j]);
-				/*
-				 * Duration time maps to a software event and can make
-				 * groups not count. Always use it outside a
-				 * group.
-				 */
-				if (!strcmp(ids[j], "duration_time")) {
-					if (j > 0)
-						strbuf_addf(events, "}:W,");
-					strbuf_addf(events, "duration_time");
-					no_group = true;
+			/* This loop is added to create multiple
+			 * events depend on count value and add
+			 * those events to group_list.
+			 */
+			for (k = 0; k < count; k++) {
+				const char **ids;
+				int idnum;
+				struct egroup *eg;
+				bool no_group = false;
+				char value[PATH_MAX];
+
+				pr_debug("metric expr %s for %s\n",
+					 pe->metric_expr, pe->metric_name);
+				expr__runtimeparam = k;
+				if (expr__find_other(pe->metric_expr, NULL,
+						     &ids, &idnum) < 0)
 					continue;
+				if (events->len > 0)
+					strbuf_addf(events, ",");
+				for (j = 0; j < idnum; j++) {
+					pr_debug("found event %s\n", ids[j]);
+					/*
+					 * Duration time maps to a software
+					 * event and can make groups not count.
+					 * Always use it outside a group.
+					 */
+					if (!strcmp(ids[j], "duration_time")) {
+						if (j > 0)
+							strbuf_addf(events,
+								    "}:W,");
+						strbuf_addf(events,
+							    "duration_time");
+						no_group = true;
+						continue;
+					}
+					strbuf_addf(events, "%s%s",
+						    j == 0 || no_group ? "{" :
+						    ",", ids[j]);
+					no_group = false;
 				}
-				strbuf_addf(events, "%s%s",
-					j == 0 || no_group ? "{" : ",",
-					ids[j]);
-				no_group = false;
-			}
-			if (!no_group)
-				strbuf_addf(events, "}:W");
+				if (!no_group)
+					strbuf_addf(events, "}:W");
 
-			eg = malloc(sizeof(struct egroup));
-			if (!eg) {
-				ret = -ENOMEM;
-				break;
+				eg = malloc(sizeof(struct egroup));
+				if (!eg) {
+					ret = -ENOMEM;
+					break;
+				}
+				eg->ids = ids;
+				eg->idnum = idnum;
+
+				if (strstr(pe->metric_expr, "?")) {
+					sprintf(value, "%s%c%d",
+						pe->metric_name, '_', k);
+				} else {
+					strcpy(value, pe->metric_name);
+				}
+
+				eg->metric_name = strdup(value);
+				eg->metric_expr = pe->metric_expr;
+				eg->metric_unit = pe->unit;
+				list_add_tail(&eg->nd, group_list);
+				ret = 0;
 			}
-			eg->ids = ids;
-			eg->idnum = idnum;
-			eg->metric_name = pe->metric_name;
-			eg->metric_expr = pe->metric_expr;
-			eg->metric_unit = pe->unit;
-			list_add_tail(&eg->nd, group_list);
-			ret = 0;
 		}
 	}
 	return ret;
