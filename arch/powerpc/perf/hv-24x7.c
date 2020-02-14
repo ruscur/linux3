@@ -1409,7 +1409,7 @@ static void h_24x7_event_read(struct perf_event *event)
 			 * that would require issuing a hcall, which would then
 			 * defeat the purpose of using the txn interface.
 			 */
-			local64_set(&event->count, 0);
+			local64_add(0, &event->count);
 		}
 
 		put_cpu_var(hv_24x7_reqb);
