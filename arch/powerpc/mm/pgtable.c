@@ -265,6 +265,7 @@ int huge_ptep_set_access_flags(struct vm_area_struct *vma,
 void assert_pte_locked(struct mm_struct *mm, unsigned long addr)
 {
 	pgd_t *pgd;
+	p4d_t *p4d;
 	pud_t *pud;
 	pmd_t *pmd;
 
@@ -272,7 +273,9 @@ void assert_pte_locked(struct mm_struct *mm, unsigned long addr)
 		return;
 	pgd = mm->pgd + pgd_index(addr);
 	BUG_ON(pgd_none(*pgd));
-	pud = pud_offset(pgd, addr);
+	p4d = p4d_offset(pgd, addr);
+	BUG_ON(p4d_none(*p4d));
+	pud = pud_offset(p4d, addr);
 	BUG_ON(pud_none(*pud));
 	pmd = pmd_offset(pud, addr);
 	/*
@@ -313,6 +316,7 @@ pte_t *__find_linux_pte(pgd_t *pgdir, unsigned long ea,
 			bool *is_thp, unsigned *hpage_shift)
 {
 	pgd_t pgd, *pgdp;
+	p4d_t p4d, *p4dp;
 	pud_t pud, *pudp;
 	pmd_t pmd, *pmdp;
 	pte_t *ret_pte;
@@ -346,13 +350,30 @@ pte_t *__find_linux_pte(pgd_t *pgdir, unsigned long ea,
 		goto out_huge;
 	}
 
+	pdshift = P4D_SHIFT;
+	p4dp = p4d_offset(&pgd, ea);
+	p4d  = READ_ONCE(*p4dp);
+
+	if (p4d_none(p4d))
+		return NULL;
+
+	if (p4d_is_leaf(p4d)) {
+		ret_pte = (pte_t *)p4dp;
+		goto out;
+	}
+
+	if (is_hugepd(__hugepd(p4d_val(p4d)))) {
+		hpdp = (hugepd_t *)&p4d;
+		goto out_huge;
+	}
+
 	/*
 	 * Even if we end up with an unmap, the pgtable will not
 	 * be freed, because we do an rcu free and here we are
 	 * irq disabled
 	 */
 	pdshift = PUD_SHIFT;
-	pudp = pud_offset(&pgd, ea);
+	pudp = pud_offset(&p4d, ea);
 	pud  = READ_ONCE(*pudp);
 
 	if (pud_none(pud))

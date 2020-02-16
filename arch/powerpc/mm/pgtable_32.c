@@ -63,7 +63,7 @@ int __ref map_kernel_page(unsigned long va, phys_addr_t pa, pgprot_t prot)
 	int err = -ENOMEM;
 
 	/* Use upper 10 bits of VA to index the first level map */
-	pd = pmd_offset(pud_offset(pgd_offset_k(va), va), va);
+	pd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(va), va), va), va);
 	/* Use middle 10 bits of VA to index the second-level map */
 	if (likely(slab_is_available()))
 		pg = pte_alloc_kernel(pd, va);
@@ -130,6 +130,7 @@ static int
 get_pteptr(struct mm_struct *mm, unsigned long addr, pte_t **ptep, pmd_t **pmdp)
 {
         pgd_t	*pgd;
+	p4d_t	*p4d;
 	pud_t	*pud;
         pmd_t	*pmd;
         pte_t	*pte;
@@ -137,17 +138,20 @@ get_pteptr(struct mm_struct *mm, unsigned long addr, pte_t **ptep, pmd_t **pmdp)
 
         pgd = pgd_offset(mm, addr & PAGE_MASK);
         if (pgd) {
-		pud = pud_offset(pgd, addr & PAGE_MASK);
-		if (pud && pud_present(*pud)) {
-			pmd = pmd_offset(pud, addr & PAGE_MASK);
-			if (pmd_present(*pmd)) {
-				pte = pte_offset_map(pmd, addr & PAGE_MASK);
-				if (pte) {
-					retval = 1;
-					*ptep = pte;
-					if (pmdp)
-						*pmdp = pmd;
-					/* XXX caller needs to do pte_unmap, yuck */
+		p4d = p4d_offset(pgd, addr & PAGE_MASK);
+		if (p4d && p4d_present(*p4d)) {
+			pud = pud_offset(p4d, addr & PAGE_MASK);
+			if (pud && pud_present(*pud)) {
+				pmd = pmd_offset(pud, addr & PAGE_MASK);
+				if (pmd_present(*pmd)) {
+					pte = pte_offset_map(pmd, addr & PAGE_MASK);
+					if (pte) {
+						retval = 1;
+						*ptep = pte;
+						if (pmdp)
+							*pmdp = pmd;
+						/* XXX caller needs to do pte_unmap, yuck */
+					}
 				}
 			}
 		}

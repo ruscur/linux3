@@ -494,17 +494,39 @@ static void kvmppc_unmap_free_pud(struct kvm *kvm, pud_t *pud,
 	pud_free(kvm->mm, pud);
 }
 
+static void kvmppc_unmap_free_p4d(struct kvm *kvm, p4d_t *p4d,
+				  unsigned int lpid)
+{
+	unsigned long iu;
+	p4d_t *p = p4d;
+
+	for (iu = 0; iu < PTRS_PER_P4D; ++iu, ++p) {
+		if (!p4d_present(*p))
+			continue;
+		if (p4d_is_leaf(*p)) {
+			p4d_clear(p);
+		} else {
+			pud_t *pud;
+
+			pud = pud_offset(p, 0);
+			kvmppc_unmap_free_pud(kvm, pud, lpid);
+			p4d_clear(p);
+		}
+	}
+	p4d_free(kvm->mm, p4d);
+}
+
 void kvmppc_free_pgtable_radix(struct kvm *kvm, pgd_t *pgd, unsigned int lpid)
 {
 	unsigned long ig;
 
 	for (ig = 0; ig < PTRS_PER_PGD; ++ig, ++pgd) {
-		pud_t *pud;
+		p4d_t *p4d;
 
 		if (!pgd_present(*pgd))
 			continue;
-		pud = pud_offset(pgd, 0);
-		kvmppc_unmap_free_pud(kvm, pud, lpid);
+		p4d = p4d_offset(pgd, 0);
+		kvmppc_unmap_free_p4d(kvm, p4d, lpid);
 		pgd_clear(pgd);
 	}
 }
@@ -566,6 +588,7 @@ int kvmppc_create_pte(struct kvm *kvm, pgd_t *pgtable, pte_t pte,
 		      unsigned long *rmapp, struct rmap_nested **n_rmap)
 {
 	pgd_t *pgd;
+	p4d_t *p4d, *new_p4d = NULL;
 	pud_t *pud, *new_pud = NULL;
 	pmd_t *pmd, *new_pmd = NULL;
 	pte_t *ptep, *new_ptep = NULL;
@@ -573,9 +596,15 @@ int kvmppc_create_pte(struct kvm *kvm, pgd_t *pgtable, pte_t pte,
 
 	/* Traverse the guest's 2nd-level tree, allocate new levels needed */
 	pgd = pgtable + pgd_index(gpa);
-	pud = NULL;
+	p4d = NULL;
 	if (pgd_present(*pgd))
-		pud = pud_offset(pgd, gpa);
+		p4d = p4d_offset(pgd, gpa);
+	else
+		new_p4d = p4d_alloc_one(kvm->mm, gpa);
+
+	pud = NULL;
+	if (p4d_present(*p4d))
+		pud = pud_offset(p4d, gpa);
 	else
 		new_pud = pud_alloc_one(kvm->mm, gpa);
 
@@ -597,12 +626,18 @@ int kvmppc_create_pte(struct kvm *kvm, pgd_t *pgtable, pte_t pte,
 	/* Now traverse again under the lock and change the tree */
 	ret = -ENOMEM;
 	if (pgd_none(*pgd)) {
+		if (!new_p4d)
+			goto out_unlock;
+		pgd_populate(kvm->mm, pgd, new_p4d);
+		new_p4d = NULL;
+	}
+	if (p4d_none(*p4d)) {
 		if (!new_pud)
 			goto out_unlock;
-		pgd_populate(kvm->mm, pgd, new_pud);
+		p4d_populate(kvm->mm, p4d, new_pud);
 		new_pud = NULL;
 	}
-	pud = pud_offset(pgd, gpa);
+	pud = pud_offset(p4d, gpa);
 	if (pud_is_leaf(*pud)) {
 		unsigned long hgpa = gpa & PUD_MASK;
 
@@ -1220,6 +1255,7 @@ static ssize_t debugfs_radix_read(struct file *file, char __user *buf,
 	pgd_t *pgt;
 	struct kvm_nested_guest *nested;
 	pgd_t pgd, *pgdp;
+	p4d_t p4d, *p4dp;
 	pud_t pud, *pudp;
 	pmd_t pmd, *pmdp;
 	pte_t *ptep;
@@ -1298,7 +1334,14 @@ static ssize_t debugfs_radix_read(struct file *file, char __user *buf,
 			continue;
 		}
 
-		pudp = pud_offset(&pgd, gpa);
+		p4dp = p4d_offset(&pgd, gpa);
+		p4d = READ_ONCE(*p4dp);
+		if (!(p4d_val(p4d) & _PAGE_PRESENT)) {
+			gpa = (gpa & P4D_MASK) + P4D_SIZE;
+			continue;
+		}
+
+		pudp = pud_offset(&p4d, gpa);
 		pud = READ_ONCE(*pudp);
 		if (!(pud_val(pud) & _PAGE_PRESENT)) {
 			gpa = (gpa & PUD_MASK) + PUD_SIZE;
