@@ -443,7 +443,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_ALTIVEC)
  *
  * clobbers r3
  */
-_GLOBAL(__inval_enable_L1)
+_NOKPROBE_GLOBAL(__inval_enable_L1)
 	/* Enable and then Flash inval the instruction & data cache */
 	mfspr	r3,SPRN_HID0
 	ori	r3,r3, HID0_ICE|HID0_ICFI|HID0_DCE|HID0_DCI

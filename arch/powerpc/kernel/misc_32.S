@@ -233,7 +233,7 @@ _GLOBAL(_nmask_and_or_msr)
 /*
  * Do an IO access in real mode
  */
-_GLOBAL(real_readb)
+_NOKPROBE_GLOBAL(real_readb)
 	mfmsr	r7
 	rlwinm	r0,r7,0,~MSR_DR
 	sync
@@ -250,7 +250,7 @@ _GLOBAL(real_readb)
 	/*
  * Do an IO access in real mode
  */
-_GLOBAL(real_writeb)
+_NOKPROBE_GLOBAL(real_writeb)
 	mfmsr	r7
 	rlwinm	r0,r7,0,~MSR_DR
 	sync

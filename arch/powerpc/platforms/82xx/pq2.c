@@ -29,6 +29,7 @@ void __noreturn pq2_restart(char *cmd)
 
 	panic("Restart failed\n");
 }
+NOKPROBE_SYMBOL(pq2_restart)
 
 #ifdef CONFIG_PCI
 static int pq2_pci_exclude_device(struct pci_controller *hose,

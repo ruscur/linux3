@@ -78,7 +78,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_CAN_NAP)
  * r11 points to the exception frame (physical address).
  * We have to preserve r10.
  */
-_GLOBAL(power_save_ppc32_restore)
+_NOKPROBE_GLOBAL(power_save_ppc32_restore)
 	lwz	r9,_LINK(r11)		/* interrupted in e500_idle */
 	stw	r9,_NIP(r11)		/* make it do a blr */
 

@@ -177,8 +177,8 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 	 *    at address 0x84. I've have some trouble with those
 	 *    parameters however and I no longer use them.
 	 */
-	lis	r5,grackle_wake_up@ha
-	addi	r5,r5,grackle_wake_up@l
+	lis	r5,.Lgrackle_wake_up@ha
+	addi	r5,r5,.Lgrackle_wake_up@l
 	tophys(r5,r5)
 	stw	r5,SL_PC(r1)
 	lis	r4,KERNELBASE@h
@@ -202,6 +202,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 	stw r5,0(r3)
 
 	.globl	low_cpu_die
+_ASM_NOKPROBE_SYMBOL(low_cpu_die)
 low_cpu_die:
 	/* Flush & disable all caches */
 	bl	flush_disable_caches
@@ -244,7 +245,6 @@ END_FTR_SECTION_IFSET(CPU_FTR_SPEC7450)
 	mtmsr	r2
 	isync
 	b	1b
-
 /*
  * Here is the resume code.
  */
@@ -255,6 +255,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_SPEC7450)
  * r4 has the physical address of SL_PC(sp) (unused)
  */
 _GLOBAL(core99_wake_up)
+_ASM_NOKPROBE_SYMBOL(core99_wake_up)
 	/* Make sure HID0 no longer contains any sleep bit and that data cache
 	 * is disabled
 	 */
@@ -287,7 +288,7 @@ _GLOBAL(core99_wake_up)
  * r1 has the physical address of SL_PC(sp).
  */
 
-grackle_wake_up:
+.Lgrackle_wake_up:
 
 	/* Restore the kernel's segment registers before
 	 * we do any r1 memory access as we are not sure they
@@ -407,7 +408,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 
 	/* restore the MSR and turn on the MMU */
 	lwz	r3,SL_MSR(r1)
-	bl	turn_on_mmu
+	bl	.Lturn_on_mmu
 
 	/* get back the stack pointer */
 	tovirt(r1,r1)
@@ -430,7 +431,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 	mtlr	r0
 	blr
 
-turn_on_mmu:
+.Lturn_on_mmu:
 	mflr	r4
 	tovirt(r4,r4)
 	mtsrr0	r4

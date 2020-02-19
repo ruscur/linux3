@@ -365,6 +365,7 @@ boot_low:
 	isync
 1:	b	1b
 
+_ASM_NOKPROBE_SYMBOL(mpc83xx_deep_resume)
 mpc83xx_deep_resume:
 	lis	r4, 1f@h
 	ori	r4, r4, 1f@l
