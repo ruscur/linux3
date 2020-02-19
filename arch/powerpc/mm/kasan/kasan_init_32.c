@@ -30,11 +30,13 @@ static void __init kasan_populate_pte(pte_t *ptep, pgprot_t prot)
 		__set_pte_at(&init_mm, va, ptep, pfn_pte(PHYS_PFN(pa), prot), 0);
 }
 
-static int __init kasan_init_shadow_page_tables(unsigned long k_start, unsigned long k_end)
+static int __init
+kasan_init_shadow_page_tables(unsigned long k_start, unsigned long k_end, bool is_late)
 {
 	pmd_t *pmd;
 	unsigned long k_cur, k_next;
 	pte_t *new = NULL;
+	pgprot_t prot = is_late ? kasan_prot_ro() : PAGE_KERNEL;
 
 	pmd = pmd_offset(pud_offset(pgd_offset_k(k_start), k_start), k_start);
 
@@ -48,7 +50,7 @@ static int __init kasan_init_shadow_page_tables(unsigned long k_start, unsigned 
 
 		if (!new)
 			return -ENOMEM;
-		kasan_populate_pte(new, PAGE_KERNEL);
+		kasan_populate_pte(new, prot);
 
 		smp_wmb(); /* See comment in __pte_alloc */
 
@@ -71,7 +73,7 @@ static int __init kasan_init_region(void *start, size_t size)
 	int ret;
 	void *block;
 
-	ret = kasan_init_shadow_page_tables(k_start, k_end);
+	ret = kasan_init_shadow_page_tables(k_start, k_end, false);
 	if (ret)
 		return ret;
 
@@ -121,7 +123,7 @@ static void __init kasan_unmap_early_shadow_vmalloc(void)
 	phys_addr_t pa = __pa(kasan_early_shadow_page);
 
 	if (!early_mmu_has_feature(MMU_FTR_HPTE_TABLE)) {
-		int ret = kasan_init_shadow_page_tables(k_start, k_end);
+		int ret = kasan_init_shadow_page_tables(k_start, k_end, true);
 
 		if (ret)
 			panic("kasan: kasan_init_shadow_page_tables() failed");
@@ -144,7 +146,8 @@ void __init kasan_mmu_init(void)
 	struct memblock_region *reg;
 
 	if (early_mmu_has_feature(MMU_FTR_HPTE_TABLE)) {
-		ret = kasan_init_shadow_page_tables(KASAN_SHADOW_START, KASAN_SHADOW_END);
+		ret = kasan_init_shadow_page_tables(KASAN_SHADOW_START, KASAN_SHADOW_END,
+						    false);
 
 		if (ret)
 			panic("kasan: kasan_init_shadow_page_tables() failed");
