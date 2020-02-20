@@ -15,13 +15,15 @@
 
 #include <asm/plpar_wrappers.h>
 #include <asm/papr_scm.h>
+#include <asm/papr_scm_dsm.h>
 
 #define BIND_ANY_ADDR (~0ul)
 
 #define PAPR_SCM_DIMM_CMD_MASK \
 	((1ul << ND_CMD_GET_CONFIG_SIZE) | \
 	 (1ul << ND_CMD_GET_CONFIG_DATA) | \
-	 (1ul << ND_CMD_SET_CONFIG_DATA))
+	 (1ul << ND_CMD_SET_CONFIG_DATA) | \
+	 (1ul << ND_CMD_CALL))
 
 struct papr_scm_priv {
 	struct platform_device *pdev;
@@ -330,19 +332,82 @@ static int papr_scm_meta_set(struct papr_scm_priv *p,
 	return 0;
 }
 
-int papr_scm_ndctl(struct nvdimm_bus_descriptor *nd_desc, struct nvdimm *nvdimm,
-		unsigned int cmd, void *buf, unsigned int buf_len, int *cmd_rc)
+/*
+ * Validate the input to dimm-control function and return papr_scm specific
+ * commands. This does sanity validation to ND_CMD_CALL sub-command packages.
+ */
+static int cmd_to_func(struct nvdimm *nvdimm, unsigned int cmd, void *buf,
+		       unsigned int buf_len)
 {
-	struct nd_cmd_get_config_size *get_size_hdr;
-	struct papr_scm_priv *p;
+	unsigned long cmd_mask = PAPR_SCM_DIMM_CMD_MASK;
+	struct nd_papr_scm_cmd_pkg *pkg = nd_to_papr_cmd_pkg(buf);
 
 	/* Only dimm-specific calls are supported atm */
 	if (!nvdimm)
 		return -EINVAL;
 
+	if (!test_bit(cmd, &cmd_mask)) {
+		pr_debug("%s: Unsupported cmd=%u\n", __func__, cmd);
+		return -EINVAL;
+	} else if (cmd != ND_CMD_CALL) {
+		return cmd;
+	}
+
+	/* cmd == ND_CMD_CALL so verify the envelop package */
+
+	if (!buf || buf_len < sizeof(struct nd_papr_scm_cmd_pkg)) {
+		pr_debug("%s: Invalid pkg size=%u\n", __func__, buf_len);
+		return -EINVAL;
+	}
+
+	if (pkg->hdr.nd_family != NVDIMM_FAMILY_PAPR_SCM) {
+		pr_debug("%s: Invalid pkg family=0x%llx\n", __func__,
+			 pkg->hdr.nd_family);
+		return -EINVAL;
+
+	}
+
+	if (pkg->hdr.nd_command <= DSM_PAPR_SCM_MIN ||
+	    pkg->hdr.nd_command >= DSM_PAPR_SCM_MAX) {
+
+		/* for unknown subcommands return ND_CMD_CALL */
+		pr_debug("%s: Unknown sub-command=0x%llx\n", __func__,
+			 pkg->hdr.nd_command);
+		return ND_CMD_CALL;
+	}
+
+	/* We except a payload with all DSM commands */
+	if (papr_scm_pcmd_to_payload(pkg) == NULL) {
+		pr_debug("%s: Empty patload for sub-command=0x%llx\n", __func__,
+			 pkg->hdr.nd_command);
+		return -EINVAL;
+	}
+
+	/* Return the DSM_PAPR_SCM_* command */
+	return pkg->hdr.nd_command;
+}
+
+int papr_scm_ndctl(struct nvdimm_bus_descriptor *nd_desc, struct nvdimm *nvdimm,
+		unsigned int cmd, void *buf, unsigned int buf_len, int *cmd_rc)
+{
+	struct nd_cmd_get_config_size *get_size_hdr;
+	struct papr_scm_priv *p;
+	struct nd_papr_scm_cmd_pkg *call_pkg = NULL;
+	int cmd_in, rc;
+
+	/* Use a local variable in case cmd_rc pointer is NULL */
+	if (cmd_rc == NULL)
+		cmd_rc = &rc;
+
+	cmd_in = cmd_to_func(nvdimm, cmd, buf, buf_len);
+	if (cmd_in < 0) {
+		pr_debug("%s: Invalid cmd=%u. Err=%d\n", __func__, cmd, cmd_in);
+		return cmd_in;
+	}
+
 	p = nvdimm_provider_data(nvdimm);
 
-	switch (cmd) {
+	switch (cmd_in) {
 	case ND_CMD_GET_CONFIG_SIZE:
 		get_size_hdr = buf;
 
@@ -360,13 +425,21 @@ int papr_scm_ndctl(struct nvdimm_bus_descriptor *nd_desc, struct nvdimm *nvdimm,
 		*cmd_rc = papr_scm_meta_set(p, buf);
 		break;
 
+	case ND_CMD_CALL:
+		/* This happens if subcommand package sanity fails */
+		call_pkg = nd_to_papr_cmd_pkg(buf);
+		call_pkg->cmd_status = -ENOENT;
+		*cmd_rc = 0;
+		break;
+
 	default:
-		return -EINVAL;
+		dev_dbg(&p->pdev->dev, "Unknown command = %d\n", cmd_in);
+		*cmd_rc = -EINVAL;
 	}
 
 	dev_dbg(&p->pdev->dev, "returned with cmd_rc = %d\n", *cmd_rc);
 
-	return 0;
+	return *cmd_rc;
 }
 
 static inline int papr_scm_node(int node)
