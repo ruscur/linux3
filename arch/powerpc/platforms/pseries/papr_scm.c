@@ -47,6 +47,9 @@ struct papr_scm_priv {
 	/* Health information for the dimm */
 	__be64 health_bitmap;
 	__be64 health_bitmap_valid;
+
+	/* length of the stat buffer as expected by phyp */
+	size_t len_stat_buffer;
 };
 
 static int drc_pmem_bind(struct papr_scm_priv *p)
@@ -150,6 +153,50 @@ err_out:
 		 "Failed to query, trying an unbind followed by bind");
 	drc_pmem_unbind(p);
 	return drc_pmem_bind(p);
+}
+
+static int drc_pmem_query_stats(struct papr_scm_priv *p,
+				struct papr_scm_perf_stats *stats,
+				size_t size, uint64_t *out)
+{
+	unsigned long ret[PLPAR_HCALL_BUFSIZE];
+	int64_t rc;
+
+	/* In case of no out buffer ignore the size */
+	if (!stats)
+		size = 0;
+
+	/*
+	 * Do the HCALL asking PHYP for info and if R4 was requested
+	 * return its value in 'out' variable.
+	 */
+	rc = plpar_hcall(H_SCM_PERFORMANCE_STATS, ret, p->drc_index,
+			 __pa(stats), size);
+	if (out)
+		*out =  be64_to_cpu(ret[0]);
+
+	switch (rc) {
+	case H_SUCCESS:
+		/* Handle the case where size of stat buffer was requested */
+		if (size != 0)
+			dev_dbg(&p->pdev->dev,
+				"Performance stats returned %d stats\n",
+				be32_to_cpu(stats->num_statistics));
+		else
+			dev_dbg(&p->pdev->dev,
+				"Performance stats size %lld\n",
+				be64_to_cpu(ret[0]));
+		return 0;
+	case H_PARTIAL:
+		dev_err(&p->pdev->dev,
+			 "Unknown performance stats, Err:0x%016llX\n",
+			be64_to_cpu(ret[0]));
+		return -ENOENT;
+	default:
+		dev_err(&p->pdev->dev,
+			 "Failed to query performance stats, Err:%lld\n", rc);
+		return -ENXIO;
+	}
 }
 
 static int drc_pmem_query_health(struct papr_scm_priv *p)
@@ -341,6 +388,53 @@ static inline int papr_scm_node(int node)
 	return min_node;
 }
 
+static ssize_t papr_perf_stats_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct nvdimm *dimm = to_nvdimm(dev);
+	struct papr_scm_priv *p = nvdimm_provider_data(dimm);
+	struct papr_scm_perf_stats *retbuffer;
+	struct papr_scm_perf_stat *stat;
+	uint64_t statid, val;
+	int rc, i;
+
+	if (!p->len_stat_buffer)
+		return -ENOENT;
+
+	/* Return buffer for phyp where stats are written */
+	retbuffer = kzalloc(p->len_stat_buffer, GFP_KERNEL);
+	if (!retbuffer)
+		return -ENOMEM;
+
+	/* Setup the buffer */
+	memcpy(retbuffer->eye_catcher, PAPR_SCM_PERF_STATS_EYECATCHER,
+	       sizeof(retbuffer->eye_catcher));
+	retbuffer->stats_version = cpu_to_be32(0x1);
+	retbuffer->num_statistics = 0;
+
+	rc = drc_pmem_query_stats(p, retbuffer, p->len_stat_buffer, NULL);
+	if (rc)
+		goto out;
+
+	/*
+	 * Go through the returned output buffer and print stats and values.
+	 * Since statistic_id is essentially a char string of 8 bytes encoded
+	 * as a __be64, simply use the string format specifier to print it.
+	 */
+	for (i = 0, stat = retbuffer->scm_statistics;
+	    i < be32_to_cpu(retbuffer->num_statistics); ++i, ++stat) {
+		statid = be64_to_cpu(stat->statistic_id);
+		val = be64_to_cpu(stat->statistic_value);
+		rc += sprintf(buf + rc, "%.8s => 0x%016llX\n",
+			      (char *) &(statid), val);
+	}
+out:
+	kfree(retbuffer);
+	return rc;
+
+}
+DEVICE_ATTR_RO(papr_perf_stats);
+
 static ssize_t papr_flags_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
@@ -390,6 +484,7 @@ DEVICE_ATTR_RO(papr_flags);
 /* papr_scm specific dimm attributes */
 static struct attribute *papr_scm_nd_attributes[] = {
 	&dev_attr_papr_flags.attr,
+	&dev_attr_papr_perf_stats.attr,
 	NULL,
 };
 
@@ -409,6 +504,7 @@ static int papr_scm_nvdimm_init(struct papr_scm_priv *p)
 	struct nd_region_desc ndr_desc;
 	unsigned long dimm_flags;
 	int target_nid, online_nid;
+	uint64_t stat_size;
 
 	p->bus_desc.ndctl = papr_scm_ndctl;
 	p->bus_desc.module = THIS_MODULE;
@@ -469,6 +565,17 @@ static int papr_scm_nvdimm_init(struct papr_scm_priv *p)
 	if (target_nid != online_nid)
 		dev_info(dev, "Region registered with target node %d and online node %d",
 			 target_nid, online_nid);
+
+	/* Try retriving the stat buffer and see if its supported */
+	if (!drc_pmem_query_stats(p, NULL, 0, &stat_size)) {
+		p->len_stat_buffer = (size_t)stat_size;
+		dev_dbg(&p->pdev->dev, "Max dimm perf stats size %ld bytes\n",
+			p->len_stat_buffer);
+	} else {
+		p->len_stat_buffer = 0;
+		dev_dbg(&p->pdev->dev, "Unable to retrieve performace stats\n");
+		dev_info(&p->pdev->dev, "Limited dimm info available\n");
+	}
 
 	return 0;
 
