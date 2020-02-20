@@ -415,6 +415,74 @@ static int cmd_to_func(struct nvdimm *nvdimm, unsigned int cmd, void *buf,
 	return pkg->hdr.nd_command;
 }
 
+/*
+ * Fetch the DIMM health info and populate it in provided papr_scm package.
+ * Since the caller can request a different version of payload and each new
+ * version of struct nd_papr_scm_dimm_health_stat is a proper-subset of
+ * previous version hence we return a subset of the cached 'struct
+ * nd_papr_scm_dimm_health_stat' depending on the payload version requested.
+ */
+static int papr_scm_get_health(struct papr_scm_priv *p,
+			       struct nd_papr_scm_cmd_pkg *pkg)
+{
+	int rc;
+	size_t copysize;
+	/* Map version to number of bytes to be copied to payload */
+	const size_t copysizes[] = {
+		[1] =
+		sizeof(struct nd_papr_scm_dimm_health_stat_v1),
+
+		/*  This should always be preset */
+		[ND_PAPR_SCM_DIMM_HEALTH_VERSION] =
+		sizeof(struct nd_papr_scm_dimm_health_stat),
+	};
+
+	rc = drc_pmem_query_health(p);
+	if (rc)
+		goto out;
+	/*
+	 * If the requested payload version is greater than one we know
+	 * aboute, return the payload version we know about and let
+	 * caller/userspace handle the mess.
+	 */
+	if (pkg->payload_version > ND_PAPR_SCM_DIMM_HEALTH_VERSION)
+		pkg->payload_version = ND_PAPR_SCM_DIMM_HEALTH_VERSION;
+
+	copysize = copysizes[pkg->payload_version];
+	if (!copysize) {
+		dev_dbg(&p->pdev->dev, "%s Unsupported payload version=0x%x\n",
+			__func__, pkg->payload_version);
+		rc = -ENOSPC;
+		goto out;
+	}
+
+	if (pkg->hdr.nd_size_out < copysize) {
+		dev_dbg(&p->pdev->dev, "%s Payload not large enough\n",
+			__func__);
+		dev_dbg(&p->pdev->dev, "%s Expected %lu, available %u\n",
+			__func__, copysize, pkg->hdr.nd_size_out);
+		rc = -ENOSPC;
+		goto out;
+	}
+
+	dev_dbg(&p->pdev->dev, "%s Copying payload size=%lu version=0x%x\n",
+		__func__, copysize, pkg->payload_version);
+
+	/* Copy a subset of health struct based on copysize */
+	memcpy(papr_scm_pcmd_to_payload(pkg), &p->health, copysize);
+	pkg->hdr.nd_fw_size = copysize;
+
+out:
+	/*
+	 * Put the error in out package and return success from function
+	 * so that errors if any are propogated back to userspace.
+	 */
+	pkg->cmd_status = rc;
+	dev_dbg(&p->pdev->dev, "%s completion code = %d\n", __func__, rc);
+
+	return 0;
+}
+
 int papr_scm_ndctl(struct nvdimm_bus_descriptor *nd_desc, struct nvdimm *nvdimm,
 		unsigned int cmd, void *buf, unsigned int buf_len, int *cmd_rc)
 {
@@ -458,6 +526,11 @@ int papr_scm_ndctl(struct nvdimm_bus_descriptor *nd_desc, struct nvdimm *nvdimm,
 		call_pkg = nd_to_papr_cmd_pkg(buf);
 		call_pkg->cmd_status = -ENOENT;
 		*cmd_rc = 0;
+		break;
+
+	case DSM_PAPR_SCM_HEALTH:
+		call_pkg = nd_to_papr_cmd_pkg(buf);
+		*cmd_rc = papr_scm_get_health(p, call_pkg);
 		break;
 
 	default:
