@@ -217,6 +217,58 @@ static int register_lpc_mem(struct ocxlpmem *ocxlpmem)
 }
 
 /**
+ * extract_command_metadata() - Extract command data from MMIO & save it for further use
+ * @ocxlpmem: the device metadata
+ * @offset: The base address of the command data structures (address of CREQO)
+ * @command_metadata: A pointer to the command metadata to populate
+ * Return: 0 on success, negative on failure
+ */
+static int extract_command_metadata(struct ocxlpmem *ocxlpmem, u32 offset,
+					struct command_metadata *command_metadata)
+{
+	int rc;
+	u64 tmp;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu, offset, OCXL_LITTLE_ENDIAN,
+				     &tmp);
+	if (rc)
+		return rc;
+
+	command_metadata->request_offset = tmp >> 32;
+	command_metadata->response_offset = tmp & 0xFFFFFFFF;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu, offset + 8, OCXL_LITTLE_ENDIAN,
+				     &tmp);
+	if (rc)
+		return rc;
+
+	command_metadata->data_offset = tmp >> 32;
+	command_metadata->data_size = tmp & 0xFFFFFFFF;
+
+	command_metadata->id = 0;
+
+	return 0;
+}
+
+/**
+ * setup_command_metadata() - Set up the command metadata
+ * @ocxlpmem: the device metadata
+ */
+static int setup_command_metadata(struct ocxlpmem *ocxlpmem)
+{
+	int rc;
+
+	mutex_init(&ocxlpmem->admin_command.lock);
+
+	rc = extract_command_metadata(ocxlpmem, GLOBAL_MMIO_ACMA_CREQO,
+				      &ocxlpmem->admin_command);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+/**
  * is_usable() - Is a controller usable?
  * @ocxlpmem: the device metadata
  * @verbose: True to log errors
@@ -456,6 +508,14 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 	ocxlpmem->pdev = pdev;
 
+	ocxlpmem->timeouts[ADMIN_COMMAND_ERRLOG] = 2000; // ms
+	ocxlpmem->timeouts[ADMIN_COMMAND_HEARTBEAT] = 100; // ms
+	ocxlpmem->timeouts[ADMIN_COMMAND_SMART] = 100; // ms
+	ocxlpmem->timeouts[ADMIN_COMMAND_CONTROLLER_DUMP] = 1000; // ms
+	ocxlpmem->timeouts[ADMIN_COMMAND_CONTROLLER_STATS] = 100; // ms
+	ocxlpmem->timeouts[ADMIN_COMMAND_SHUTDOWN] = 1000; // ms
+	ocxlpmem->timeouts[ADMIN_COMMAND_FW_UPDATE] = 16000; // ms
+
 	pci_set_drvdata(pdev, ocxlpmem);
 
 	ocxlpmem->ocxl_fn = ocxl_function_open(pdev);
@@ -498,6 +558,11 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (read_device_metadata(ocxlpmem)) {
 		dev_err(&pdev->dev, "Could not read metadata\n");
+		goto err;
+	}
+
+	if (setup_command_metadata(ocxlpmem)) {
+		dev_err(&pdev->dev, "Could not read OCXL command matada\n");
 		goto err;
 	}
 

@@ -7,6 +7,7 @@
 #include <linux/mm.h>
 
 #define LABEL_AREA_SIZE	(1UL << PA_SECTION_SHIFT)
+#define DEFAULT_TIMEOUT 100
 
 #define GLOBAL_MMIO_CHI		0x000
 #define GLOBAL_MMIO_CHIC	0x008
@@ -80,6 +81,16 @@
 #define STATUS_FW_ARG_INVALID	0x51
 #define STATUS_FW_INVALID	0x52
 
+struct command_metadata {
+	u32 request_offset;
+	u32 response_offset;
+	u32 data_offset;
+	u32 data_size;
+	struct mutex lock;
+	u16 id;
+	u8 op_code;
+};
+
 struct ocxlpmem_function0 {
 	struct pci_dev *pdev;
 	struct ocxl_fn *ocxl_fn;
@@ -95,9 +106,11 @@ struct ocxlpmem {
 	struct ocxl_afu *ocxl_afu;
 	struct ocxl_context *ocxl_context;
 	void *metadata_addr;
+	struct command_metadata admin_command;
 	struct resource pmem_res;
 	struct nd_region *nd_region;
 	char fw_version[8+1];
+	u32 timeouts[ADMIN_COMMAND_MAX+1];
 
 	u32 max_controller_dump_size;
 	u16 scm_revision; // major/minor
@@ -122,3 +135,51 @@ struct ocxlpmem {
  * Returns 0 on success, negative on error
  */
 int ocxlpmem_chi(const struct ocxlpmem *ocxlpmem, u64 *chi);
+
+/**
+ * admin_command_request() - Issue an admin command request
+ * @ocxlpmem: the device metadata
+ * @op_code: The op-code for the command
+ *
+ * Returns an identifier for the command, or negative on error
+ */
+int admin_command_request(struct ocxlpmem *ocxlpmem, u8 op_code);
+
+/**
+ * admin_response() - Validate an admin response
+ * @ocxlpmem: the device metadata
+ * Returns the status code of the command, or negative on error
+ */
+int admin_response(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * admin_command_execute() - Notify the controller to start processing a pending admin command
+ * @ocxlpmem: the device metadata
+ * Returns 0 on success, negative on error
+ */
+int admin_command_execute(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * admin_command_complete_timeout() - Wait for an admin command to finish executing
+ * @ocxlpmem: the device metadata
+ * @command: the admin command to wait for completion (determines the timeout)
+ * Returns 0 on success, -EBUSY on timeout
+ */
+int admin_command_complete_timeout(const struct ocxlpmem *ocxlpmem,
+				   int command);
+
+/**
+ * admin_response_handled() - Notify the controller that the admin response has been handled
+ * @ocxlpmem: the device metadata
+ * Returns 0 on success, negative on failure
+ */
+int admin_response_handled(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * warn_status() - Emit a kernel warning showing a command status.
+ * @ocxlpmem: the device metadata
+ * @message: A message to accompany the warning
+ * @status: The command status
+ */
+void warn_status(const struct ocxlpmem *ocxlpmem, const char *message,
+		 u8 status);
