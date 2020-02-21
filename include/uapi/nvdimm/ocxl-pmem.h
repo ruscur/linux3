@@ -66,6 +66,20 @@ struct ioctl_ocxl_pmem_controller_stats {
 	__u64 cache_write_latency; /* nanoseconds */
 };
 
+struct ioctl_ocxl_pmem_eventfd {
+	__s32 eventfd;
+	__u32 reserved;
+};
+
+#ifndef BIT_ULL
+#define BIT_ULL(nr)	(1ULL << (nr))
+#endif
+
+#define IOCTL_OCXL_PMEM_EVENT_CONTROLLER_DUMP_AVAILABLE	BIT_ULL(0)
+#define IOCTL_OCXL_PMEM_EVENT_ERROR_LOG_AVAILABLE	BIT_ULL(1)
+#define IOCTL_OCXL_PMEM_EVENT_HARDWARE_FATAL		BIT_ULL(2)
+#define IOCTL_OCXL_PMEM_EVENT_FIRMWARE_FATAL		BIT_ULL(3)
+
 /* ioctl numbers */
 #define OCXL_PMEM_MAGIC 0x5C
 /* SCM devices */
@@ -74,5 +88,7 @@ struct ioctl_ocxl_pmem_controller_stats {
 #define IOCTL_OCXL_PMEM_CONTROLLER_DUMP_DATA		_IOWR(OCXL_PMEM_MAGIC, 0x03, struct ioctl_ocxl_pmem_controller_dump_data)
 #define IOCTL_OCXL_PMEM_CONTROLLER_DUMP_COMPLETE	_IO(OCXL_PMEM_MAGIC, 0x04)
 #define IOCTL_OCXL_PMEM_CONTROLLER_STATS		_IO(OCXL_PMEM_MAGIC, 0x05)
+#define IOCTL_OCXL_PMEM_EVENTFD				_IOW(OCXL_PMEM_MAGIC, 0x06, struct ioctl_ocxl_pmem_eventfd)
+#define IOCTL_OCXL_PMEM_EVENT_CHECK			_IOR(OCXL_PMEM_MAGIC, 0x07, __u64)
 
 #endif /* _UAPI_OCXL_SCM_H */

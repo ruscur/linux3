@@ -10,6 +10,7 @@
 #include <misc/ocxl.h>
 #include <linux/delay.h>
 #include <linux/ndctl.h>
+#include <linux/eventfd.h>
 #include <linux/fs.h>
 #include <linux/mm_types.h>
 #include <linux/memory_hotplug.h>
@@ -335,10 +336,21 @@ static void free_ocxlpmem(struct ocxlpmem *ocxlpmem)
 {
 	int rc;
 
+	// Disable doorbells
+	(void)ocxl_global_mmio_set64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_CHIEC,
+				     OCXL_LITTLE_ENDIAN,
+				     GLOBAL_MMIO_CHI_ALL);
+
 	if (ocxlpmem->nvdimm_bus)
 		nvdimm_bus_unregister(ocxlpmem->nvdimm_bus);
 
 	free_minor(ocxlpmem);
+
+	if (ocxlpmem->irq_addr[1])
+		iounmap(ocxlpmem->irq_addr[1]);
+
+	if (ocxlpmem->irq_addr[0])
+		iounmap(ocxlpmem->irq_addr[0]);
 
 	if (ocxlpmem->cdev.owner)
 		cdev_del(&ocxlpmem->cdev);
@@ -442,6 +454,11 @@ static int file_open(struct inode *inode, struct file *file)
 static int file_release(struct inode *inode, struct file *file)
 {
 	struct ocxlpmem *ocxlpmem = file->private_data;
+
+	if (ocxlpmem->ev_ctx) {
+		eventfd_ctx_put(ocxlpmem->ev_ctx);
+		ocxlpmem->ev_ctx = NULL;
+	}
 
 	ocxlpmem_put(ocxlpmem);
 	return 0;
@@ -938,6 +955,51 @@ out:
 	return rc;
 }
 
+static int ioctl_eventfd(struct ocxlpmem *ocxlpmem,
+		 struct ioctl_ocxl_pmem_eventfd __user *uarg)
+{
+	struct ioctl_ocxl_pmem_eventfd args;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	if (ocxlpmem->ev_ctx)
+		return -EINVAL;
+
+	ocxlpmem->ev_ctx = eventfd_ctx_fdget(args.eventfd);
+	if (!ocxlpmem->ev_ctx)
+		return -EFAULT;
+
+	return 0;
+}
+
+static int ioctl_event_check(struct ocxlpmem *ocxlpmem, u64 __user *uarg)
+{
+	u64 val = 0;
+	int rc;
+	u64 chi = 0;
+
+	rc = ocxlpmem_chi(ocxlpmem, &chi);
+	if (rc < 0)
+		return rc;
+
+	if (chi & GLOBAL_MMIO_CHI_ELA)
+		val |= IOCTL_OCXL_PMEM_EVENT_ERROR_LOG_AVAILABLE;
+
+	if (chi & GLOBAL_MMIO_CHI_CDA)
+		val |= IOCTL_OCXL_PMEM_EVENT_CONTROLLER_DUMP_AVAILABLE;
+
+	if (chi & GLOBAL_MMIO_CHI_CFFS)
+		val |= IOCTL_OCXL_PMEM_EVENT_FIRMWARE_FATAL;
+
+	if (chi & GLOBAL_MMIO_CHI_CHFS)
+		val |= IOCTL_OCXL_PMEM_EVENT_HARDWARE_FATAL;
+
+	rc = copy_to_user((u64 __user *) uarg, &val, sizeof(val));
+
+	return rc;
+}
+
 static long file_ioctl(struct file *file, unsigned int cmd, unsigned long args)
 {
 	struct ocxlpmem *ocxlpmem = file->private_data;
@@ -965,6 +1027,15 @@ static long file_ioctl(struct file *file, unsigned int cmd, unsigned long args)
 	case IOCTL_OCXL_PMEM_CONTROLLER_STATS:
 		rc = ioctl_controller_stats(ocxlpmem,
 					    (struct ioctl_ocxl_pmem_controller_stats __user *)args);
+		break;
+
+	case IOCTL_OCXL_PMEM_EVENTFD:
+		rc = ioctl_eventfd(ocxlpmem,
+				   (struct ioctl_ocxl_pmem_eventfd __user *)args);
+		break;
+
+	case IOCTL_OCXL_PMEM_EVENT_CHECK:
+		rc = ioctl_event_check(ocxlpmem, (u64 __user *)args);
 		break;
 	}
 
@@ -1107,6 +1178,146 @@ out:
 	kfree(buf);
 }
 
+static irqreturn_t imn0_handler(void *private)
+{
+	struct ocxlpmem *ocxlpmem = private;
+	u64 chi = 0;
+
+	(void)ocxlpmem_chi(ocxlpmem, &chi);
+
+	if (chi & GLOBAL_MMIO_CHI_ELA) {
+		dev_warn(&ocxlpmem->dev, "Error log is available\n");
+
+		if (ocxlpmem->ev_ctx)
+			eventfd_signal(ocxlpmem->ev_ctx, 1);
+	}
+
+	if (chi & GLOBAL_MMIO_CHI_CDA) {
+		dev_warn(&ocxlpmem->dev, "Controller dump is available\n");
+
+		if (ocxlpmem->ev_ctx)
+			eventfd_signal(ocxlpmem->ev_ctx, 1);
+	}
+
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t imn1_handler(void *private)
+{
+	struct ocxlpmem *ocxlpmem = private;
+	u64 chi = 0;
+
+	(void)ocxlpmem_chi(ocxlpmem, &chi);
+
+	if (chi & (GLOBAL_MMIO_CHI_CFFS | GLOBAL_MMIO_CHI_CHFS)) {
+		dev_err(&ocxlpmem->dev,
+			"Controller status is fatal, chi=0x%llx, going offline\n", chi);
+
+		if (ocxlpmem->nvdimm_bus) {
+			nvdimm_bus_unregister(ocxlpmem->nvdimm_bus);
+			ocxlpmem->nvdimm_bus = NULL;
+		}
+
+		if (ocxlpmem->ev_ctx)
+			eventfd_signal(ocxlpmem->ev_ctx, 1);
+	}
+
+	return IRQ_HANDLED;
+}
+
+
+/**
+ * ocxlpmem_setup_irq() - Set up the IRQs for the OpenCAPI Persistent Memory device
+ * @ocxlpmem: the device metadata
+ * Return: 0 on success, negative on failure
+ */
+static int ocxlpmem_setup_irq(struct ocxlpmem *ocxlpmem)
+{
+	int rc;
+	u64 irq_addr;
+
+	rc = ocxl_afu_irq_alloc(ocxlpmem->ocxl_context, &ocxlpmem->irq_id[0]);
+	if (rc)
+		return rc;
+
+	rc = ocxl_irq_set_handler(ocxlpmem->ocxl_context, ocxlpmem->irq_id[0],
+				  imn0_handler, NULL, ocxlpmem);
+
+	irq_addr = ocxl_afu_irq_get_addr(ocxlpmem->ocxl_context, ocxlpmem->irq_id[0]);
+	if (!irq_addr)
+		return -EINVAL;
+
+	ocxlpmem->irq_addr[0] = ioremap(irq_addr, PAGE_SIZE);
+	if (!ocxlpmem->irq_addr[0])
+		return -EINVAL;
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_IMA0_OHP,
+				      OCXL_LITTLE_ENDIAN,
+				      (u64)ocxlpmem->irq_addr[0]);
+	if (rc)
+		goto out_irq0;
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_IMA0_CFP,
+				      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out_irq0;
+
+	rc = ocxl_afu_irq_alloc(ocxlpmem->ocxl_context, &ocxlpmem->irq_id[1]);
+	if (rc)
+		goto out_irq0;
+
+
+	rc = ocxl_irq_set_handler(ocxlpmem->ocxl_context, ocxlpmem->irq_id[1],
+				  imn1_handler, NULL, ocxlpmem);
+	if (rc)
+		goto out_irq0;
+
+	irq_addr = ocxl_afu_irq_get_addr(ocxlpmem->ocxl_context, ocxlpmem->irq_id[1]);
+	if (!irq_addr) {
+		rc = -EFAULT;
+		goto out_irq0;
+	}
+
+	ocxlpmem->irq_addr[1] = ioremap(irq_addr, PAGE_SIZE);
+	if (!ocxlpmem->irq_addr[1]) {
+		rc = -EINVAL;
+		goto out_irq0;
+	}
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_IMA1_OHP,
+				      OCXL_LITTLE_ENDIAN,
+				      (u64)ocxlpmem->irq_addr[1]);
+	if (rc)
+		goto out_irq1;
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_IMA1_CFP,
+				      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out_irq1;
+
+	// Enable doorbells
+	rc = ocxl_global_mmio_set64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_CHIE,
+				    OCXL_LITTLE_ENDIAN,
+				    GLOBAL_MMIO_CHI_ELA | GLOBAL_MMIO_CHI_CDA |
+				    GLOBAL_MMIO_CHI_CFFS | GLOBAL_MMIO_CHI_CHFS |
+				    GLOBAL_MMIO_CHI_NSCRA);
+	if (rc)
+		goto out_irq1;
+
+	return 0;
+
+out_irq1:
+	iounmap(ocxlpmem->irq_addr[1]);
+	ocxlpmem->irq_addr[1] = NULL;
+
+out_irq0:
+	iounmap(ocxlpmem->irq_addr[0]);
+	ocxlpmem->irq_addr[0] = NULL;
+
+	return rc;
+}
+
 /**
  * probe_function0() - Set up function 0 for an OpenCAPI persistent memory device
  * This is important as it enables templates higher than 0 across all other functions,
@@ -1213,6 +1424,11 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (read_device_metadata(ocxlpmem)) {
 		dev_err(&pdev->dev, "Could not read metadata\n");
+		goto err;
+	}
+
+	if (ocxlpmem_setup_irq(ocxlpmem)) {
+		dev_err(&pdev->dev, "Could not set up OCXL IRQs\n");
 		goto err;
 	}
 

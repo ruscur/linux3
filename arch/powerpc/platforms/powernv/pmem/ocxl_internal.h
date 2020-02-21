@@ -103,6 +103,10 @@ struct ocxlpmem {
 	struct pci_dev *pdev;
 	struct cdev cdev;
 	struct ocxl_fn *ocxl_fn;
+#define SCM_IRQ_COUNT 2
+	int irq_id[SCM_IRQ_COUNT];
+	struct dev_pagemap irq_pgmap[SCM_IRQ_COUNT];
+	void *irq_addr[SCM_IRQ_COUNT];
 	struct nd_interleave_set nd_set;
 	struct nvdimm_bus_descriptor bus_desc;
 	struct nvdimm_bus *nvdimm_bus;
@@ -113,6 +117,7 @@ struct ocxlpmem {
 	struct command_metadata ns_command;
 	struct resource pmem_res;
 	struct nd_region *nd_region;
+	struct eventfd_ctx *ev_ctx;
 	char fw_version[8+1];
 	u32 timeouts[ADMIN_COMMAND_MAX+1];
 
