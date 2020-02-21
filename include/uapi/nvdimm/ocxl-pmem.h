@@ -38,9 +38,24 @@ struct ioctl_ocxl_pmem_error_log {
 	__u8 *buf; /* pointer to output buffer */
 };
 
+struct ioctl_ocxl_pmem_controller_dump_data {
+	__u8 *buf; /* pointer to output buffer */
+	__u16 buf_size; /* in/out, buffer size provided/required.
+			 * If required is greater than provided, the buffer
+			 * will be truncated to the amount provided. If its
+			 * less, then only the required bytes will be populated.
+			 * If it is 0, then there is no more dump data available.
+			 */
+	__u32 offset; /* in, Offset within the dump */
+	__u64 reserved[8];
+};
+
 /* ioctl numbers */
 #define OCXL_PMEM_MAGIC 0x5C
 /* SCM devices */
 #define IOCTL_OCXL_PMEM_ERROR_LOG			_IOWR(OCXL_PMEM_MAGIC, 0x01, struct ioctl_ocxl_pmem_error_log)
+#define IOCTL_OCXL_PMEM_CONTROLLER_DUMP			_IO(OCXL_PMEM_MAGIC, 0x02)
+#define IOCTL_OCXL_PMEM_CONTROLLER_DUMP_DATA		_IOWR(OCXL_PMEM_MAGIC, 0x03, struct ioctl_ocxl_pmem_controller_dump_data)
+#define IOCTL_OCXL_PMEM_CONTROLLER_DUMP_COMPLETE	_IO(OCXL_PMEM_MAGIC, 0x04)
 
 #endif /* _UAPI_OCXL_SCM_H */
