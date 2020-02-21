@@ -246,3 +246,9 @@ int ns_response_handled(const struct ocxlpmem *ocxlpmem);
  */
 void warn_status(const struct ocxlpmem *ocxlpmem, const char *message,
 		 u8 status);
+
+/**
+ * ocxlpmem_sysfs_add() - Create sysfs entries for an OpenCAPI persistent memory device
+ * @ocxlpmem: the device metadata
+ */
+int ocxlpmem_sysfs_add(struct ocxlpmem *ocxlpmem);

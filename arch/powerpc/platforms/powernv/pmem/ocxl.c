@@ -1878,6 +1878,11 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err;
 	}
 
+	if (ocxlpmem_sysfs_add(ocxlpmem)) {
+		dev_err(&pdev->dev, "Could not create sysfs entries\n");
+		goto err;
+	}
+
 	elapsed = 0;
 	timeout = ocxlpmem->readiness_timeout + ocxlpmem->memory_available_timeout;
 	while (!is_usable(ocxlpmem, false)) {
