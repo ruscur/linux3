@@ -307,6 +307,44 @@ static bool is_usable(const struct ocxlpmem *ocxlpmem, bool verbose)
 }
 
 /**
+ * heartbeat() - Issue a heartbeat command to the controller
+ * @ocxlpmem: the device metadata
+ * Return: 0 if the controller responded correctly, negative on error
+ */
+static int heartbeat(struct ocxlpmem *ocxlpmem)
+{
+	int rc;
+
+	mutex_lock(&ocxlpmem->admin_command.lock);
+
+	rc = admin_command_request(ocxlpmem, ADMIN_COMMAND_HEARTBEAT);
+	if (rc)
+		goto out;
+
+	rc = admin_command_execute(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = admin_command_complete_timeout(ocxlpmem, ADMIN_COMMAND_HEARTBEAT);
+	if (rc < 0) {
+		dev_err(&ocxlpmem->dev, "Heartbeat timeout\n");
+		goto out;
+	}
+
+	rc = admin_response(ocxlpmem);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS)
+		warn_status(ocxlpmem, "Unexpected status from heartbeat", rc);
+
+	(void)admin_response_handled(ocxlpmem);
+
+out:
+	mutex_unlock(&ocxlpmem->admin_command.lock);
+	return rc;
+}
+
+/**
  * allocate_minor() - Allocate a minor number to use for an OpenCAPI pmem device
  * @ocxlpmem: the device metadata
  * Return: the allocated minor number
@@ -1455,6 +1493,11 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (create_cdev(ocxlpmem)) {
 		dev_err(&pdev->dev, "Could not create character device\n");
+		goto err;
+	}
+
+	if (heartbeat(ocxlpmem)) {
+		dev_err(&pdev->dev, "Heartbeat failed\n");
 		goto err;
 	}
 
