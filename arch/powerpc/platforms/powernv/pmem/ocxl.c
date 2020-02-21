@@ -81,6 +81,129 @@ static int ndctl_config_size(struct nd_cmd_get_config_size *command)
 	return 0;
 }
 
+/**
+ * smart_header_parse() - Parse the first 64 bits of the SMART admin command response
+ * @ocxlpmem: the device metadata
+ * @length: out, returns the number of bytes in the response (excluding the 64 bit header)
+ */
+static int smart_header_parse(struct ocxlpmem *ocxlpmem, u32 *length)
+{
+	int rc;
+	u64 val;
+
+	u16 data_identifier;
+	u32 data_length;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	data_identifier = val >> 48;
+	data_length = val & 0xFFFFFFFF;
+
+	if (data_identifier != 0x534D) { // 'SM'
+		dev_err(&ocxlpmem->dev,
+			"Bad data identifier for smart data, expected 'SM', got '%-.*s'\n",
+			2, (char *)&data_identifier);
+		return -EINVAL;
+	}
+
+	*length = data_length;
+	return 0;
+}
+
+static int ndctl_smart(struct ocxlpmem *ocxlpmem, struct nd_cmd_pkg *pkg)
+{
+	u32 length, i;
+	struct nd_ocxl_smart *out;
+	int rc;
+
+	mutex_lock(&ocxlpmem->admin_command.lock);
+
+	rc = admin_command_request(ocxlpmem, ADMIN_COMMAND_SMART);
+	if (rc)
+		goto out;
+
+	rc = admin_command_execute(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = admin_command_complete_timeout(ocxlpmem, ADMIN_COMMAND_SMART);
+	if (rc < 0) {
+		dev_err(&ocxlpmem->dev, "SMART timeout\n");
+		goto out;
+	}
+
+	rc = admin_response(ocxlpmem);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS) {
+		warn_status(ocxlpmem, "Unexpected status from SMART", rc);
+		goto out;
+	}
+
+	rc = smart_header_parse(ocxlpmem, &length);
+	if (rc)
+		goto out;
+
+	pkg->nd_fw_size = length;
+
+	length = min(length, pkg->nd_size_out); // bytes
+	out = (struct nd_ocxl_smart *)pkg->nd_payload;
+	// Each SMART attribute is 2 * 64 bits
+	out->count = length / (2 * sizeof(u64)); // attributes
+
+	for (i = 0; i < length; i += sizeof(u64)) {
+		rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+					     ocxlpmem->admin_command.data_offset + sizeof(u64) + i,
+					     OCXL_LITTLE_ENDIAN,
+					     &out->attribs[i/sizeof(u64)]);
+		if (rc)
+			goto out;
+	}
+
+	rc = admin_response_handled(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = 0;
+	goto out;
+
+out:
+	mutex_unlock(&ocxlpmem->admin_command.lock);
+	return rc;
+}
+
+static int ndctl_call(struct ocxlpmem *ocxlpmem, void *buf, unsigned int buf_len)
+{
+	struct nd_cmd_pkg *pkg = buf;
+
+	if (buf_len < sizeof(struct nd_cmd_pkg)) {
+		dev_err(&ocxlpmem->dev, "Invalid ND_CALL size=%u\n", buf_len);
+		return -EINVAL;
+	}
+
+	if (pkg->nd_family != NVDIMM_FAMILY_OCXL) {
+		dev_err(&ocxlpmem->dev, "Invalid ND_CALL family=0x%llx\n", pkg->nd_family);
+		return -EINVAL;
+	}
+
+	switch (pkg->nd_command) {
+	case ND_CMD_OCXL_SMART:
+		ndctl_smart(ocxlpmem, pkg);
+		break;
+
+	default:
+		dev_err(&ocxlpmem->dev, "Invalid ND_CALL command=0x%llx\n", pkg->nd_command);
+		return -EINVAL;
+	}
+
+
+	return 0;
+}
+
 static int ndctl(struct nvdimm_bus_descriptor *nd_desc,
 		 struct nvdimm *nvdimm,
 		 unsigned int cmd, void *buf, unsigned int buf_len, int *cmd_rc)
@@ -88,6 +211,10 @@ static int ndctl(struct nvdimm_bus_descriptor *nd_desc,
 	struct ocxlpmem *ocxlpmem = container_of(nd_desc, struct ocxlpmem, bus_desc);
 
 	switch (cmd) {
+	case ND_CMD_CALL:
+		*cmd_rc = ndctl_call(ocxlpmem, buf, buf_len);
+		return 0;
+
 	case ND_CMD_GET_CONFIG_SIZE:
 		*cmd_rc = ndctl_config_size(buf);
 		return 0;
@@ -171,6 +298,7 @@ static int register_lpc_mem(struct ocxlpmem *ocxlpmem)
 	set_bit(ND_CMD_GET_CONFIG_SIZE, &nvdimm_cmd_mask);
 	set_bit(ND_CMD_GET_CONFIG_DATA, &nvdimm_cmd_mask);
 	set_bit(ND_CMD_SET_CONFIG_DATA, &nvdimm_cmd_mask);
+	set_bit(ND_CMD_CALL, &nvdimm_cmd_mask);
 
 	set_bit(NDD_ALIASING, &nvdimm_flags);
 

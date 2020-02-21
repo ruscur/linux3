@@ -7,6 +7,7 @@
 #include <linux/libnvdimm.h>
 #include <uapi/nvdimm/ocxl-pmem.h>
 #include <linux/mm.h>
+#include <linux/ndctl.h>
 
 #define LABEL_AREA_SIZE	(1UL << PA_SECTION_SHIFT)
 #define DEFAULT_TIMEOUT 100
@@ -96,6 +97,23 @@ struct command_metadata {
 struct ocxlpmem_function0 {
 	struct pci_dev *pdev;
 	struct ocxl_fn *ocxl_fn;
+};
+
+struct nd_ocxl_smart {
+	__u8 count;
+	__u8 reserved[7];
+	__u64 attribs[0];
+} __packed;
+
+struct nd_pkg_ocxl {
+	struct nd_cmd_pkg gen;
+	union {
+		struct nd_ocxl_smart smart;
+	};
+};
+
+enum nd_cmd_ocxl {
+	ND_CMD_OCXL_SMART = 1,
 };
 
 struct ocxlpmem {
