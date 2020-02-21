@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+if LIBNVDIMM
+
+config OCXL_PMEM
+	tristate "OpenCAPI Persistent Memory"
+	depends on LIBNVDIMM && PPC_POWERNV && PCI && EEH && ZONE_DEVICE && OCXL
+	help
+	  Exposes devices that implement the OpenCAPI Storage Class Memory
+	  specification as persistent memory regions. You may also want
+	  DEV_DAX, DEV_DAX_PMEM & FS_DAX if you plan on using DAX devices
+	  stacked on top of this driver.
+
+	  Select N if unsure.
+
+endif
