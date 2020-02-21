@@ -259,9 +259,15 @@ static int setup_command_metadata(struct ocxlpmem *ocxlpmem)
 	int rc;
 
 	mutex_init(&ocxlpmem->admin_command.lock);
+	mutex_init(&ocxlpmem->ns_command.lock);
 
 	rc = extract_command_metadata(ocxlpmem, GLOBAL_MMIO_ACMA_CREQO,
 				      &ocxlpmem->admin_command);
+	if (rc)
+		return rc;
+
+	rc = extract_command_metadata(ocxlpmem, GLOBAL_MMIO_NSCMA_CREQO,
+					  &ocxlpmem->ns_command);
 	if (rc)
 		return rc;
 

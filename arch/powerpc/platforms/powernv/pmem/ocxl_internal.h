@@ -107,6 +107,7 @@ struct ocxlpmem {
 	struct ocxl_context *ocxl_context;
 	void *metadata_addr;
 	struct command_metadata admin_command;
+	struct command_metadata ns_command;
 	struct resource pmem_res;
 	struct nd_region *nd_region;
 	char fw_version[8+1];
@@ -174,6 +175,42 @@ int admin_command_complete_timeout(const struct ocxlpmem *ocxlpmem,
  * Returns 0 on success, negative on failure
  */
 int admin_response_handled(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * ns_command_request() - Issue a near storage command request
+ * @ocxlpmem: the device metadata
+ * @op_code: The op-code for the command
+ * Returns an identifier for the command, or negative on error
+ */
+int ns_command_request(struct ocxlpmem *ocxlpmem, u8 op_code);
+
+/**
+ * ns_response() - Validate a near storage response
+ * @ocxlpmem: the device metadata
+ * Returns the status code of the command, or negative on error
+ */
+int ns_response(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * ns_command_execute() - Notify the controller to start processing a pending near storage command
+ * @ocxlpmem: the device metadata
+ * Returns 0 on success, negative on error
+ */
+int ns_command_execute(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * ns_command_complete() - Is a near storage command executing
+ * @ocxlpmem: the device metadata
+ * Returns true if the previous admin command has completed
+ */
+bool ns_command_complete(const struct ocxlpmem *ocxlpmem);
+
+/**
+ * ns_response_handled() - Notify the controller that the near storage response has been handled
+ * @ocxlpmem: the device metadata
+ * Returns 0 on success, negative on failure
+ */
+int ns_response_handled(const struct ocxlpmem *ocxlpmem);
 
 /**
  * warn_status() - Emit a kernel warning showing a command status.
