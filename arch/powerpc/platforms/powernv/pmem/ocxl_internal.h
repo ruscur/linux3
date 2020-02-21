@@ -5,6 +5,7 @@
 #include <linux/cdev.h>
 #include <misc/ocxl.h>
 #include <linux/libnvdimm.h>
+#include <uapi/nvdimm/ocxl-pmem.h>
 #include <linux/mm.h>
 
 #define LABEL_AREA_SIZE	(1UL << PA_SECTION_SHIFT)
