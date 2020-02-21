@@ -778,7 +778,12 @@ static void generic_metric(struct perf_stat_config *config,
 
 	if (!metric_events[i]) {
 		const char *p = metric_expr;
+		if (strstr(p, "?")) {
+			char *tmp = strrchr(metric_name, '_');
 
+			tmp++;
+			expr__runtimeparam = strtol(tmp, &tmp, 10);
+		}
 		if (expr__parse(&ratio, &pctx, &p) == 0) {
 			char *unit;
 			char metric_bf[64];

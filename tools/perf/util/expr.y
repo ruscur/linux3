@@ -37,6 +37,8 @@
 %type <num> expr if_expr
 
 %{
+int expr__runtimeparam;
+
 static int expr__lex(YYSTYPE *res, const char **pp);
 
 static void expr__error(double *final_val __maybe_unused,
@@ -102,7 +104,7 @@ static int expr__symbol(YYSTYPE *res, const char *p, const char **pp)
 	if (*p == '#')
 		*dst++ = *p++;
 
-	while (isalnum(*p) || *p == '_' || *p == '.' || *p == ':' || *p == '@' || *p == '\\') {
+	while (isalnum(*p) || *p == '_' || *p == '.' || *p == ':' || *p == '@' || *p == '\\' || *p == '?') {
 		if (p - s >= MAXIDLEN)
 			return -1;
 		/*
@@ -113,6 +115,19 @@ static int expr__symbol(YYSTYPE *res, const char *p, const char **pp)
 			*dst++ = '/';
 		else if (*p == '\\')
 			*dst++ = *++p;
+		else if (*p == '?') {
+			int size = snprintf(NULL, 0, "%d", expr__runtimeparam);
+			char * paramval = (char *)malloc(size);
+			int i = 0;
+			if(!paramval)
+				*dst++ = '0';
+			else {
+				sprintf(paramval, "%d", expr__runtimeparam);
+				while(i < size)
+					*dst++ = paramval[i++];
+				free(paramval);
+			}
+		}
 		else
 			*dst++ = *p;
 		p++;
