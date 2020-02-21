@@ -8,6 +8,7 @@
 
 #include <linux/module.h>
 #include <misc/ocxl.h>
+#include <linux/delay.h>
 #include <linux/ndctl.h>
 #include <linux/mm_types.h>
 #include <linux/memory_hotplug.h>
@@ -216,6 +217,36 @@ static int register_lpc_mem(struct ocxlpmem *ocxlpmem)
 }
 
 /**
+ * is_usable() - Is a controller usable?
+ * @ocxlpmem: the device metadata
+ * @verbose: True to log errors
+ * Return: true if the controller is usable
+ */
+static bool is_usable(const struct ocxlpmem *ocxlpmem, bool verbose)
+{
+	u64 chi = 0;
+	int rc = ocxlpmem_chi(ocxlpmem, &chi);
+
+	if (rc < 0)
+		return false;
+
+	if (!(chi & GLOBAL_MMIO_CHI_CRDY)) {
+		if (verbose)
+			dev_err(&ocxlpmem->dev, "controller is not ready.\n");
+		return false;
+	}
+
+	if (!(chi & GLOBAL_MMIO_CHI_MA)) {
+		if (verbose)
+			dev_err(&ocxlpmem->dev,
+				"controller does not have memory available.\n");
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * allocate_minor() - Allocate a minor number to use for an OpenCAPI pmem device
  * @ocxlpmem: the device metadata
  * Return: the allocated minor number
@@ -329,6 +360,48 @@ static void ocxlpmem_remove(struct pci_dev *pdev)
 }
 
 /**
+ * read_device_metadata() - Retrieve config information from the AFU and save it for future use
+ * @ocxlpmem: the device metadata
+ * Return: 0 on success, negative on failure
+ */
+static int read_device_metadata(struct ocxlpmem *ocxlpmem)
+{
+	u64 val;
+	int rc;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_CCAP0,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	ocxlpmem->scm_revision = val & 0xFFFF;
+	ocxlpmem->read_latency = (val >> 32) & 0xFF;
+	ocxlpmem->readiness_timeout = (val >> 48) & 0x0F;
+	ocxlpmem->memory_available_timeout = val >> 52;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_CCAP1,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	ocxlpmem->max_controller_dump_size = val & 0xFFFFFFFF;
+
+	// Extract firmware version text
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_FWVER,
+				     OCXL_HOST_ENDIAN, (u64 *)ocxlpmem->fw_version);
+	if (rc)
+		return rc;
+
+	ocxlpmem->fw_version[8] = '\0';
+
+	dev_info(&ocxlpmem->dev,
+		 "Firmware version '%s' SCM revision %d:%d\n", ocxlpmem->fw_version,
+		 ocxlpmem->scm_revision >> 4, ocxlpmem->scm_revision & 0x0F);
+
+	return 0;
+}
+
+/**
  * probe_function0() - Set up function 0 for an OpenCAPI persistent memory device
  * This is important as it enables templates higher than 0 across all other functions,
  * which in turn enables higher bandwidth accesses
@@ -368,6 +441,7 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct ocxlpmem *ocxlpmem;
 	int rc;
+	u16 elapsed, timeout;
 
 	if (PCI_FUNC(pdev->devfn) == 0)
 		return probe_function0(pdev);
@@ -420,6 +494,24 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (rc) {
 		dev_err(&pdev->dev, "Could not attach ocxl context\n");
 		goto err;
+	}
+
+	if (read_device_metadata(ocxlpmem)) {
+		dev_err(&pdev->dev, "Could not read metadata\n");
+		goto err;
+	}
+
+	elapsed = 0;
+	timeout = ocxlpmem->readiness_timeout + ocxlpmem->memory_available_timeout;
+	while (!is_usable(ocxlpmem, false)) {
+		if (elapsed++ > timeout) {
+			dev_warn(&ocxlpmem->dev, "OpenCAPI Persistent Memory ready timeout.\n");
+			(void)is_usable(ocxlpmem, true);
+			rc = -ENXIO;
+			goto err;
+		}
+
+		msleep(1000);
 	}
 
 	rc = register_lpc_mem(ocxlpmem);

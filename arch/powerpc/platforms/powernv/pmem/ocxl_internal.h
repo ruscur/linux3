@@ -97,4 +97,28 @@ struct ocxlpmem {
 	void *metadata_addr;
 	struct resource pmem_res;
 	struct nd_region *nd_region;
+	char fw_version[8+1];
+
+	u32 max_controller_dump_size;
+	u16 scm_revision; // major/minor
+	u8 readiness_timeout;  /* The worst case time (in seconds) that the host shall
+				* wait for the controller to become operational following a reset (CHI.CRDY).
+				*/
+	u8 memory_available_timeout;   /* The worst case time (in seconds) that the host shall
+					* wait for memory to become available following a reset (CHI.MA).
+					*/
+
+	u16 read_latency; /* The nominal measure of latency (in nanoseconds)
+			   * associated with an unassisted read of a memory block.
+			   * This represents the capability of the raw media technology without assistance
+			   */
 };
+
+/**
+ * ocxlpmem_chi() - Get the value of the CHI register
+ * @ocxlpmem: the device metadata
+ * @chi: returns the CHI value
+ *
+ * Returns 0 on success, negative on error
+ */
+int ocxlpmem_chi(const struct ocxlpmem *ocxlpmem, u64 *chi);
