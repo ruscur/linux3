@@ -1050,6 +1050,235 @@ int req_controller_health_perf(struct ocxlpmem *ocxlpmem)
 				      GLOBAL_MMIO_HCI_REQ_HEALTH_PERF);
 }
 
+#ifdef CONFIG_OCXL_PMEM_DEBUG
+/**
+ * enable_fwdebug() - Enable FW debug on the controller
+ * @ocxlpmem: the device metadata
+ * Return: 0 on success, negative on failure
+ */
+static int enable_fwdebug(const struct ocxlpmem *ocxlpmem)
+{
+	return ocxl_global_mmio_set64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_HCI,
+				      OCXL_LITTLE_ENDIAN,
+				      GLOBAL_MMIO_HCI_FW_DEBUG);
+}
+
+/**
+ * disable_fwdebug() - Disable FW debug on the controller
+ * @ocxlpmem: the device metadata
+ * Return: 0 on success, negative on failure
+ */
+static int disable_fwdebug(const struct ocxlpmem *ocxlpmem)
+{
+	return ocxl_global_mmio_set64(ocxlpmem->ocxl_afu, GLOBAL_MMIO_HCIC,
+				      OCXL_LITTLE_ENDIAN,
+				      GLOBAL_MMIO_HCI_FW_DEBUG);
+}
+
+static int ioctl_fwdebug(struct ocxlpmem *ocxlpmem,
+			     struct ioctl_ocxl_pmem_fwdebug __user *uarg)
+{
+	struct ioctl_ocxl_pmem_fwdebug args;
+	u64 val;
+	int i;
+	int rc;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	// Buffer size must be a multiple of 8
+	if ((args.buf_size & 0x07))
+		return -EINVAL;
+
+	if (args.buf_size > ocxlpmem->admin_command.data_size)
+		return -EINVAL;
+
+	mutex_lock(&ocxlpmem->admin_command.lock);
+
+	rc = enable_fwdebug(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = admin_command_request(ocxlpmem, ADMIN_COMMAND_FW_DEBUG);
+	if (rc)
+		goto out;
+
+	// Write DebugAction & FunctionCode
+	val = ((u64)args.debug_action << 56) | ((u64)args.function_code << 40);
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu,
+				      ocxlpmem->admin_command.request_offset + 0x08,
+				      OCXL_LITTLE_ENDIAN, val);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu,
+				      ocxlpmem->admin_command.request_offset + 0x10,
+				      OCXL_LITTLE_ENDIAN, args.debug_parameter_1);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu,
+				      ocxlpmem->admin_command.request_offset + 0x18,
+				      OCXL_LITTLE_ENDIAN, args.debug_parameter_2);
+	if (rc)
+		goto out;
+
+	for (i = 0x20; i < 0x38; i += 0x08)
+		rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu,
+					      ocxlpmem->admin_command.request_offset + i,
+					      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out;
+
+
+	// Populate admin command buffer
+	if (args.buf_size) {
+		for (i = 0; i < args.buf_size; i += sizeof(u64)) {
+			u64 val;
+
+			if (copy_from_user(&val, &args.buf[i], sizeof(u64)))
+				return -EFAULT;
+
+			rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu,
+						      ocxlpmem->admin_command.data_offset + i,
+						      OCXL_HOST_ENDIAN, val);
+			if (rc)
+				goto out;
+		}
+	}
+
+	rc = admin_command_execute(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = admin_command_complete_timeout(ocxlpmem,
+					    ocxlpmem->timeouts[ADMIN_COMMAND_FW_DEBUG]);
+	if (rc < 0)
+		goto out;
+
+	rc = admin_response(ocxlpmem);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS) {
+		warn_status(ocxlpmem, "Unexpected status from FW Debug", rc);
+		goto out;
+	}
+
+	if (args.buf_size) {
+		for (i = 0; i < args.buf_size; i += sizeof(u64)) {
+			u64 val;
+
+			rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+						     ocxlpmem->admin_command.data_offset + i,
+						     OCXL_HOST_ENDIAN, &val);
+			if (rc)
+				goto out;
+
+			if (copy_to_user(&args.buf[i], &val, sizeof(u64))) {
+				rc = -EFAULT;
+				goto out;
+			}
+		}
+	}
+
+	rc = admin_response_handled(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = disable_fwdebug(ocxlpmem);
+	if (rc)
+		goto out;
+
+out:
+	mutex_unlock(&ocxlpmem->admin_command.lock);
+	return rc;
+}
+
+static int ioctl_shutdown(struct ocxlpmem *ocxlpmem)
+{
+	int rc;
+
+	mutex_lock(&ocxlpmem->admin_command.lock);
+
+	rc = admin_command_request(ocxlpmem, ADMIN_COMMAND_SHUTDOWN);
+	if (rc)
+		goto out;
+
+	rc = admin_command_execute(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = admin_command_complete_timeout(ocxlpmem, ADMIN_COMMAND_SHUTDOWN);
+	if (rc < 0) {
+		dev_warn(&ocxlpmem->dev, "Shutdown timed out\n");
+		goto out;
+	}
+
+	rc = 0;
+	goto out;
+
+out:
+	mutex_unlock(&ocxlpmem->admin_command.lock);
+	return rc;
+}
+
+static int ioctl_mmio_write(struct ocxlpmem *ocxlpmem,
+				struct ioctl_ocxl_pmem_mmio __user *uarg)
+{
+	struct scm_ioctl_mmio args;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	return ocxl_global_mmio_write64(ocxlpmem->ocxl_afu, args.address,
+					OCXL_LITTLE_ENDIAN, args.val);
+}
+
+static int ioctl_mmio_read(struct ocxlpmem *ocxlpmem,
+				     struct ioctl_ocxl_pmem_mmio __user *uarg)
+{
+	struct ioctl_ocxl_pmem_mmio args;
+	int rc;
+
+	if (copy_from_user(&args, uarg, sizeof(args)))
+		return -EFAULT;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu, args.address,
+				     OCXL_LITTLE_ENDIAN, &args.val);
+	if (rc)
+		return rc;
+
+	if (copy_to_user(uarg, &args, sizeof(args)))
+		return -EFAULT;
+
+	return 0;
+}
+#else /* CONFIG_OCXL_PMEM_DEBUG */
+static int ioctl_fwdebug(struct ocxlpmem *ocxlpmem,
+			     struct ioctl_ocxl_pmem_fwdebug __user *uarg)
+{
+	return -EPERM;
+}
+
+static int ioctl_shutdown(struct ocxlpmem *ocxlpmem)
+{
+	return -EPERM;
+}
+
+static int ioctl_mmio_write(struct ocxlpmem *ocxlpmem,
+				struct ioctl_ocxl_pmem_mmio __user *uarg)
+{
+	return -EPERM;
+}
+
+static int ioctl_mmio_read(struct ocxlpmem *ocxlpmem,
+			       struct ioctl_ocxl_pmem_mmio __user *uarg)
+{
+	return -EPERM;
+}
+#endif /* CONFIG_OCXL_PMEM_DEBUG */
+
 static long file_ioctl(struct file *file, unsigned int cmd, unsigned long args)
 {
 	struct ocxlpmem *ocxlpmem = file->private_data;
@@ -1091,6 +1320,26 @@ static long file_ioctl(struct file *file, unsigned int cmd, unsigned long args)
 	case IOCTL_OCXL_PMEM_REQUEST_HEALTH:
 		rc = req_controller_health_perf(ocxlpmem);
 		break;
+
+	case IOCTL_OCXL_PMEM_FWDEBUG:
+		rc = ioctl_fwdebug(ocxlpmem,
+				   (struct ioctl_ocxl_pmem_fwdebug __user *)args);
+		break;
+
+	case IOCTL_OCXL_PMEM_SHUTDOWN:
+		rc = ioctl_shutdown(ocxlpmem);
+		break;
+
+	case IOCTL_OCXL_PMEM_MMIO_WRITE:
+		rc = ioctl_mmio_write(ocxlpmem,
+				      (struct ioctl_ocxl_pmem_mmio __user *)args);
+		break;
+
+	case IOCTL_OCXL_PMEM_MMIO_READ:
+		rc = ioctl_mmio_read(ocxlpmem,
+				     (struct ioctl_ocxl_pmem_mmio __user *)args);
+		break;
+
 	}
 
 	return rc;

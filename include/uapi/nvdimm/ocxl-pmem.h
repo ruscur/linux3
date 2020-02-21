@@ -6,6 +6,28 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
+enum ocxlpmem_fwdebug_action {
+	OCXL_PMEM_FWDEBUG_READ_CONTROLLER_MEMORY = 0x01,
+	OCXL_PMEM_FWDEBUG_WRITE_CONTROLLER_MEMORY = 0x02,
+	OCXL_PMEM_FWDEBUG_ENABLE_FUNCTION = 0x03,
+	OCXL_PMEM_FWDEBUG_DISABLE_FUNCTION = 0x04,
+	OCXL_PMEM_FWDEBUG_GET_PEL = 0x05, // Retrieve Persistent Error Log
+};
+
+struct ioctl_ocxl_pmem_buffer_info {
+	__u32	admin_command_buffer_size; // out
+	__u32	near_storage_buffer_size; // out
+};
+
+struct ioctl_ocxl_pmem_fwdebug { // All args are inputs
+	enum ocxlpmem_fwdebug_action debug_action;
+	__u16 function_code;
+	__u16 buf_size; // Size of optional data buffer
+	__u64 debug_parameter_1;
+	__u64 debug_parameter_2;
+	__u8 *buf; // Pointer to optional in/out data buffer
+};
+
 #define OCXL_PMEM_ERROR_LOG_ACTION_RESET	(1 << (32-32))
 #define OCXL_PMEM_ERROR_LOG_ACTION_CHKFW	(1 << (53-32))
 #define OCXL_PMEM_ERROR_LOG_ACTION_REPLACE	(1 << (54-32))
@@ -66,6 +88,11 @@ struct ioctl_ocxl_pmem_controller_stats {
 	__u64 cache_write_latency; /* nanoseconds */
 };
 
+struct ioctl_ocxl_pmem_mmio {
+	__u64 address; /* Offset in global MMIO space */
+	__u64 val; /* value to write/was read */
+};
+
 struct ioctl_ocxl_pmem_eventfd {
 	__s32 eventfd;
 	__u32 reserved;
@@ -91,5 +118,10 @@ struct ioctl_ocxl_pmem_eventfd {
 #define IOCTL_OCXL_PMEM_EVENTFD				_IOW(OCXL_PMEM_MAGIC, 0x06, struct ioctl_ocxl_pmem_eventfd)
 #define IOCTL_OCXL_PMEM_EVENT_CHECK			_IOR(OCXL_PMEM_MAGIC, 0x07, __u64)
 #define IOCTL_OCXL_PMEM_REQUEST_HEALTH			_IO(OCXL_PMEM_MAGIC, 0x08)
+
+#define IOCTL_OCXL_PMEM_FWDEBUG		_IOWR(OCXL_PMEM_MAGIC, 0xf0, struct ioctl_ocxl_pmem_fwdebug)
+#define IOCTL_OCXL_PMEM_MMIO_WRITE	_IOW(OCXL_PMEM_MAGIC, 0xf1, struct ioctl_ocxl_pmem_mmio)
+#define IOCTL_OCXL_PMEM_MMIO_READ	_IOWR(OCXL_PMEM_MAGIC, 0xf2, struct ioctl_ocxl_pmem_mmio)
+#define IOCTL_OCXL_PMEM_SHUTDOWN	_IO(OCXL_PMEM_MAGIC, 0xf3)
 
 #endif /* _UAPI_OCXL_SCM_H */

@@ -12,4 +12,10 @@ config OCXL_PMEM
 
 	  Select N if unsure.
 
+config OCXL_PMEM_DEBUG
+	bool "OpenCAPI Persistent Memory debugging"
+	depends on OCXL_PMEM
+	help
+	  Enables low level IOCTLs for OpenCAPI Persistent Memory firmware development
+
 endif
