@@ -758,6 +758,186 @@ static int ioctl_controller_dump_complete(struct ocxlpmem *ocxlpmem)
 				    GLOBAL_MMIO_HCI_CONTROLLER_DUMP_COLLECTED);
 }
 
+/**
+ * controller_stats_header_parse() - Parse the first 64 bits of the controller stats admin command response
+ * @ocxlpmem: the device metadata
+ * @length: out, returns the number of bytes in the response (excluding the 64 bit header)
+ */
+static int controller_stats_header_parse(struct ocxlpmem *ocxlpmem,
+	u32 *length)
+{
+	int rc;
+	u64 val;
+
+	u16 data_identifier;
+	u32 data_length;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		return rc;
+
+	data_identifier = val >> 48;
+	data_length = val & 0xFFFFFFFF;
+
+	if (data_identifier != 0x4353) { // 'CS'
+		dev_err(&ocxlpmem->dev,
+			"Bad data identifier for controller stats, expected 'CS', got '%-.*s'\n",
+			2, (char *)&data_identifier);
+		return -EINVAL;
+	}
+
+	*length = data_length;
+	return 0;
+}
+
+static int ioctl_controller_stats(struct ocxlpmem *ocxlpmem,
+				  struct ioctl_ocxl_pmem_controller_stats __user *uarg)
+{
+	struct ioctl_ocxl_pmem_controller_stats args;
+	u32 length;
+	int rc;
+	u64 val;
+
+	memset(&args, '\0', sizeof(args));
+
+	mutex_lock(&ocxlpmem->admin_command.lock);
+
+	rc = admin_command_request(ocxlpmem, ADMIN_COMMAND_CONTROLLER_STATS);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_write64(ocxlpmem->ocxl_afu,
+				      ocxlpmem->admin_command.request_offset + 0x08,
+				      OCXL_LITTLE_ENDIAN, 0);
+	if (rc)
+		goto out;
+
+	rc = admin_command_execute(ocxlpmem);
+	if (rc)
+		goto out;
+
+
+	rc = admin_command_complete_timeout(ocxlpmem,
+					    ADMIN_COMMAND_CONTROLLER_STATS);
+	if (rc < 0) {
+		dev_warn(&ocxlpmem->dev, "Controller stats timed out\n");
+		goto out;
+	}
+
+	rc = admin_response(ocxlpmem);
+	if (rc < 0)
+		goto out;
+	if (rc != STATUS_SUCCESS) {
+		warn_status(ocxlpmem,
+			    "Unexpected status from controller stats", rc);
+		goto out;
+	}
+
+	rc = controller_stats_header_parse(ocxlpmem, &length);
+	if (rc)
+		goto out;
+
+	if (length != 0x140)
+		warn_status(ocxlpmem,
+			    "Unexpected length for controller stats data, expected 0x140, got 0x%x",
+			    length);
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x08,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		goto out;
+
+	args.reset_count = val >> 32;
+	args.reset_uptime = val & 0xFFFFFFFF;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x10,
+				     OCXL_LITTLE_ENDIAN, &val);
+	if (rc)
+		goto out;
+
+	args.power_on_uptime = val >> 32;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x08,
+				     OCXL_LITTLE_ENDIAN, &args.host_load_count);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x10,
+				     OCXL_LITTLE_ENDIAN, &args.host_store_count);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x18,
+				     OCXL_LITTLE_ENDIAN, &args.media_read_count);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x20,
+				     OCXL_LITTLE_ENDIAN, &args.media_write_count);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x28,
+				     OCXL_LITTLE_ENDIAN, &args.cache_hit_count);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x30,
+				     OCXL_LITTLE_ENDIAN, &args.cache_miss_count);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x38,
+				     OCXL_LITTLE_ENDIAN, &args.media_read_latency);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x40,
+				     OCXL_LITTLE_ENDIAN, &args.media_write_latency);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x48,
+				     OCXL_LITTLE_ENDIAN, &args.cache_read_latency);
+	if (rc)
+		goto out;
+
+	rc = ocxl_global_mmio_read64(ocxlpmem->ocxl_afu,
+				     ocxlpmem->admin_command.data_offset + 0x08 + 0x40 + 0x50,
+				     OCXL_LITTLE_ENDIAN, &args.cache_write_latency);
+	if (rc)
+		goto out;
+
+	if (copy_to_user(uarg, &args, sizeof(args))) {
+		rc = -EFAULT;
+		goto out;
+	}
+
+	rc = admin_response_handled(ocxlpmem);
+	if (rc)
+		goto out;
+
+	rc = 0;
+	goto out;
+
+out:
+	mutex_unlock(&ocxlpmem->admin_command.lock);
+	return rc;
+}
+
 static long file_ioctl(struct file *file, unsigned int cmd, unsigned long args)
 {
 	struct ocxlpmem *ocxlpmem = file->private_data;
@@ -780,6 +960,11 @@ static long file_ioctl(struct file *file, unsigned int cmd, unsigned long args)
 
 	case IOCTL_OCXL_PMEM_CONTROLLER_DUMP_COMPLETE:
 		rc = ioctl_controller_dump_complete(ocxlpmem);
+		break;
+
+	case IOCTL_OCXL_PMEM_CONTROLLER_STATS:
+		rc = ioctl_controller_stats(ocxlpmem,
+					    (struct ioctl_ocxl_pmem_controller_stats __user *)args);
 		break;
 	}
 
