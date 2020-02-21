@@ -16,8 +16,17 @@ static ssize_t serial_show(struct device *device, struct device_attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", fn_config->serial);
 }
 
+static ssize_t fw_version_show(struct device *device,
+			       struct device_attribute *attr, char *buf)
+{
+	struct ocxlpmem *ocxlpmem = container_of(device, struct ocxlpmem, dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%s\n", ocxlpmem->fw_version);
+}
+
 static struct device_attribute attrs[] = {
 	__ATTR_RO(serial),
+	__ATTR_RO(fw_version),
 };
 
 int ocxlpmem_sysfs_add(struct ocxlpmem *ocxlpmem)
