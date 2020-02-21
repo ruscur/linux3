@@ -10,6 +10,7 @@
 #include <misc/ocxl.h>
 #include <linux/delay.h>
 #include <linux/ndctl.h>
+#include <linux/fs.h>
 #include <linux/mm_types.h>
 #include <linux/memory_hotplug.h>
 #include "ocxl_internal.h"
@@ -339,6 +340,9 @@ static void free_ocxlpmem(struct ocxlpmem *ocxlpmem)
 
 	free_minor(ocxlpmem);
 
+	if (ocxlpmem->cdev.owner)
+		cdev_del(&ocxlpmem->cdev);
+
 	if (ocxlpmem->metadata_addr)
 		devm_memunmap(&ocxlpmem->dev, ocxlpmem->metadata_addr);
 
@@ -394,6 +398,70 @@ static int ocxlpmem_register(struct ocxlpmem *ocxlpmem)
 	ocxlpmem->dev.parent = &ocxlpmem->pdev->dev;
 
 	return device_register(&ocxlpmem->dev);
+}
+
+static void ocxlpmem_put(struct ocxlpmem *ocxlpmem)
+{
+	put_device(&ocxlpmem->dev);
+}
+
+static struct ocxlpmem *ocxlpmem_get(struct ocxlpmem *ocxlpmem)
+{
+	return (get_device(&ocxlpmem->dev) == NULL) ? NULL : ocxlpmem;
+}
+
+static struct ocxlpmem *find_and_get_ocxlpmem(dev_t devno)
+{
+	struct ocxlpmem *ocxlpmem;
+	int minor = MINOR(devno);
+	/*
+	 * We don't declare an RCU critical section here, as our AFU
+	 * is protected by a reference counter on the device. By the time the
+	 * minor number of a device is removed from the idr, the ref count of
+	 * the device is already at 0, so no user API will access that AFU and
+	 * this function can't return it.
+	 */
+	ocxlpmem = idr_find(&minors_idr, minor);
+	if (ocxlpmem)
+		ocxlpmem_get(ocxlpmem);
+	return ocxlpmem;
+}
+
+static int file_open(struct inode *inode, struct file *file)
+{
+	struct ocxlpmem *ocxlpmem;
+
+	ocxlpmem = find_and_get_ocxlpmem(inode->i_rdev);
+	if (!ocxlpmem)
+		return -ENODEV;
+
+	file->private_data = ocxlpmem;
+	return 0;
+}
+
+static int file_release(struct inode *inode, struct file *file)
+{
+	struct ocxlpmem *ocxlpmem = file->private_data;
+
+	ocxlpmem_put(ocxlpmem);
+	return 0;
+}
+
+static const struct file_operations fops = {
+	.owner		= THIS_MODULE,
+	.open		= file_open,
+	.release	= file_release,
+};
+
+/**
+ * create_cdev() - Create the chardev in /dev for the device
+ * @ocxlpmem: the SCM metadata
+ * Return: 0 on success, negative on failure
+ */
+static int create_cdev(struct ocxlpmem *ocxlpmem)
+{
+	cdev_init(&ocxlpmem->cdev, &fops);
+	return cdev_add(&ocxlpmem->cdev, ocxlpmem->dev.devt, 1);
 }
 
 /**
@@ -572,6 +640,11 @@ static int probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err;
 	}
 
+	if (create_cdev(ocxlpmem)) {
+		dev_err(&pdev->dev, "Could not create character device\n");
+		goto err;
+	}
+
 	elapsed = 0;
 	timeout = ocxlpmem->readiness_timeout + ocxlpmem->memory_available_timeout;
 	while (!is_usable(ocxlpmem, false)) {
@@ -613,13 +686,51 @@ static struct pci_driver pci_driver = {
 	.shutdown = ocxlpmem_remove,
 };
 
+static int file_init(void)
+{
+	int rc;
+
+	mutex_init(&minors_idr_lock);
+	idr_init(&minors_idr);
+
+	rc = alloc_chrdev_region(&ocxlpmem_dev, 0, NUM_MINORS, "ocxl-pmem");
+	if (rc) {
+		idr_destroy(&minors_idr);
+		pr_err("Unable to allocate OpenCAPI persistent memory major number: %d\n", rc);
+		return rc;
+	}
+
+	ocxlpmem_class = class_create(THIS_MODULE, "ocxl-pmem");
+	if (IS_ERR(ocxlpmem_class)) {
+		idr_destroy(&minors_idr);
+		pr_err("Unable to create ocxl-pmem class\n");
+		unregister_chrdev_region(ocxlpmem_dev, NUM_MINORS);
+		return PTR_ERR(ocxlpmem_class);
+	}
+
+	return 0;
+}
+
+static void file_exit(void)
+{
+	class_destroy(ocxlpmem_class);
+	unregister_chrdev_region(ocxlpmem_dev, NUM_MINORS);
+	idr_destroy(&minors_idr);
+}
+
 static int __init ocxlpmem_init(void)
 {
-	int rc = 0;
+	int rc;
 
-	rc = pci_register_driver(&pci_driver);
+	rc = file_init();
 	if (rc)
 		return rc;
+
+	rc = pci_register_driver(&pci_driver);
+	if (rc) {
+		file_exit();
+		return rc;
+	}
 
 	return 0;
 }
@@ -627,6 +738,7 @@ static int __init ocxlpmem_init(void)
 static void ocxlpmem_exit(void)
 {
 	pci_unregister_driver(&pci_driver);
+	file_exit();
 }
 
 module_init(ocxlpmem_init);
