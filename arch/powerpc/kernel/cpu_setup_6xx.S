@@ -276,7 +276,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_NO_DPM)
  * in some 750 cpus where using a not yet initialized FPU register after
  * power on reset may hang the CPU
  */
-_GLOBAL(__init_fpu_registers)
+_NOKPROBE_GLOBAL(__init_fpu_registers)
 	mfmsr	r10
 	ori	r11,r10,MSR_FP
 	mtmsr	r11
@@ -381,7 +381,7 @@ _GLOBAL(__save_cpu_setup)
  * restore CPU state as backed up by the previous
  * function. This does not include cache setting
  */
-_GLOBAL(__restore_cpu_setup)
+_NOKPROBE_GLOBAL(__restore_cpu_setup)
 	/* Some CR fields are volatile, we back it up all */
 	mfcr	r7
 

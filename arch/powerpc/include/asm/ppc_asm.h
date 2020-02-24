@@ -267,8 +267,18 @@ n:
 	.pushsection "_kprobe_blacklist","aw";		\
 	PPC_LONG (entry) ;				\
 	.popsection
+#define _NOKPROBE_ENTRY(entry)				\
+	_ASM_NOKPROBE_SYMBOL(entry)				\
+	_ENTRY(entry)
+#define _NOKPROBE_GLOBAL(entry)				\
+	_ASM_NOKPROBE_SYMBOL(entry)				\
+	_GLOBAL(entry)
 #else
 #define _ASM_NOKPROBE_SYMBOL(entry)
+#define _NOKPROBE_ENTRY(entry)				\
+	_ENTRY(entry)
+#define _NOKPROBE_GLOBAL(entry)				\
+	_GLOBAL(entry)
 #endif
 
 #define FUNC_START(name)	_GLOBAL(name)

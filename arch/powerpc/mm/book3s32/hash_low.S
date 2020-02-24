@@ -45,7 +45,7 @@ mmu_hash_lock:
  * Uses r0, r3 - r6, r8, r10, ctr, lr.
  */
 	.text
-_GLOBAL(hash_page)
+_NOKPROBE_GLOBAL(hash_page)
 #ifdef CONFIG_SMP
 	lis	r8, (mmu_hash_lock - PAGE_OFFSET)@h
 	ori	r8, r8, (mmu_hash_lock - PAGE_OFFSET)@l
@@ -81,7 +81,7 @@ _GLOBAL(hash_page)
 	rlwinm.	r8,r8,0,0,20		/* extract pt base address */
 #endif
 #ifdef CONFIG_SMP
-	beq-	hash_page_out		/* return if no mapping */
+	beq-	.Lhash_page_out		/* return if no mapping */
 #else
 	/* XXX it seems like the 601 will give a machine fault on the
 	   rfi if its alignment is wrong (bottom 4 bits of address are
@@ -109,11 +109,11 @@ _GLOBAL(hash_page)
 #if (PTE_FLAGS_OFFSET != 0)
 	addi	r8,r8,PTE_FLAGS_OFFSET
 #endif
-retry:
+.Lretry:
 	lwarx	r6,0,r8			/* get linux-style pte, flag word */
 	andc.	r5,r3,r6		/* check access & ~permission */
 #ifdef CONFIG_SMP
-	bne-	hash_page_out		/* return if access not permitted */
+	bne-	.Lhash_page_out		/* return if access not permitted */
 #else
 	bnelr-
 #endif
@@ -128,7 +128,7 @@ retry:
 #endif /* CONFIG_SMP */
 #endif /* CONFIG_PTE_64BIT */
 	stwcx.	r5,0,r8			/* attempt to update PTE */
-	bne-	retry			/* retry if someone got there first */
+	bne-	.Lretry			/* retry if someone got there first */
 
 	mfsrin	r3,r4			/* get segment reg for segment */
 #ifndef CONFIG_VMAP_STACK
@@ -156,7 +156,7 @@ retry:
 #endif
 
 #ifdef CONFIG_SMP
-hash_page_out:
+.Lhash_page_out:
 	eieio
 	lis	r8, (mmu_hash_lock - PAGE_OFFSET)@ha
 	li	r0,0
@@ -173,7 +173,7 @@ hash_page_out:
  * the accessed bit) have already been done and that there is actually
  * a hash table in use (i.e. we're not on a 603).
  */
-_GLOBAL(add_hash_page)
+_NOKPROBE_GLOBAL(add_hash_page)
 	mflr	r0
 	stw	r0,4(r1)
 
@@ -308,7 +308,7 @@ Hash_msk = (((1 << Hash_bits) - 1) * 64)
 #define HASH_LEFT	31-(LG_PTEG_SIZE+Hash_bits-1)
 #define HASH_RIGHT	31-LG_PTEG_SIZE
 
-_GLOBAL(create_hpte)
+_NOKPROBE_GLOBAL(create_hpte)
 	/* Convert linux-style PTE (r5) to low word of PPC-style PTE (r8) */
 	rlwinm	r8,r5,32-9,30,30	/* _PAGE_RW -> PP msb */
 	rlwinm	r0,r5,32-6,30,30	/* _PAGE_DIRTY -> PP msb */
@@ -360,7 +360,7 @@ END_FTR_SECTION_IFCLR(CPU_FTR_NEED_COHERENT)
 1:	LDPTEu	r6,HPTE_SIZE(r4)	/* get next PTE */
 	CMPPTE	0,r6,r5
 	bdnzf	2,1b			/* loop while ctr != 0 && !cr0.eq */
-	beq+	found_slot
+	beq+	.Lfound_slot
 
 	patch_site	0f, patch__hash_page_B
 	/* Search the secondary PTEG for a matching PTE */
@@ -372,7 +372,7 @@ END_FTR_SECTION_IFCLR(CPU_FTR_NEED_COHERENT)
 2:	LDPTEu	r6,HPTE_SIZE(r4)
 	CMPPTE	0,r6,r5
 	bdnzf	2,2b
-	beq+	found_slot
+	beq+	.Lfound_slot
 	xori	r5,r5,PTE_H		/* clear H bit again */
 
 	/* Search the primary PTEG for an empty slot */
@@ -381,7 +381,7 @@ END_FTR_SECTION_IFCLR(CPU_FTR_NEED_COHERENT)
 1:	LDPTEu	r6,HPTE_SIZE(r4)	/* get next PTE */
 	TST_V(r6)			/* test valid bit */
 	bdnzf	2,1b			/* loop while ctr != 0 && !cr0.eq */
-	beq+	found_empty
+	beq+	.Lfound_empty
 
 	/* update counter of times that the primary PTEG is full */
 	lis	r4, (primary_pteg_full - PAGE_OFFSET)@ha
@@ -399,7 +399,7 @@ END_FTR_SECTION_IFCLR(CPU_FTR_NEED_COHERENT)
 2:	LDPTEu	r6,HPTE_SIZE(r4)
 	TST_V(r6)
 	bdnzf	2,2b
-	beq+	found_empty
+	beq+	.Lfound_empty
 	xori	r5,r5,PTE_H		/* clear H bit again */
 
 	/*
@@ -437,9 +437,9 @@ END_FTR_SECTION_IFCLR(CPU_FTR_NEED_COHERENT)
 
 #ifndef CONFIG_SMP
 	/* Store PTE in PTEG */
-found_empty:
+.Lfound_empty:
 	STPTE	r5,0(r4)
-found_slot:
+.Lfound_slot:
 	STPTE	r8,HPTE_SIZE/2(r4)
 
 #else /* CONFIG_SMP */
@@ -460,8 +460,8 @@ found_slot:
  * We do however have to make sure that the PTE is never in an invalid
  * state with the V bit set.
  */
-found_empty:
-found_slot:
+.Lfound_empty:
+.Lfound_slot:
 	CLR_V(r5,r0)		/* clear V (valid) bit in PTE */
 	STPTE	r5,0(r4)
 	sync
@@ -493,7 +493,7 @@ htab_hash_searches:
  *
  * We assume that there is a hash table in use (Hash != 0).
  */
-_GLOBAL(flush_hash_pages)
+_NOKPROBE_GLOBAL(flush_hash_pages)
 	/*
 	 * We disable interrupts here, even on UP, because we want
 	 * the _PAGE_HASHPTE bit to be a reliable indication of
@@ -634,7 +634,7 @@ EXPORT_SYMBOL(flush_hash_pages)
 /*
  * Flush an entry from the TLB
  */
-_GLOBAL(_tlbie)
+_NOKPROBE_GLOBAL(_tlbie)
 #ifdef CONFIG_SMP
 	lwz	r8,TASK_CPU(r2)
 	oris	r8,r8,11
@@ -671,7 +671,7 @@ _GLOBAL(_tlbie)
 /*
  * Flush the entire TLB. 603/603e only
  */
-_GLOBAL(_tlbia)
+_NOKPROBE_GLOBAL(_tlbia)
 #if defined(CONFIG_SMP)
 	lwz	r8,TASK_CPU(r2)
 	oris	r8,r8,10

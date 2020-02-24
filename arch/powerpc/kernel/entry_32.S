@@ -44,24 +44,21 @@
 	.align	12
 
 #ifdef CONFIG_BOOKE
-	.globl	mcheck_transfer_to_handler
-mcheck_transfer_to_handler:
+_NOKPROBE_ENTRY(mcheck_transfer_to_handler)
 	mfspr	r0,SPRN_DSRR0
 	stw	r0,_DSRR0(r11)
 	mfspr	r0,SPRN_DSRR1
 	stw	r0,_DSRR1(r11)
 	/* fall through */
 
-	.globl	debug_transfer_to_handler
-debug_transfer_to_handler:
+_NOKPROBE_ENTRY(debug_transfer_to_handler)
 	mfspr	r0,SPRN_CSRR0
 	stw	r0,_CSRR0(r11)
 	mfspr	r0,SPRN_CSRR1
 	stw	r0,_CSRR1(r11)
 	/* fall through */
 
-	.globl	crit_transfer_to_handler
-crit_transfer_to_handler:
+_NOKPROBE_ENTRY(crit_transfer_to_handler)
 #ifdef CONFIG_PPC_BOOK3E_MMU
 	mfspr	r0,SPRN_MAS0
 	stw	r0,MAS0(r11)
@@ -97,8 +94,7 @@ crit_transfer_to_handler:
 #endif
 
 #ifdef CONFIG_40x
-	.globl	crit_transfer_to_handler
-crit_transfer_to_handler:
+_NOKPROBE_ENTRY(crit_transfer_to_handler)
 	lwz	r0,crit_r10@l(0)
 	stw	r0,GPR10(r11)
 	lwz	r0,crit_r11@l(0)
@@ -124,13 +120,11 @@ crit_transfer_to_handler:
  * Note that we rely on the caller having set cr0.eq iff the exception
  * occurred in kernel mode (i.e. MSR:PR = 0).
  */
-	.globl	transfer_to_handler_full
-transfer_to_handler_full:
+_NOKPROBE_ENTRY(transfer_to_handler_full)
 	SAVE_NVGPRS(r11)
 	/* fall through */
 
-	.globl	transfer_to_handler
-transfer_to_handler:
+_NOKPROBE_ENTRY(transfer_to_handler)
 	stw	r2,GPR2(r11)
 	stw	r12,_NIP(r11)
 	stw	r9,_MSR(r11)
@@ -194,8 +188,7 @@ transfer_to_handler:
 	bt-	31-TLF_NAPPING,4f
 	bt-	31-TLF_SLEEPING,7f
 #endif /* CONFIG_PPC_BOOK3S_32 || CONFIG_E500 */
-	.globl transfer_to_handler_cont
-transfer_to_handler_cont:
+_NOKPROBE_ENTRY(transfer_to_handler_cont)
 3:
 	mflr	r9
 	tovirt_novmstack r2, r2 	/* set r2 to current */
@@ -297,6 +290,7 @@ reenable_mmu:
  * On kernel stack overflow, load up an initial stack pointer
  * and call StackOverflow(regs), which should not return.
  */
+_ASM_NOKPROBE_SYMBOL(stack_ovf)
 stack_ovf:
 	/* sometimes we use a statically-allocated stack, which is OK. */
 	lis	r12,_end@h
@@ -460,6 +454,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	lwz	r7,_NIP(r1)
 	lwz	r2,GPR2(r1)
 	lwz	r1,GPR1(r1)
+syscall_exit_finish:
 #if defined(CONFIG_PPC_8xx) && defined(CONFIG_PERF_EVENTS)
 	mtspr	SPRN_NRI, r0
 #endif
@@ -467,6 +462,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	mtspr	SPRN_SRR1,r8
 	SYNC
 	RFI
+_ASM_NOKPROBE_SYMBOL(syscall_exit_finish)
 #ifdef CONFIG_44x
 2:	li	r7,0
 	iccci	r0,r0
@@ -750,8 +746,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_SPE)
 	addi	r1,r1,INT_FRAME_SIZE
 	blr
 
-	.globl	fast_exception_return
-fast_exception_return:
+_NOKPROBE_ENTRY(fast_exception_return)
 #if !(defined(CONFIG_4xx) || defined(CONFIG_BOOKE))
 	andi.	r10,r9,MSR_RI		/* check for recoverable interrupt */
 	beq	1f			/* if not, we've got problems */
@@ -780,8 +775,8 @@ fast_exception_return:
 
 #if !(defined(CONFIG_4xx) || defined(CONFIG_BOOKE))
 /* check if the exception happened in a restartable section */
-1:	lis	r3,exc_exit_restart_end@ha
-	addi	r3,r3,exc_exit_restart_end@l
+1:	lis	r3,.Lexc_exit_restart_end@ha
+	addi	r3,r3,.Lexc_exit_restart_end@l
 	cmplw	r12,r3
 #ifdef CONFIG_PPC_BOOK3S_601
 	bge	2b
@@ -1005,15 +1000,13 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	LOAD_REG_IMMEDIATE(r10,MSR_KERNEL & ~MSR_RI)
 	SYNC
 	mtmsr	r10		/* clear the RI bit */
-	.globl exc_exit_restart
-exc_exit_restart:
+_NOKPROBE_ENTRY(exc_exit_restart)
 	lwz	r12,_NIP(r1)
 	mtspr	SPRN_SRR0,r12
 	mtspr	SPRN_SRR1,r9
 	REST_4GPRS(9, r1)
 	lwz	r1,GPR1(r1)
-	.globl exc_exit_restart_end
-exc_exit_restart_end:
+.Lexc_exit_restart_end:
 	SYNC
 	RFI
 
@@ -1033,17 +1026,15 @@ exc_exit_restart_end:
 	li	r10, 0
 	stw	r10, 8(r1)
 	REST_2GPRS(9, r1)
-	.globl exc_exit_restart
+_NOKPROBE_ENTRY(exc_exit_restart)
 exc_exit_restart:
 	lwz	r11,_NIP(r1)
 	lwz	r12,_MSR(r1)
-exc_exit_start:
 	mtspr	SPRN_SRR0,r11
 	mtspr	SPRN_SRR1,r12
 	REST_2GPRS(11, r1)
 	lwz	r1,GPR1(r1)
-	.globl exc_exit_restart_end
-exc_exit_restart_end:
+.Lexc_exit_restart_end:
 	PPC405_ERR77_SYNC
 	rfi
 	b	.			/* prevent prefetch past rfi */
@@ -1146,8 +1137,7 @@ exc_exit_restart_end:
 #endif
 
 #ifdef CONFIG_40x
-	.globl	ret_from_crit_exc
-ret_from_crit_exc:
+_NOKPROBE_ENTRY(ret_from_crit_exc)
 	mfspr	r9,SPRN_SPRG_THREAD
 	lis	r10,saved_ksp_limit@ha;
 	lwz	r10,saved_ksp_limit@l(r10);
@@ -1163,8 +1153,7 @@ ret_from_crit_exc:
 #endif /* CONFIG_40x */
 
 #ifdef CONFIG_BOOKE
-	.globl	ret_from_crit_exc
-ret_from_crit_exc:
+_NOKPROBE_ENTRY(ret_from_crit_exc)
 	mfspr	r9,SPRN_SPRG_THREAD
 	lwz	r10,SAVED_KSP_LIMIT(r1)
 	stw	r10,KSP_LIMIT(r9)
@@ -1172,8 +1161,7 @@ ret_from_crit_exc:
 	RESTORE_MMU_REGS;
 	RET_FROM_EXC_LEVEL(SPRN_CSRR0, SPRN_CSRR1, PPC_RFCI)
 
-	.globl	ret_from_debug_exc
-ret_from_debug_exc:
+_NOKPROBE_ENTRY(ret_from_debug_exc)
 	mfspr	r9,SPRN_SPRG_THREAD
 	lwz	r10,SAVED_KSP_LIMIT(r1)
 	stw	r10,KSP_LIMIT(r9)
@@ -1182,8 +1170,7 @@ ret_from_debug_exc:
 	RESTORE_MMU_REGS;
 	RET_FROM_EXC_LEVEL(SPRN_DSRR0, SPRN_DSRR1, PPC_RFDI)
 
-	.globl	ret_from_mcheck_exc
-ret_from_mcheck_exc:
+_NOKPROBE_ENTRY(ret_from_mcheck_exc)
 	mfspr	r9,SPRN_SPRG_THREAD
 	lwz	r10,SAVED_KSP_LIMIT(r1)
 	stw	r10,KSP_LIMIT(r9)
@@ -1277,9 +1264,10 @@ do_user_signal:			/* r10 contains MSR_KERNEL here */
  * that occurred at a place where taking an exception will lose
  * state information, such as the contents of SRR0 and SRR1.
  */
+_ASM_NOKPROBE_SYMBOL(nonrecoverable)
 nonrecoverable:
-	lis	r10,exc_exit_restart_end@ha
-	addi	r10,r10,exc_exit_restart_end@l
+	lis	r10,.Lexc_exit_restart_end@ha
+	addi	r10,r10,.Lexc_exit_restart_end@l
 	cmplw	r12,r10
 #ifdef CONFIG_PPC_BOOK3S_601
 	bgelr
@@ -1332,7 +1320,7 @@ ee_restarts:
  * On CHRP, the Run-Time Abstraction Services (RTAS) have to be
  * called with the MMU off.
  */
-_GLOBAL(enter_rtas)
+_NOKPROBE_GLOBAL(enter_rtas)
 	stwu	r1,-INT_FRAME_SIZE(r1)
 	mflr	r0
 	stw	r0,INT_FRAME_SIZE+4(r1)
@@ -1370,8 +1358,7 @@ _GLOBAL(enter_rtas)
 	mtspr	SPRN_SRR1,r9
 	RFI			/* return to caller */
 
-	.globl	machine_check_in_rtas
-machine_check_in_rtas:
+_NOKPROBE_ENTRY(machine_check_in_rtas)
 	twi	31,0,0
 	/* XXX load up BATs and panic */
 

@@ -176,7 +176,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 
 
 /* Resume code */
-_GLOBAL(swsusp_arch_resume)
+_NOKPROBE_GLOBAL(swsusp_arch_resume)
 
 #ifdef CONFIG_ALTIVEC
 	/* Stop pending alitvec streams and memory accesses */
@@ -367,7 +367,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 
 	/* restore the MSR and turn on the MMU */
 	lwz	r3,SL_MSR(r11)
-	bl	turn_on_mmu
+	bl	.Lturn_on_mmu
 	tovirt(r11,r11)
 
 	/* Restore TB */
@@ -399,7 +399,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 /* FIXME:This construct is actually not useful since we don't shut
  * down the instruction MMU, we could just flip back MSR-DR on.
  */
-turn_on_mmu:
+.Lturn_on_mmu:
 	mflr	r4
 	mtsrr0	r4
 	mtsrr1	r3

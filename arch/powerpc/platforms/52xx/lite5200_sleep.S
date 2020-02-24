@@ -193,6 +193,7 @@ sram_code_end:
 
 
 /* uboot jumps here on resume */
+_ASM_NOKPROBE_SYMBOL(lite5200_wakeup)
 lite5200_wakeup:
 	bl	restore_regs
 
@@ -335,6 +336,7 @@ save_regs:
 	LOAD_SR(n+2, addr+2);	\
 	LOAD_SR(n+3, addr+3);
 
+_ASM_NOKPROBE_SYMBOL(restore_regs)
 restore_regs:
 	lis	r4, registers@h
 	ori	r4, r4, registers@l

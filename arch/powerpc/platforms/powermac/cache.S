@@ -35,6 +35,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_L2CR)
 	b	__flush_disable_L1
 
 /* This is the code for G3 and 74[01]0 */
+_ASM_NOKPROBE_SYMBOL(flush_disable_75x)
 flush_disable_75x:
 	mflr	r10
 
@@ -186,6 +187,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_ALTIVEC)
 	blr
 
 /* This code is for 745x processors */
+_ASM_NOKPROBE_SYMBOL(flush_disable_745x)
 flush_disable_745x:
 	/* Turn off EE and DR in MSR */
 	mfmsr	r11
