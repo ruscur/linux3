@@ -135,6 +135,18 @@ END_FTR_SECTION_IFCLR(CPU_FTR_STCX_CHECKS_ADDRESS)
 
 	cmpdi	r3,0
 	bne	.Lsyscall_restore_regs
+	li	r0,0
+	li	r4,0
+	li	r5,0
+	li	r6,0
+	li	r7,0
+	li	r8,0
+	li	r9,0
+	li	r10,0
+	li	r11,0
+	li	r12,0
+	mtctr	r0
+	mtspr	SPRN_XER,r0
 .Lsyscall_restore_regs_cont:
 
 BEGIN_FTR_SECTION
