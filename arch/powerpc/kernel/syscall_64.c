@@ -121,7 +121,8 @@ notrace long system_call_exception(long r3, long r4, long r5,
  * because RI=0 and soft mask state is "unreconciled", so it is marked notrace.
  */
 notrace unsigned long syscall_exit_prepare(unsigned long r3,
-					   struct pt_regs *regs)
+					   struct pt_regs *regs,
+					   long scv)
 {
 	unsigned long *ti_flagsp = &current_thread_info()->flags;
 	unsigned long ti_flags;
@@ -134,7 +135,7 @@ notrace unsigned long syscall_exit_prepare(unsigned long r3,
 
 	ti_flags = *ti_flagsp;
 
-	if (unlikely(r3 >= (unsigned long)-MAX_ERRNO)) {
+	if (unlikely(r3 >= (unsigned long)-MAX_ERRNO) && !scv) {
 		if (likely(!(ti_flags & (_TIF_NOERROR | _TIF_RESTOREALL)))) {
 			r3 = -r3;
 			regs->ccr |= 0x10000000; /* Set SO bit in CR */
@@ -191,9 +192,14 @@ again:
 	trace_hardirqs_on();
 
 	/* This pattern matches prep_irq_for_idle */
-	__hard_EE_RI_disable();
+	/* scv need not set RI=0 because SRRs are not used */
+	if (scv)
+		__hard_irq_disable();
+	else
+		__hard_EE_RI_disable();
 	if (unlikely(lazy_irq_pending())) {
-		__hard_RI_enable();
+		if (!scv)
+			__hard_RI_enable();
 		trace_hardirqs_off();
 		local_paca->irq_happened |= PACA_IRQ_HARD_DIS;
 		local_irq_enable();

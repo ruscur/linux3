@@ -304,7 +304,7 @@ struct thread_struct {
 	.regs = (struct pt_regs *)INIT_SP - 1, /* XXX bogus, I think */ \
 	.addr_limit = KERNEL_DS, \
 	.fpexc_mode = 0, \
-	.fscr = FSCR_TAR | FSCR_EBB \
+	.fscr = FSCR_TAR | FSCR_EBB | FSCR_SCV \
 }
 #endif
 
