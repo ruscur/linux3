@@ -44,6 +44,28 @@ static inline unsigned long cputime_to_usecs(const cputime_t ct)
 #ifdef CONFIG_PPC64
 #define get_accounting(tsk)	(&get_paca()->accounting)
 static inline void arch_vtime_task_switch(struct task_struct *tsk) { }
+
+/*
+ * account_cpu_user_entry/exit runs "unreconciled", so can't trace,
+ * can't use use get_paca()
+ */
+static notrace inline void account_cpu_user_entry(void)
+{
+	unsigned long tb = mftb();
+	struct cpu_accounting_data *acct = &local_paca->accounting;
+
+	acct->utime += (tb - acct->starttime_user);
+	acct->starttime = tb;
+}
+static notrace inline void account_cpu_user_exit(void)
+{
+	unsigned long tb = mftb();
+	struct cpu_accounting_data *acct = &local_paca->accounting;
+
+	acct->stime += (tb - acct->starttime);
+	acct->starttime_user = tb;
+}
+
 #else
 #define get_accounting(tsk)	(&task_thread_info(tsk)->accounting)
 /*
@@ -61,5 +83,12 @@ static inline void arch_vtime_task_switch(struct task_struct *prev)
 #endif
 
 #endif /* __KERNEL__ */
+#else /* CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
+static inline void account_cpu_user_entry(void)
+{
+}
+static inline void account_cpu_user_exit(void)
+{
+}
 #endif /* CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
 #endif /* __POWERPC_CPUTIME_H */
