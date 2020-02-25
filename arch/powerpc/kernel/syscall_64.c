@@ -19,12 +19,18 @@ extern void __noreturn tabort_syscall(unsigned long nip, unsigned long msr);
 
 typedef long (*syscall_fn)(long, long, long, long, long, long);
 
-/* Has to run notrace because it is entered "unreconciled" */
-notrace long system_call_exception(long r3, long r4, long r5, long r6, long r7, long r8,
-			   unsigned long r0, struct pt_regs *regs)
+/* Has to run notrace because it is entered not completely "reconciled" */
+notrace long system_call_exception(long r3, long r4, long r5,
+				   long r6, long r7, long r8,
+				   unsigned long r0, struct pt_regs *regs)
 {
 	unsigned long ti_flags;
 	syscall_fn f;
+
+	if (IS_ENABLED(CONFIG_PPC_IRQ_SOFT_MASK_DEBUG))
+		BUG_ON(irq_soft_mask_return() != IRQS_ALL_DISABLED);
+
+	trace_hardirqs_off(); /* finish reconciling */
 
 	if (IS_ENABLED(CONFIG_PPC_BOOK3S))
 		BUG_ON(!(regs->msr & MSR_RI));
@@ -33,8 +39,10 @@ notrace long system_call_exception(long r3, long r4, long r5, long r6, long r7, 
 	BUG_ON(regs->softe != IRQS_ENABLED);
 
 	if (IS_ENABLED(CONFIG_PPC_TRANSACTIONAL_MEM) &&
-	    unlikely(regs->msr & MSR_TS_T))
+	    unlikely(regs->msr & MSR_TS_T)) {
+		local_irq_enable();
 		tabort_syscall(regs->nip, regs->msr);
+	}
 
 	account_cpu_user_entry();
 
@@ -51,16 +59,6 @@ notrace long system_call_exception(long r3, long r4, long r5, long r6, long r7, 
 	kuap_check_amr();
 
 	/*
-	 * A syscall should always be called with interrupts enabled
-	 * so we just unconditionally hard-enable here. When some kind
-	 * of irq tracing is used, we additionally check that condition
-	 * is correct
-	 */
-	if (IS_ENABLED(CONFIG_PPC_IRQ_SOFT_MASK_DEBUG)) {
-		WARN_ON(irq_soft_mask_return() != IRQS_ENABLED);
-		WARN_ON(local_paca->irq_happened);
-	}
-	/*
 	 * This is not required for the syscall exit path, but makes the
 	 * stack frame look nicer. If this was initialised in the first stack
 	 * frame, or if the unwinder was taught the first stack frame always
@@ -68,7 +66,7 @@ notrace long system_call_exception(long r3, long r4, long r5, long r6, long r7, 
 	 */
 	regs->softe = IRQS_ENABLED;
 
-	__hard_irq_enable();
+	local_irq_enable();
 
 	ti_flags = current_thread_info()->flags;
 	if (unlikely(ti_flags & _TIF_SYSCALL_DOTRACE)) {
