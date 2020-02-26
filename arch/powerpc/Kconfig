@@ -246,6 +246,7 @@ config PPC
 	select SYSCTL_EXCEPTION_TRACE
 	select THREAD_INFO_IN_TASK
 	select VIRT_TO_BUS			if !PPC64
+	select IMA_SECURE_AND_OR_TRUSTED_BOOT	if PPC_SECURE_BOOT
 	#
 	# Please keep this list sorted alphabetically.
 	#
@@ -978,7 +979,6 @@ config PPC_SECURE_BOOT
 	prompt "Enable secure boot support"
 	bool
 	depends on PPC_POWERNV
-	depends on IMA_ARCH_POLICY
 	help
 	  Systems with firmware secure boot enabled need to define security
 	  policies to extend secure boot to the OS. This config allows a user
