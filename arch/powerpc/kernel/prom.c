@@ -518,6 +518,8 @@ static void __init early_init_drmem_lmb(struct drmem_lmb *lmb,
 		DBG("Adding: %llx -> %llx\n", base, size);
 		if (validate_mem_limit(base, &size))
 			memblock_add(base, size);
+
+		early_init_dt_mark_hotplug_memory_arch(base, size);
 	} while (--rngs);
 }
 #endif /* CONFIG_PPC_PSERIES */
