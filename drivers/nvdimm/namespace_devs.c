@@ -10,6 +10,7 @@
 #include <linux/nd.h>
 #include "nd-core.h"
 #include "pmem.h"
+#include "pfn.h"
 #include "nd.h"
 
 static void namespace_io_release(struct device *dev)
@@ -1737,6 +1738,17 @@ struct nd_namespace_common *nvdimm_namespace_common_probe(struct device *dev)
 		dev_dbg(&ndns->dev, "%pa, too small must be at least %#x\n",
 				&size, ND_MIN_NAMESPACE_SIZE);
 		return ERR_PTR(-ENODEV);
+	}
+
+	if (pmem_should_map_pages(dev)) {
+		struct nd_namespace_io *nsio = to_nd_namespace_io(&ndns->dev);
+		struct resource *res = &nsio->res;
+
+		if (!IS_ALIGNED(res->start | (res->end + 1),
+					memremap_compat_align())) {
+			dev_err(&ndns->dev, "%pr misaligned, unable to map\n", res);
+			return ERR_PTR(-EOPNOTSUPP);
+		}
 	}
 
 	if (is_namespace_pmem(&ndns->dev)) {
