@@ -7,6 +7,34 @@
 
 #include "of_helpers.h"
 
+struct property *new_property(const char *name, const int length,
+		const unsigned char *value, struct property *last)
+{
+	struct property *new = kzalloc(sizeof(*new), GFP_KERNEL);
+
+	if (!new)
+		return NULL;
+
+	new->name = kstrdup(name, GFP_KERNEL);
+	if (!new->name)
+		goto cleanup;
+	new->value = kmalloc(length + 1, GFP_KERNEL);
+	if (!new->value)
+		goto cleanup;
+
+	memcpy(new->value, value, length);
+	*(((char *)new->value) + length) = 0;
+	new->length = length;
+	new->next = last;
+	return new;
+
+cleanup:
+	kfree(new->name);
+	kfree(new->value);
+	kfree(new);
+	return NULL;
+}
+
 /**
  * pseries_of_derive_parent - basically like dirname(1)
  * @path:  the full_name of a node to be added to the tree
