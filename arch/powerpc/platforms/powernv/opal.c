@@ -107,6 +107,46 @@ void opal_configure_cores(void)
 		cur_cpu_spec->cpu_restore();
 }
 
+const char *arch_address_lookup(unsigned long addr,
+			    unsigned long *symbolsize,
+			    unsigned long *offset,
+			    char **modname, char *namebuf)
+{
+	__be64 symaddr;
+	__be64 symsize;
+
+	if (!firmware_has_feature(FW_FEATURE_OPAL))
+		return NULL;
+
+	if (opal_get_symbol(addr, &symaddr, &symsize, namebuf,
+			cpu_to_be64(KSYM_NAME_LEN)) != OPAL_SUCCESS)
+		return NULL;
+
+	*symbolsize = be64_to_cpu(symsize);
+	*offset = addr - be64_to_cpu(symaddr);
+	*modname = "OPAL";
+
+	return namebuf;
+}
+
+unsigned long arch_address_lookup_name(const char *name)
+{
+	__be64 addr;
+	__be64 size;
+
+	if (!firmware_has_feature(FW_FEATURE_OPAL))
+		return 0;
+
+	/* opal: prefix allows lookup of symbols that clash with kernel */
+	if (!strncasecmp(name, "opal:", strlen("opal:")))
+		name += strlen("opal:");
+
+	if (opal_lookup_symbol(name, &addr, &size) != OPAL_SUCCESS)
+		return 0;
+
+	return be64_to_cpu(addr);
+}
+
 int __init early_init_dt_scan_opal(unsigned long node,
 				   const char *uname, int depth, void *data)
 {
