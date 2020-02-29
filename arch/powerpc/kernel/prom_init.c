@@ -805,6 +805,18 @@ static void __init early_cmdline_parse(void)
 #endif
 	}
 
+#ifdef CONFIG_PPC_SVM
+	opt = prom_strstr(prom_cmd_line, "svm=");
+	if (opt) {
+		bool val;
+
+		opt += sizeof("svm=") - 1;
+		if (!prom_strtobool(opt, &val))
+			prom_svm_enable = val;
+		prom_printf("svm =%d\n", prom_svm_enable);
+	}
+#endif /* CONFIG_PPC_SVM */
+
 #ifdef CONFIG_PPC_PSERIES
 	prom_radix_disable = !IS_ENABLED(CONFIG_PPC_RADIX_MMU_DEFAULT);
 	opt = prom_strstr(prom_cmd_line, "disable_radix");
@@ -823,23 +835,22 @@ static void __init early_cmdline_parse(void)
 	if (prom_radix_disable)
 		prom_debug("Radix disabled from cmdline\n");
 
-	opt = prom_strstr(prom_cmd_line, "xive=off");
-	if (opt) {
-		prom_xive_disable = true;
-		prom_debug("XIVE disabled from cmdline\n");
-	}
-#endif /* CONFIG_PPC_PSERIES */
-
 #ifdef CONFIG_PPC_SVM
-	opt = prom_strstr(prom_cmd_line, "svm=");
-	if (opt) {
-		bool val;
-
-		opt += sizeof("svm=") - 1;
-		if (!prom_strtobool(opt, &val))
-			prom_svm_enable = val;
+	if (prom_svm_enable) {
+		prom_xive_disable = true;
+		prom_debug("XIVE disabled in Secure VM\n");
 	}
 #endif /* CONFIG_PPC_SVM */
+
+	if (!prom_xive_disable) {
+		opt = prom_strstr(prom_cmd_line, "xive=off");
+		if (opt) {
+			prom_xive_disable = true;
+			prom_debug("XIVE disabled from cmdline\n");
+		}
+	}
+
+#endif /* CONFIG_PPC_PSERIES */
 }
 
 #ifdef CONFIG_PPC_PSERIES
@@ -1251,6 +1262,12 @@ static void __init prom_parse_xive_model(u8 val,
 		break;
 	case OV5_FEAT(OV5_XIVE_EXPLOIT): /* Only Exploitation mode */
 		prom_debug("XIVE - exploitation mode supported\n");
+
+#ifdef CONFIG_PPC_SVM
+		if (prom_svm_enable)
+			prom_panic("WARNING: xive unsupported in Secure VM\n");
+#endif /* CONFIG_PPC_SVM */
+
 		if (prom_xive_disable) {
 			/*
 			 * If we __have__ to do XIVE, we're better off ignoring
