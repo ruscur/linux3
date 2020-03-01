@@ -38,7 +38,9 @@ Required properties:
 
    - fsl,asrc-rate	: Defines a mutual sample rate used by DPCM Back Ends.
 
-   - fsl,asrc-width	: Defines a mutual sample width used by DPCM Back Ends.
+   - fsl,asrc-format	: Defines a mutual sample format used by DPCM Back
+			  Ends. The value is one of SNDRV_PCM_FORMAT_XX in
+			  "include/uapi/sound/asound.h"
 
    - fsl,asrc-clk-map   : Defines clock map used in driver. which is required
 			  by imx8qm/imx8qxp platform
