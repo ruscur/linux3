@@ -481,7 +481,7 @@
 					dma-names = "rxa", "rxb", "rxc",
 							"txa", "txb", "txc";
 					fsl,asrc-rate  = <48000>;
-					fsl,asrc-width = <16>;
+					fsl,asrc-format = <2>;
 					status = "okay";
 				};
 
