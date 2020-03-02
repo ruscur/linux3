@@ -269,7 +269,7 @@ static inline void assert_pte_locked(struct mm_struct *mm, unsigned long addr)
 }
 #endif /* !CONFIG_DEBUG_VM */
 
-#ifdef CONFIG_PPC_RADIX_MMU
+#if defined(CONFIG_PPC_RADIX_MMU) && defined(CONFIG_PPC_HASH_MMU)
 static inline bool radix_enabled(void)
 {
 	return mmu_has_feature(MMU_FTR_TYPE_RADIX);
@@ -279,7 +279,7 @@ static inline bool early_radix_enabled(void)
 {
 	return early_mmu_has_feature(MMU_FTR_TYPE_RADIX);
 }
-#else
+#elif defined(CONFIG_PPC_HASH_MMU)
 static inline bool radix_enabled(void)
 {
 	return false;
@@ -288,6 +288,16 @@ static inline bool radix_enabled(void)
 static inline bool early_radix_enabled(void)
 {
 	return false;
+}
+#else
+static inline bool radix_enabled(void)
+{
+	return true;
+}
+
+static inline bool early_radix_enabled(void)
+{
+	return true;
 }
 #endif
 

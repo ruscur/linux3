@@ -232,6 +232,7 @@ static void __init check_cpu_pa_features(unsigned long node)
 #ifdef CONFIG_PPC_BOOK3S_64
 static void __init init_mmu_slb_size(unsigned long node)
 {
+#ifdef CONFIG_PPC_HASH_MMU
 	const __be32 *slb_size_ptr;
 
 	slb_size_ptr = of_get_flat_dt_prop(node, "slb-size", NULL) ? :
@@ -239,6 +240,7 @@ static void __init init_mmu_slb_size(unsigned long node)
 
 	if (slb_size_ptr)
 		mmu_slb_size = be32_to_cpup(slb_size_ptr);
+#endif
 }
 #else
 #define init_mmu_slb_size(node) do { } while(0)

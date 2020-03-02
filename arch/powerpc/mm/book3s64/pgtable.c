@@ -11,13 +11,24 @@
 #include <asm/debugfs.h>
 #include <asm/pgalloc.h>
 #include <asm/tlb.h>
-#include <asm/trace.h>
 #include <asm/powernv.h>
 #include <asm/firmware.h>
 #include <asm/ultravisor.h>
 
 #include <mm/mmu_decl.h>
+#define CREATE_TRACE_POINTS
 #include <trace/events/thp.h>
+
+struct mmu_psize_def mmu_psize_defs[MMU_PAGE_COUNT];
+EXPORT_SYMBOL_GPL(mmu_psize_defs);
+
+int mmu_linear_psize = MMU_PAGE_4K;
+EXPORT_SYMBOL_GPL(mmu_linear_psize);
+int mmu_vmalloc_psize = MMU_PAGE_4K;
+#ifdef CONFIG_SPARSEMEM_VMEMMAP
+int mmu_vmemmap_psize = MMU_PAGE_4K;
+#endif
+int mmu_io_psize = MMU_PAGE_4K;
 
 unsigned long __pmd_frag_nr;
 EXPORT_SYMBOL(__pmd_frag_nr);
@@ -147,6 +158,7 @@ pmd_t pmd_modify(pmd_t pmd, pgprot_t newprot)
 	return pmd_set_protbits(__pmd(pmdv), newprot);
 }
 
+#ifdef CONFIG_PPC_HASH_MMU
 /*
  * This is called at the end of handling a user page fault, when the
  * fault has been handled by updating a HUGE PMD entry in the linux page tables.
@@ -159,6 +171,7 @@ void update_mmu_cache_pmd(struct vm_area_struct *vma, unsigned long addr,
 	if (radix_enabled())
 		prefetch((void *)addr);
 }
+#endif
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 
 /* For use by kexec */
@@ -220,7 +233,12 @@ static void flush_partition(unsigned int lpid, bool radix)
 			     "r" (TLBIEL_INVAL_SET_LPID), "r" (lpid));
 		/* do we need fixup here ?*/
 		asm volatile("eieio; tlbsync; ptesync" : : : "memory");
-		trace_tlbie(lpid, 0, TLBIEL_INVAL_SET_LPID, lpid, 2, 0, 0);
+		/*
+		 * XXX: Can't use this tracepoint
+		 * because this file defines the  THP tracepoints
+		 * trace_tlbie(lpid, 0, TLBIEL_INVAL_SET_LPID, lpid, 2, 0, 0);
+		 * KVM tlbie tracing has much larger deficiencies though.
+		 */
 	}
 }
 

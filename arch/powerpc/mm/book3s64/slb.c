@@ -812,17 +812,3 @@ long do_slb_fault(struct pt_regs *regs, unsigned long ea)
 		return err;
 	}
 }
-
-void do_bad_slb_fault(struct pt_regs *regs, unsigned long ea, long err)
-{
-	if (err == -EFAULT) {
-		if (user_mode(regs))
-			_exception(SIGSEGV, regs, SEGV_BNDERR, ea);
-		else
-			bad_page_fault(regs, ea, SIGSEGV);
-	} else if (err == -EINVAL) {
-		unrecoverable_exception(regs);
-	} else {
-		BUG();
-	}
-}

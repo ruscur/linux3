@@ -18,6 +18,7 @@
 unsigned int hpage_shift;
 EXPORT_SYMBOL(hpage_shift);
 
+#ifdef CONFIG_PPC_HASH_MMU
 extern long hpte_insert_repeating(unsigned long hash, unsigned long vpn,
 				  unsigned long pa, unsigned long rlags,
 				  unsigned long vflags, int psize, int ssize);
@@ -128,6 +129,7 @@ int __hash_page_huge(unsigned long ea, unsigned long access, unsigned long vsid,
 	*ptep = __pte(new_pte & ~H_PAGE_BUSY);
 	return 0;
 }
+#endif
 
 pte_t huge_ptep_modify_prot_start(struct vm_area_struct *vma,
 				  unsigned long addr, pte_t *ptep)

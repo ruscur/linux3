@@ -28,6 +28,7 @@ static int alloc_context_id(int min_id, int max_id)
 	return ida_alloc_range(&mmu_context_ida, min_id, max_id, GFP_KERNEL);
 }
 
+#ifdef CONFIG_PPC_HASH_MMU
 void hash__reserve_context_id(int id)
 {
 	int result = ida_alloc_range(&mmu_context_ida, id, id, GFP_KERNEL);
@@ -47,9 +48,9 @@ int hash__alloc_context_id(void)
 	return alloc_context_id(MIN_USER_CONTEXT, max);
 }
 EXPORT_SYMBOL_GPL(hash__alloc_context_id);
+#endif
 
-void slb_setup_new_exec(void);
-
+#ifdef CONFIG_PPC_HASH_MMU
 static int realloc_context_ids(mm_context_t *ctx)
 {
 	int i, id;
@@ -143,12 +144,15 @@ static int hash__init_new_context(struct mm_struct *mm)
 	return index;
 }
 
+void slb_setup_new_exec(void);
+
 void hash__setup_new_exec(void)
 {
 	slice_setup_new_exec();
 
 	slb_setup_new_exec();
 }
+#endif
 
 static int radix__init_new_context(struct mm_struct *mm)
 {
@@ -174,7 +178,9 @@ static int radix__init_new_context(struct mm_struct *mm)
 	 */
 	asm volatile("ptesync;isync" : : : "memory");
 
+#ifdef CONFIG_PPC_HASH_MMU
 	mm->context.hash_context = NULL;
+#endif
 
 	return index;
 }
@@ -185,8 +191,10 @@ int init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 
 	if (radix_enabled())
 		index = radix__init_new_context(mm);
+#ifdef CONFIG_PPC_HASH_MMU
 	else
 		index = hash__init_new_context(mm);
+#endif
 
 	if (index < 0)
 		return index;
@@ -210,6 +218,7 @@ void __destroy_context(int context_id)
 }
 EXPORT_SYMBOL_GPL(__destroy_context);
 
+#ifdef CONFIG_PPC_HASH_MMU
 static void destroy_contexts(mm_context_t *ctx)
 {
 	int index, context_id;
@@ -221,6 +230,7 @@ static void destroy_contexts(mm_context_t *ctx)
 	}
 	kfree(ctx->hash_context);
 }
+#endif
 
 static void pmd_frag_destroy(void *pmd_frag)
 {
@@ -273,7 +283,11 @@ void destroy_context(struct mm_struct *mm)
 		process_tb[mm->context.id].prtb0 = 0;
 	else
 		subpage_prot_free(mm);
+#ifdef CONFIG_PPC_HASH_MMU
 	destroy_contexts(&mm->context);
+#else
+	ida_free(&mmu_context_ida, mm->context.id);
+#endif
 	mm->context.id = MMU_NO_CONTEXT;
 }
 

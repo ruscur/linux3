@@ -758,6 +758,7 @@ void __init setup_per_cpu_areas(void)
 	unsigned int cpu;
 	int rc;
 
+#ifdef CONFIG_PPC_HASH_MMU
 	/*
 	 * Linear mapping is one of 4K, 1M and 16M.  For 4K, no need
 	 * to group units.  For larger mappings, use 1M atom which
@@ -767,6 +768,9 @@ void __init setup_per_cpu_areas(void)
 		atom_size = PAGE_SIZE;
 	else
 		atom_size = 1 << 20;
+#else
+	atom_size = PAGE_SIZE;
+#endif
 
 	rc = pcpu_embed_first_chunk(0, dyn_size, atom_size, pcpu_cpu_distance,
 				    pcpu_fc_alloc, pcpu_fc_free);

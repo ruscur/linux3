@@ -1161,6 +1161,7 @@ EXC_COMMON_BEGIN(data_access_common)
 	INT_COMMON 0x300, PACA_EXGEN, 1, 1, 1, 1, 1
 	ld	r4,_DAR(r1)
 	ld	r5,_DSISR(r1)
+#ifdef CONFIG_PPC_HASH_MMU
 BEGIN_MMU_FTR_SECTION
 	ld	r6,_MSR(r1)
 	li	r3,0x300
@@ -1168,6 +1169,9 @@ BEGIN_MMU_FTR_SECTION
 MMU_FTR_SECTION_ELSE
 	b	handle_page_fault
 ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_TYPE_RADIX)
+#else
+	b	handle_page_fault
+#endif
 
 
 EXC_REAL_BEGIN(data_access_slb, 0x380, 0x80)
@@ -1181,6 +1185,7 @@ EXC_COMMON_BEGIN(data_access_slb_common)
 	INT_COMMON 0x380, PACA_EXSLB, 1, 1, 0, 1, 0
 	ld	r4,_DAR(r1)
 	addi	r3,r1,STACK_FRAME_OVERHEAD
+#ifdef CONFIG_PPC_HASH_MMU
 BEGIN_MMU_FTR_SECTION
 	/* HPT case, do SLB fault */
 	bl	do_slb_fault
@@ -1192,6 +1197,9 @@ MMU_FTR_SECTION_ELSE
 	/* Radix case, access is outside page table range */
 	li	r3,-EFAULT
 ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_TYPE_RADIX)
+#else
+	li	r3,-EFAULT
+#endif
 	std	r3,RESULT(r1)
 	bl	save_nvgprs
 	RECONCILE_IRQ_STATE(r10, r11)
@@ -1213,6 +1221,7 @@ EXC_COMMON_BEGIN(instruction_access_common)
 	INT_COMMON 0x400, PACA_EXGEN, 1, 1, 1, 2, 2
 	ld	r4,_DAR(r1)
 	ld	r5,_DSISR(r1)
+#ifdef CONFIG_PPC_HASH_MMU
 BEGIN_MMU_FTR_SECTION
 	ld      r6,_MSR(r1)
 	li	r3,0x400
@@ -1220,6 +1229,9 @@ BEGIN_MMU_FTR_SECTION
 MMU_FTR_SECTION_ELSE
 	b	handle_page_fault
 ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_TYPE_RADIX)
+#else
+	b	handle_page_fault
+#endif
 
 
 EXC_REAL_BEGIN(instruction_access_slb, 0x480, 0x80)
@@ -1233,6 +1245,7 @@ EXC_COMMON_BEGIN(instruction_access_slb_common)
 	INT_COMMON 0x480, PACA_EXSLB, 1, 1, 0, 2, 0
 	ld	r4,_DAR(r1)
 	addi	r3,r1,STACK_FRAME_OVERHEAD
+#ifdef CONFIG_PPC_HASH_MMU
 BEGIN_MMU_FTR_SECTION
 	/* HPT case, do SLB fault */
 	bl	do_slb_fault
@@ -1244,6 +1257,9 @@ MMU_FTR_SECTION_ELSE
 	/* Radix case, access is outside page table range */
 	li	r3,-EFAULT
 ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_TYPE_RADIX)
+#else
+	li	r3,-EFAULT
+#endif
 	std	r3,RESULT(r1)
 	bl	save_nvgprs
 	RECONCILE_IRQ_STATE(r10, r11)
@@ -2252,8 +2268,8 @@ disable_machine_check:
  * Hash table stuff
  */
 	.balign	IFETCH_ALIGN_BYTES
+#ifdef CONFIG_PPC_HASH_MMU
 do_hash_page:
-#ifdef CONFIG_PPC_BOOK3S_64
 	lis	r0,(DSISR_BAD_FAULT_64S | DSISR_DABRMATCH | DSISR_KEYFAULT)@h
 	ori	r0,r0,DSISR_BAD_FAULT_64S@l
 	and.	r0,r5,r0		/* weird error? */
@@ -2283,7 +2299,7 @@ do_hash_page:
 	/* Reload DAR/DSISR into r4/r5 for the DABR check below */
 	ld	r4,_DAR(r1)
 	ld      r5,_DSISR(r1)
-#endif /* CONFIG_PPC_BOOK3S_64 */
+#endif /* CONFIG_PPC_HASH_MMU */
 
 /* Here we have a page fault that hash_page can't handle. */
 handle_page_fault:
@@ -2315,7 +2331,7 @@ handle_dabr_fault:
 	b       ret_from_except
 
 
-#ifdef CONFIG_PPC_BOOK3S_64
+#ifdef CONFIG_PPC_HASH_MMU
 /* We have a page fault that hash_page could handle but HV refused
  * the PTE insertion
  */

@@ -314,8 +314,11 @@ static void __init radix_init_pgtable(void)
 	unsigned long rts_field;
 	struct memblock_region *reg;
 
+#ifdef CONFIG_PPC_HASH_MMU
 	/* We don't support slb for radix */
 	mmu_slb_size = 0;
+#endif
+
 	/*
 	 * Create the linear mapping, using standard page size for now
 	 */
@@ -547,6 +550,7 @@ void __init radix__early_init_mmu(void)
 {
 	unsigned long lpcr;
 
+#ifdef CONFIG_PPC_HASH_MMU
 #ifdef CONFIG_PPC_64K_PAGES
 	/* PAGE_SIZE mappings */
 	mmu_virtual_psize = MMU_PAGE_64K;
@@ -563,6 +567,7 @@ void __init radix__early_init_mmu(void)
 		mmu_vmemmap_psize = MMU_PAGE_2M;
 	} else
 		mmu_vmemmap_psize = mmu_virtual_psize;
+#endif
 #endif
 	/*
 	 * initialize page table size

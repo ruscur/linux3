@@ -33,6 +33,7 @@
 #include <linux/hugetlb.h>
 #include <linux/uaccess.h>
 
+#include <asm/asm-prototypes.h>
 #include <asm/firmware.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
@@ -685,3 +686,22 @@ void bad_page_fault(struct pt_regs *regs, unsigned long address, int sig)
 
 	die("Kernel access of bad area", regs, sig);
 }
+
+#ifdef CONFIG_PPC_BOOK3S_64
+/*
+ * Radix takes bad slb (segment) faults as well.
+ */
+void do_bad_slb_fault(struct pt_regs *regs, unsigned long ea, long err)
+{
+	if (err == -EFAULT) {
+		if (user_mode(regs))
+			_exception(SIGSEGV, regs, SEGV_BNDERR, ea);
+		else
+			bad_page_fault(regs, ea, SIGSEGV);
+	} else if (err == -EINVAL) {
+		unrecoverable_exception(regs);
+	} else {
+		BUG();
+	}
+}
+#endif

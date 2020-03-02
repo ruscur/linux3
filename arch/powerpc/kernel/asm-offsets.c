@@ -238,6 +238,7 @@ int main(void)
 #endif /* CONFIG_PPC_BOOK3E */
 
 #ifdef CONFIG_PPC_BOOK3S_64
+#ifdef CONFIG_PPC_HASH_MMU
 	OFFSET(PACASLBCACHE, paca_struct, slb_cache);
 	OFFSET(PACASLBCACHEPTR, paca_struct, slb_cache_ptr);
 	OFFSET(PACASTABRR, paca_struct, stab_rr);
@@ -246,6 +247,7 @@ int main(void)
 	OFFSET(MMUPSIZESLLP, mmu_psize_def, sllp);
 #else
 	OFFSET(PACACONTEXTSLLP, paca_struct, mm_ctx_sllp);
+#endif
 #endif /* CONFIG_PPC_MM_SLICES */
 	OFFSET(PACA_EXGEN, paca_struct, exgen);
 	OFFSET(PACA_EXMC, paca_struct, exmc);
@@ -254,10 +256,12 @@ int main(void)
 #ifdef CONFIG_PPC_PSERIES
 	OFFSET(PACALPPACAPTR, paca_struct, lppaca_ptr);
 #endif
+#ifdef CONFIG_PPC_HASH_MMU
 	OFFSET(PACA_SLBSHADOWPTR, paca_struct, slb_shadow_ptr);
 	OFFSET(SLBSHADOW_STACKVSID, slb_shadow, save_area[SLB_NUM_BOLTED - 1].vsid);
 	OFFSET(SLBSHADOW_STACKESID, slb_shadow, save_area[SLB_NUM_BOLTED - 1].esid);
 	OFFSET(SLBSHADOW_SAVEAREA, slb_shadow, save_area);
+#endif
 	OFFSET(LPPACA_PMCINUSE, lppaca, pmcregs_in_use);
 #ifdef CONFIG_KVM_BOOK3S_HV_POSSIBLE
 	OFFSET(PACA_PMCINUSE, paca_struct, pmcregs_in_use);

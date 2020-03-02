@@ -168,6 +168,7 @@ static void __init pnv_init(void)
 #endif
 		add_preferred_console("hvc", 0, NULL);
 
+#ifdef CONFIG_PPC_HASH_MMU
 	if (!radix_enabled()) {
 		int i;
 
@@ -175,6 +176,7 @@ static void __init pnv_init(void)
 		for_each_possible_cpu(i)
 			paca_ptrs[i]->mce_faulty_slbs = memblock_alloc_node(mmu_slb_size, __alignof__(*paca_ptrs[i]->mce_faulty_slbs), cpu_to_node(i));
 	}
+#endif
 }
 
 static void __init pnv_init_IRQ(void)

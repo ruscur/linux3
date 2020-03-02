@@ -16,7 +16,7 @@
 extern int create_section_mapping(unsigned long start, unsigned long end, int nid);
 extern int remove_section_mapping(unsigned long start, unsigned long end);
 
-#ifdef CONFIG_PPC_BOOK3S_64
+#ifdef CONFIG_PPC_HASH_MMU
 extern int resize_hpt_for_hotplug(unsigned long new_mem_size);
 #else
 static inline int resize_hpt_for_hotplug(unsigned long new_mem_size) { return 0; }
