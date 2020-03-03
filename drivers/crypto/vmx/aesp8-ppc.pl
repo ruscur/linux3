@@ -100,7 +100,7 @@ if ($flavour =~ /64/) {
 	$SHL	="slwi";
 } else { die "nonsense $flavour"; }
 
-$LITTLE_ENDIAN = ($flavour=~/le$/) ? $SIZE_T : 0;
+$LITTLE_ENDIAN = ($flavour=~/ppc64le/) ? $SIZE_T : 0;
 
 $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
 ( $xlate="${dir}ppc-xlate.pl" and -f $xlate ) or
