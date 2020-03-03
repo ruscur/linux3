@@ -373,7 +373,9 @@ static inline bool flush_coherent_icache(unsigned long addr)
 	 */
 	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE)) {
 		mb(); /* sync */
+		allow_read_from_user((void *)addr, 4);
 		icbi((void *)addr);
+		prevent_read_from_user((void *)addr, 4);
 		mb(); /* sync */
 		isync();
 		return true;
