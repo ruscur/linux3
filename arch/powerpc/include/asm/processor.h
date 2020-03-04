@@ -432,6 +432,7 @@ enum idle_boot_override {IDLE_NO_OVERRIDE = 0, IDLE_POWERSAVE_OFF};
 #define STOP_ENABLE		0x00000001
 
 #define STOP_VERSION_P9       0x1
+#define STOP_VERSION_P9_V1    0x2
 
 /*
  * Classify the dependencies of the stop states

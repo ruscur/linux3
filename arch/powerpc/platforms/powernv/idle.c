@@ -805,6 +805,11 @@ out:
 	return srr1;
 }
 
+static unsigned long power9_idle_quirky_stop(unsigned long psscr, bool mmu_on)
+{
+	return power9_idle_stop(psscr, mmu_on);
+}
+
 #ifdef CONFIG_HOTPLUG_CPU
 static unsigned long power9_offline_stop(unsigned long psscr)
 {
@@ -1359,6 +1364,9 @@ static int __init pnv_init_idle_states(void)
 	switch(stop_dep.stop_version) {
 	case STOP_VERSION_P9:
 		stop_dep.idle_stop = power9_idle_stop;
+		break;
+	case STOP_VERSION_P9_V1:
+		stop_dep.idle_stop = power9_idle_quirky_stop;
 		break;
 	default:
 		stop_dep.idle_stop = NULL;
