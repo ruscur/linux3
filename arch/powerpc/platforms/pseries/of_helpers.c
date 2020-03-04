@@ -34,6 +34,7 @@ cleanup:
 	kfree(new);
 	return NULL;
 }
+EXPORT_SYMBOL(new_property);
 
 /**
  * pseries_of_derive_parent - basically like dirname(1)
