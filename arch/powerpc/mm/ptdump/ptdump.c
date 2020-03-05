@@ -279,7 +279,7 @@ static void walk_pmd(struct pg_state *st, pud_t *pud, unsigned long start)
 
 static void walk_pud(struct pg_state *st, p4d_t *p4d, unsigned long start)
 {
-	pud_t *pud = pud_offset(p4d, 0);
+	pud_t *pud = pud_offset(p4d, 0UL);
 	unsigned long addr;
 	unsigned int i;
 
