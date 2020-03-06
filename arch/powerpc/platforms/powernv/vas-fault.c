@@ -237,6 +237,10 @@ irqreturn_t vas_fault_thread_fn(int irq, void *data)
 		memcpy(crb, fifo, CRB_SIZE);
 		entry->stamp.nx.pswid = cpu_to_be32(FIFO_INVALID_ENTRY);
 		entry->ccw |= cpu_to_be32(CCW0_INVALID);
+		/*
+		 * Return credit for the fault window.
+		 */
+		vas_return_credit(vinst->fault_win, 0);
 		mutex_unlock(&vinst->mutex);
 
 		pr_devel("VAS[%d] fault_fifo %p, fifo %p, fault_crbs %d\n",
@@ -266,6 +270,11 @@ irqreturn_t vas_fault_thread_fn(int irq, void *data)
 		}
 
 		update_csb(window, crb);
+		/*
+		 * Return credit for send window after processing
+		 * fault CRB.
+		 */
+		vas_return_credit(window, 1);
 	} while (true);
 }
 
