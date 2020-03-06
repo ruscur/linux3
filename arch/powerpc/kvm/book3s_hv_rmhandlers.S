@@ -3121,7 +3121,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_ALTIVEC)
  * Save transactional state and TM-related registers.
  * Called with r3 pointing to the vcpu struct and r4 containing
  * the guest MSR value.
- * r5 is non-zero iff non-volatile register state needs to be maintained.
+ * r5 is non-zero if non-volatile register state needs to be maintained.
  * If r5 == 0, this can modify all checkpointed registers, but
  * restores r1 and r2 before exit.
  */
@@ -3194,7 +3194,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_P9_TM_XER_SO_BUG)
  * Restore transactional state and TM-related registers.
  * Called with r3 pointing to the vcpu struct
  * and r4 containing the guest MSR value.
- * r5 is non-zero iff non-volatile register state needs to be maintained.
+ * r5 is non-zero if non-volatile register state needs to be maintained.
  * This potentially modifies all checkpointed registers.
  * It restores r1 and r2 from the PACA.
  */
