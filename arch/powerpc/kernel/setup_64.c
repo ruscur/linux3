@@ -67,6 +67,7 @@
 #include <asm/kup.h>
 #include <asm/early_ioremap.h>
 
+#include <mm/mmu_decl.h>
 #include "setup.h"
 
 int spinning_secondaries;
@@ -299,6 +300,8 @@ void __init early_setup(unsigned long dt_ptr)
 
 	/* Enable early debugging if any specified (see udbg.h) */
 	udbg_early_init();
+
+	kaslr_early_init(__va(dt_ptr), 0);
 
 	udbg_printf(" -> %s(), dt_ptr: 0x%lx\n", __func__, dt_ptr);
 
