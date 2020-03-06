@@ -379,8 +379,10 @@ notrace void __init kaslr_early_init(void *dt_ptr, phys_addr_t size)
 	unsigned long kernel_sz;
 
 	if (IS_ENABLED(CONFIG_PPC64)) {
-		if (__run_at_load == 1)
+		if (__run_at_load == 1) {
+			kaslr_late_init();
 			return;
+		}
 
 		/* Setup flat device-tree pointer */
 		initial_boot_params = dt_ptr;
