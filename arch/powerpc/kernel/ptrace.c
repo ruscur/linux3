@@ -2829,6 +2829,19 @@ static int set_dac_range(struct task_struct *child,
 }
 #endif /* CONFIG_PPC_ADV_DEBUG_DAC_RANGE */
 
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+static int empty_ptrace_bp(struct thread_struct *thread)
+{
+	int i;
+
+	for (i = 0; i < nr_wp_slots(); i++) {
+		if (!thread->ptrace_bps[i])
+			return i;
+	}
+	return -1;
+}
+#endif
+
 #ifndef CONFIG_PPC_ADV_DEBUG_REGS
 static int empty_hw_brk(struct thread_struct *thread)
 {
@@ -2915,8 +2928,9 @@ static long ppc_set_hwdebug(struct task_struct *child,
 		len = 1;
 	else
 		return -EINVAL;
-	bp = thread->ptrace_bps[0];
-	if (bp)
+
+	i = empty_ptrace_bp(thread);
+	if (i < 0)
 		return -ENOSPC;
 
 	/* Create a new breakpoint request if one doesn't exist already */
@@ -2925,14 +2939,14 @@ static long ppc_set_hwdebug(struct task_struct *child,
 	attr.bp_len = len;
 	arch_bp_generic_fields(brk.type, &attr.bp_type);
 
-	thread->ptrace_bps[0] = bp = register_user_hw_breakpoint(&attr,
+	thread->ptrace_bps[i] = bp = register_user_hw_breakpoint(&attr,
 					       ptrace_triggered, NULL, child);
 	if (IS_ERR(bp)) {
-		thread->ptrace_bps[0] = NULL;
+		thread->ptrace_bps[i] = NULL;
 		return PTR_ERR(bp);
 	}
 
-	return 1;
+	return i + 1;
 #endif /* CONFIG_HAVE_HW_BREAKPOINT */
 
 	if (bp_info->addr_mode != PPC_BREAKPOINT_MODE_EXACT)
@@ -2979,10 +2993,10 @@ static long ppc_del_hwdebug(struct task_struct *child, long data)
 		return -EINVAL;
 
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
-	bp = thread->ptrace_bps[0];
+	bp = thread->ptrace_bps[data - 1];
 	if (bp) {
 		unregister_hw_breakpoint(bp);
-		thread->ptrace_bps[0] = NULL;
+		thread->ptrace_bps[data - 1] = NULL;
 	} else
 		ret = -ENOENT;
 	return ret;
