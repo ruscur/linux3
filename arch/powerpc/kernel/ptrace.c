@@ -3074,7 +3074,7 @@ long arch_ptrace(struct task_struct *child, long request,
 #else /* !CONFIG_PPC_ADV_DEBUG_REGS */
 		dbginfo.num_instruction_bps = 0;
 		if (ppc_breakpoint_available())
-			dbginfo.num_data_bps = 1;
+			dbginfo.num_data_bps = nr_wp_slots();
 		else
 			dbginfo.num_data_bps = 0;
 		dbginfo.num_condition_regs = 0;
