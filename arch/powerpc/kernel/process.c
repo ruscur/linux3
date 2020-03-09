@@ -704,21 +704,25 @@ void switch_booke_debug_regs(struct debug_reg *new_debug)
 EXPORT_SYMBOL_GPL(switch_booke_debug_regs);
 #else	/* !CONFIG_PPC_ADV_DEBUG_REGS */
 #ifndef CONFIG_HAVE_HW_BREAKPOINT
-static void set_breakpoint(struct arch_hw_breakpoint *brk)
+static void set_breakpoint(struct arch_hw_breakpoint *brk, int i)
 {
 	preempt_disable();
-	__set_breakpoint(brk, 0);
+	__set_breakpoint(brk, i);
 	preempt_enable();
 }
 
 static void set_debug_reg_defaults(struct thread_struct *thread)
 {
-	thread->hw_brk.address = 0;
-	thread->hw_brk.type = 0;
-	thread->hw_brk.len = 0;
-	thread->hw_brk.hw_len = 0;
-	if (ppc_breakpoint_available())
-		set_breakpoint(&thread->hw_brk);
+	int i;
+
+	for (i = 0; i < nr_wp_slots(); i++) {
+		thread->hw_brk[i].address = 0;
+		thread->hw_brk[i].type = 0;
+		thread->hw_brk[i].len = 0;
+		thread->hw_brk[i].hw_len = 0;
+		if (ppc_breakpoint_available())
+			set_breakpoint(&thread->hw_brk[i], i);
+	}
 }
 #endif /* !CONFIG_HAVE_HW_BREAKPOINT */
 #endif	/* CONFIG_PPC_ADV_DEBUG_REGS */
@@ -1141,6 +1145,24 @@ static inline void restore_sprs(struct thread_struct *old_thread,
 	thread_pkey_regs_restore(new_thread, old_thread);
 }
 
+#ifndef CONFIG_HAVE_HW_BREAKPOINT
+static void switch_hw_breakpoint(struct task_struct *new)
+{
+	int i;
+
+	for (i = 0; i < nr_wp_slots(); i++) {
+		if (unlikely(!hw_brk_match(this_cpu_ptr(&current_brk[i]),
+					   &new->thread.hw_brk[i]))) {
+			__set_breakpoint(&new->thread.hw_brk[i], i);
+		}
+	}
+}
+#else
+static void switch_hw_breakpoint(struct task_struct *new)
+{
+}
+#endif
+
 struct task_struct *__switch_to(struct task_struct *prev,
 	struct task_struct *new)
 {
@@ -1172,10 +1194,7 @@ struct task_struct *__switch_to(struct task_struct *prev,
  * For PPC_BOOK3S_64, we use the hw-breakpoint interfaces that would
  * schedule DABR
  */
-#ifndef CONFIG_HAVE_HW_BREAKPOINT
-	if (unlikely(!hw_brk_match(this_cpu_ptr(&current_brk[0]), &new->thread.hw_brk)))
-		__set_breakpoint(&new->thread.hw_brk, 0);
-#endif /* CONFIG_HAVE_HW_BREAKPOINT */
+	switch_hw_breakpoint(new);
 #endif
 
 	/*

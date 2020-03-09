@@ -107,6 +107,9 @@ static void do_signal(struct task_struct *tsk)
 	struct ksignal ksig = { .sig = 0 };
 	int ret;
 	int is32 = is_32bit_task();
+#ifndef CONFIG_PPC_ADV_DEBUG_REGS
+	int i;
+#endif
 
 	BUG_ON(tsk != current);
 
@@ -128,8 +131,10 @@ static void do_signal(struct task_struct *tsk)
 	 * user space. The DABR will have been cleared if it
 	 * triggered inside the kernel.
 	 */
-	if (tsk->thread.hw_brk.address && tsk->thread.hw_brk.type)
-		__set_breakpoint(&tsk->thread.hw_brk, 0);
+	for (i = 0; i < nr_wp_slots(); i++) {
+		if (tsk->thread.hw_brk[i].address && tsk->thread.hw_brk[i].type)
+			__set_breakpoint(&tsk->thread.hw_brk[i], i);
+	}
 #endif
 	/* Re-enable the breakpoints for the signal stack */
 	thread_change_pc(tsk, tsk->thread.regs);
