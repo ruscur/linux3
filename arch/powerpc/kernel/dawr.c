@@ -50,9 +50,13 @@ int set_dawr(struct arch_hw_breakpoint *brk, int nr)
 	return 0;
 }
 
-static void set_dawr_cb(void *info)
+static void disable_dawrs(void *info)
 {
-	set_dawr(info, 0);
+	struct arch_hw_breakpoint null_brk = {0};
+	int i;
+
+	for (i = 0; i < nr_wp_slots(); i++)
+		set_dawr(&null_brk, i);
 }
 
 static ssize_t dawr_write_file_bool(struct file *file,
@@ -74,7 +78,7 @@ static ssize_t dawr_write_file_bool(struct file *file,
 
 	/* If we are clearing, make sure all CPUs have the DAWR cleared */
 	if (!dawr_force_enable)
-		smp_call_function(set_dawr_cb, &null_brk, 0);
+		smp_call_function(disable_dawrs, NULL, 0);
 
 	return rc;
 }
