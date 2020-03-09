@@ -101,10 +101,10 @@ static inline bool dawr_enabled(void)
 {
 	return dawr_force_enable;
 }
-int set_dawr(struct arch_hw_breakpoint *brk);
+int set_dawr(struct arch_hw_breakpoint *brk, int nr);
 #else
 static inline bool dawr_enabled(void) { return false; }
-static inline int set_dawr(struct arch_hw_breakpoint *brk) { return -1; }
+static inline int set_dawr(struct arch_hw_breakpoint *brk, int nr) { return -1; }
 #endif
 
 #endif	/* __KERNEL__ */
