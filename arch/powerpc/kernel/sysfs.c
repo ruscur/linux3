@@ -586,8 +586,6 @@ EXPORT_SYMBOL(ppc_enable_pmcs);
  * SPRs which are not related to PMU.
  */
 #ifdef CONFIG_PPC64
-SYSFS_SPRSETUP(purr, SPRN_PURR);
-SYSFS_SPRSETUP(spurr, SPRN_SPURR);
 SYSFS_SPRSETUP(pir, SPRN_PIR);
 SYSFS_SPRSETUP(tscr, SPRN_TSCR);
 
@@ -596,8 +594,6 @@ SYSFS_SPRSETUP(tscr, SPRN_TSCR);
   enable write when needed with a separate function.
   Lets be conservative and default to pseries.
 */
-static DEVICE_ATTR(spurr, 0400, show_spurr, NULL);
-static DEVICE_ATTR(purr, 0400, show_purr, store_purr);
 static DEVICE_ATTR(pir, 0400, show_pir, NULL);
 static DEVICE_ATTR(tscr, 0600, show_tscr, store_tscr);
 #endif /* CONFIG_PPC64 */
@@ -761,39 +757,114 @@ static void create_svm_file(void)
 }
 #endif /* CONFIG_PPC_SVM */
 
-static void read_idle_purr(void *val)
-{
-	u64 *ret = val;
+/*
+ * The duration (in ms) from the last IPI to the target CPU until
+ * which a cached value of purr, spurr, idle_purr, idle_spurr can be
+ * reported to the user on a corresponding sysfs file read. Beyond
+ * this duration, fresh values need to be obtained by sending IPIs to
+ * the target CPU when the sysfs files are read.
+ */
+static unsigned long util_stats_staleness_tolerance_ms = 10;
+struct util_acct_stats {
+	u64 latest_purr;
+	u64 latest_spurr;
+	u64 latest_idle_purr;
+	u64 latest_idle_spurr;
+	unsigned long last_update_jiffies;
+};
 
-	*ret = read_this_idle_purr();
+DEFINE_PER_CPU(struct util_acct_stats, util_acct_stats);
+
+static void update_util_acct_stats(void *ptr)
+{
+	struct util_acct_stats *stats = ptr;
+
+	stats->latest_purr = mfspr(SPRN_PURR);
+	stats->latest_spurr = mfspr(SPRN_SPURR);
+	stats->latest_idle_purr = read_this_idle_purr();
+	stats->latest_idle_spurr = read_this_idle_spurr();
+	stats->last_update_jiffies = jiffies;
 }
+
+struct util_acct_stats *get_util_stats_ptr(int cpu)
+{
+	struct util_acct_stats *stats = per_cpu_ptr(&util_acct_stats, cpu);
+	unsigned long delta_jiffies;
+
+	delta_jiffies = jiffies - stats->last_update_jiffies;
+
+	/*
+	 * If we have a recent enough data, reuse that instead of
+	 * sending an IPI.
+	 */
+	if (jiffies_to_msecs(delta_jiffies) < util_stats_staleness_tolerance_ms)
+		return stats;
+
+	smp_call_function_single(cpu, update_util_acct_stats, stats, 1);
+	return stats;
+}
+
+static ssize_t show_purr(struct device *dev,
+			 struct device_attribute *attr, char *buf)
+{
+	struct cpu *cpu = container_of(dev, struct cpu, dev);
+	struct util_acct_stats *stats;
+
+	stats = get_util_stats_ptr(cpu->dev.id);
+	return sprintf(buf, "%llx\n", stats->latest_purr);
+}
+
+static void write_purr(void *val)
+{
+	mtspr(SPRN_PURR, *(unsigned long *)val);
+}
+
+static ssize_t __used store_purr(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct cpu *cpu = container_of(dev, struct cpu, dev);
+	unsigned long val;
+	int ret = kstrtoul(buf, 16, &val);
+
+	if (ret != 0)
+		return -EINVAL;
+
+	smp_call_function_single(cpu->dev.id, write_purr, &val, 1);
+	return count;
+}
+static DEVICE_ATTR(purr, 0400, show_purr, store_purr);
+
+static ssize_t show_spurr(struct device *dev,
+			  struct device_attribute *attr, char *buf)
+{
+	struct cpu *cpu = container_of(dev, struct cpu, dev);
+	struct util_acct_stats *stats;
+
+	stats = get_util_stats_ptr(cpu->dev.id);
+	return sprintf(buf, "%llx\n", stats->latest_spurr);
+}
+static DEVICE_ATTR(spurr, 0400, show_spurr, NULL);
 
 static ssize_t idle_purr_show(struct device *dev,
 			      struct device_attribute *attr, char *buf)
 {
 	struct cpu *cpu = container_of(dev, struct cpu, dev);
-	u64 val;
+	struct util_acct_stats *stats;
 
-	smp_call_function_single(cpu->dev.id, read_idle_purr, &val, 1);
-	return sprintf(buf, "%llx\n", val);
+	stats = get_util_stats_ptr(cpu->dev.id);
+	return sprintf(buf, "%llx\n", stats->latest_idle_purr);
 }
 static DEVICE_ATTR(idle_purr, 0400, idle_purr_show, NULL);
-
-static void read_idle_spurr(void *val)
-{
-	u64 *ret = val;
-
-	*ret = read_this_idle_spurr();
-}
 
 static ssize_t idle_spurr_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
 	struct cpu *cpu = container_of(dev, struct cpu, dev);
-	u64 val;
+	struct util_acct_stats *stats;
 
-	smp_call_function_single(cpu->dev.id, read_idle_spurr, &val, 1);
-	return sprintf(buf, "%llx\n", val);
+	stats =  get_util_stats_ptr(cpu->dev.id);
+	return sprintf(buf, "%llx\n", stats->latest_idle_spurr);
 }
 static DEVICE_ATTR(idle_spurr, 0400, idle_spurr_show, NULL);
 
