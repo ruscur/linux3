@@ -901,9 +901,13 @@
 			The feature only exists starting from
 			Arch Perfmon v4 (Skylake and newer).
 
-	disable_ddw	[PPC/PSERIES]
-			Disable Dynamic DMA Window support. Use this if
-			to workaround buggy firmware.
+	disable_ddw=	[PPC/PSERIES]
+			Controls weather Dynamic DMA Window support is enabled.
+			Use this if to workaround buggy firmware. Following
+			values are supported:
+                on      Disable ddw always
+                off     Enable ddw always
+		default Enable ddw if no Persistent memory present (default)
 
 	disable_ipv6=	[IPV6]
 			See Documentation/networking/ipv6.txt.

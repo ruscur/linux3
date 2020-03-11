@@ -12,6 +12,7 @@
 
 #include <linux/init.h>
 #include <linux/types.h>
+#include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/memblock.h>
@@ -755,12 +756,39 @@ static void pci_dma_dev_setup_pSeries(struct pci_dev *dev)
 		       pci_name(dev));
 }
 
+/*
+ * Following values for the variable are handled
+ * '-1': Force enable ddw even if Persistent memory is present
+ * '0' : Enable ddw if no Persistent memory present (default)
+ * '1' : Disable ddw always
+ */
 static int __read_mostly disable_ddw;
 
-static int __init disable_ddw_setup(char *str)
+static int __init disable_ddw_setup(char *param)
 {
-	disable_ddw = 1;
-	printk(KERN_INFO "ppc iommu: disabling ddw.\n");
+	bool val;
+	int res;
+
+	/* Maintain old behaviour that disables DDW when flag given */
+	if (!param) {
+		disable_ddw = 1;
+		return 0;
+	}
+
+	res = strtobool(param, &val);
+
+	if (!res) {
+		if (val) {
+			disable_ddw = 1;
+			pr_info("ppc iommu: disabling ddw.\n");
+		} else if (!val) {
+			/* Force enable of DDW even if pmem is available */
+			disable_ddw = -1;
+			pr_info("ppc iommu: will force enable ddw.\n");
+		}
+	} else if (strcmp(param, "default") == 0) {
+		disable_ddw = 0;
+	}
 
 	return 0;
 }
@@ -1313,6 +1341,37 @@ static struct notifier_block iommu_reconfig_nb = {
 	.notifier_call = iommu_reconfig_notifier,
 };
 
+/* Check if DDW can be supported for this lpar */
+int ddw_supported(void)
+{
+	struct device_node *dn;
+
+	if (disable_ddw == -1) /* force enable ddw */
+		goto out;
+
+	if (disable_ddw == 1)
+		return 0;
+
+	/*
+	 * Due to DMA window limitations currently DDW is not supported
+	 * for persistent memory. This is due 1 TiB size of direct mapped
+	 * DMA window size limitation enforce by phyp. Since pmem memory
+	 * will be mapped at phy address > 4TiB, we cannot accmodate pmem
+	 * in the DDW window and DMA's to/from the pmem memory will result in
+	 * PHBs getting frozen triggering EEH. Hence for the the time being
+	 * disable DDW in presence of a 'ibm,pmemory' node.
+	 */
+	dn = of_find_compatible_node(NULL, NULL, "ibm,pmemory");
+	if (dn) {
+		pr_info("IOMMU: Disabling DDW as pmem memory available\n");
+		of_node_put(dn);
+		return 0;
+	}
+ out:
+	pr_info("IOMMU: Enabling DDW support\n");
+	return 1;
+}
+
 /* These are called very early. */
 void iommu_init_early_pSeries(void)
 {
@@ -1322,7 +1381,7 @@ void iommu_init_early_pSeries(void)
 	if (firmware_has_feature(FW_FEATURE_LPAR)) {
 		pseries_pci_controller_ops.dma_bus_setup = pci_dma_bus_setup_pSeriesLP;
 		pseries_pci_controller_ops.dma_dev_setup = pci_dma_dev_setup_pSeriesLP;
-		if (!disable_ddw)
+		if (ddw_supported())
 			pseries_pci_controller_ops.iommu_bypass_supported =
 				iommu_bypass_supported_pSeriesLP;
 	} else {
