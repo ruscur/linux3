@@ -10,6 +10,7 @@
 #include <linux/fs.h>
 #include <linux/reboot.h>
 #include <linux/irq_work.h>
+#include <linux/extable.h>
 
 #include <asm/machdep.h>
 #include <asm/rtas.h>
@@ -505,6 +506,7 @@ static int mce_handle_error(struct pt_regs *regs, struct rtas_error_log *errp)
 	int initiator = rtas_error_initiator(errp);
 	int severity = rtas_error_severity(errp);
 	u8 error_type, err_sub_type;
+	const struct exception_table_entry *entry;
 
 	if (initiator == RTAS_INITIATOR_UNKNOWN)
 		mce_err.initiator = MCE_INITIATOR_UNKNOWN;
@@ -558,6 +560,12 @@ static int mce_handle_error(struct pt_regs *regs, struct rtas_error_log *errp)
 	switch (mce_log->error_type) {
 	case MC_ERROR_TYPE_UE:
 		mce_err.error_type = MCE_ERROR_TYPE_UE;
+		entry = search_kernel_exception_table(regs->nip);
+		if (entry) {
+			mce_err.ignore_event = true;
+			regs->nip = extable_fixup(entry);
+			disposition = RTAS_DISP_FULLY_RECOVERED;
+		}
 		switch (err_sub_type) {
 		case MC_ERROR_UE_IFETCH:
 			mce_err.u.ue_error_type = MCE_UE_ERROR_IFETCH;
