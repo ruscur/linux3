@@ -2405,3 +2405,15 @@ replay_interrupt_return:
 	blr
 
 _ASM_NOKPROBE_SYMBOL(__replay_interrupt)
+
+_GLOBAL(switch_to_virt_mode)
+	mflr	r10
+	mfmsr	r11
+	ori	r11,r11,MSR_IR|MSR_DR
+	/* Clear MSR_RI before setting SRR0 and SRR1 */
+	li	r12,0
+	mtmsrd	r12,1
+	mtspr	SPRN_SRR0,r10
+	mtspr	SPRN_SRR1,r11
+	RFI_TO_KERNEL
+	b	.

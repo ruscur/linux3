@@ -113,5 +113,6 @@ int dlpar_workqueue_init(void);
 
 void pseries_setup_rfi_flush(void);
 void pseries_lpar_read_hblkrm_characteristics(void);
+extern void switch_to_virt_mode(void);
 
 #endif /* _PSERIES_PSERIES_H */
