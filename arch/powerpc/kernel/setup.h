@@ -8,6 +8,8 @@
 #ifndef __ARCH_POWERPC_KERNEL_SETUP_H
 #define __ARCH_POWERPC_KERNEL_SETUP_H
 
+#define __nostackprotector __attribute__((__optimize__("no-stack-protector")))
+
 void initialize_cache_info(void);
 void irqstack_early_init(void);
 
