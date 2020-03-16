@@ -171,6 +171,20 @@ unsigned long __init mmu_mapin_ram(unsigned long base, unsigned long top)
 	return top;
 }
 
+static void mmu_pin_text(unsigned long boundary)
+{
+	unsigned long addr = PAGE_OFFSET;
+	unsigned long twc = MD_SVALID | MD_PS8MEG;
+	unsigned long rpn = __pa(addr) | 0xf0 | _PAGE_RO |
+			    _PAGE_SPS | _PAGE_SH | _PAGE_PRESENT;
+	int i;
+
+	for (i = 28; i < 32 && __pa(addr) < boundary; i++, addr += SZ_8M, rpn += SZ_8M)
+		mpc8xx_update_tlb(0, i, addr | MI_EVALID, twc, rpn);
+	for (; i < 32; i++)
+		mpc8xx_update_tlb(0, i, 0, 0, 0);
+}
+
 void mmu_mark_initmem_nx(void)
 {
 	unsigned long etext8 = ALIGN(__pa(_etext), SZ_8M);
@@ -180,14 +194,32 @@ void mmu_mark_initmem_nx(void)
 
 	mmu_mapin_ram_chunk(0, boundary, PAGE_KERNEL_TEXT, false);
 	mmu_mapin_ram_chunk(boundary, einittext8, PAGE_KERNEL, false);
+
+	if (IS_ENABLED(CONFIG_PIN_TLB_TEXT))
+		mmu_pin_text(boundary);
 }
 
 #ifdef CONFIG_STRICT_KERNEL_RWX
+static void mmu_pin_data(unsigned long sinittext)
+{
+	unsigned long addr = PAGE_OFFSET;
+	unsigned long twc = MD_SVALID | MD_PS8MEG;
+	unsigned long rpn = __pa(addr) | 0xf0 | _PAGE_RO |
+			    _PAGE_SPS | _PAGE_SH | _PAGE_PRESENT;
+	int i;
+	int max = IS_ENABLED(CONFIG_PIN_TLB_IMMR) ? 30 : 31;
+
+	for (i = 28; i <= max && __pa(addr) < sinittext; i++, addr += SZ_8M, rpn += SZ_8M)
+		mpc8xx_update_tlb(0, i, addr | MI_EVALID, twc, rpn);
+}
+
 void mmu_mark_rodata_ro(void)
 {
 	unsigned long sinittext = __pa(_sinittext);
 
 	mmu_mapin_ram_chunk(0, sinittext, PAGE_KERNEL_ROX, false);
+	if (IS_ENABLED(CONFIG_PIN_TLB_DATA))
+		mmu_pin_data(sinittext);
 }
 #endif
 
