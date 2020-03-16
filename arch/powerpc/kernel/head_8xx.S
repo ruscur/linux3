@@ -866,6 +866,50 @@ initial_mmu:
 	mtspr	SPRN_DER, r8
 	blr
 
+/*
+ * void mpc8xx_update_tlb(int data, int idx, unsigned long epn,
+ *			  unsigned long twc, unsigned long rpn);
+ */
+_GLOBAL(mpc8xx_update_tlb)
+	lis	r9, (1f - PAGE_OFFSET)@h
+	ori	r9, r9, (1f - PAGE_OFFSET)@l
+	mfmsr	r10
+	mflr	r11
+	li	r12, MSR_KERNEL & ~(MSR_IR | MSR_DR)
+	rlwinm	r0, r10, 0, ~MSR_RI
+	rlwinm	r0, r0, 0, ~MSR_EE
+	mtmsr	r0
+	isync
+	.align	4
+	mtspr	SPRN_SRR0, r9
+	mtspr	SPRN_SRR1, r12
+	rfi
+
+1:	cmpwi	r3, 0
+	beq	2f
+
+	mfspr	r0, SPRN_MD_CTR
+	rlwimi	r0, r4, 8, 0x00001f00
+	mtspr	SPRN_MD_CTR, r0
+
+	mtspr	SPRN_MD_EPN, r5
+	mtspr	SPRN_MD_TWC, r6
+	mtspr	SPRN_MD_RPN, r7
+	b	3f
+
+2:	mfspr	r0, SPRN_MI_CTR
+	rlwimi	r0, r4, 8, 0x00001f00
+	mtspr	SPRN_MI_CTR, r0
+
+	mtspr	SPRN_MI_EPN, r5
+	mtspr	SPRN_MI_TWC, r6
+	mtspr	SPRN_MI_RPN, r7
+
+3:	li	r12, MSR_KERNEL & ~(MSR_IR | MSR_DR | MSR_RI)
+	mtmsr	r12
+	mtspr	SPRN_SRR1, r10
+	mtspr	SPRN_SRR0, r11
+	rfi
 
 /*
  * We put a few things here that have to be page-aligned.

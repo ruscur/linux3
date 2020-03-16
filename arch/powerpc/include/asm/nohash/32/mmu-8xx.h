@@ -193,6 +193,9 @@
 
 #include <linux/mmdebug.h>
 
+void mpc8xx_update_tlb(int data, int idx, unsigned long epn,
+		       unsigned long twc, unsigned long rpn);
+
 typedef struct {
 	unsigned int id;
 	unsigned int active;
