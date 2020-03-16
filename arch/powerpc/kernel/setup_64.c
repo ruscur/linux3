@@ -285,17 +285,27 @@ void __init early_setup(unsigned long dt_ptr)
 
 	/* -------- printk is _NOT_ safe to use here ! ------- */
 
-	/* Try new device tree based feature discovery ... */
-	if (!dt_cpu_ftrs_init(__va(dt_ptr)))
-		/* Otherwise use the old style CPU table */
-		identify_cpu(0, mfspr(SPRN_PVR));
+	/*
+	 * Assume we're on cpu 0 for now.
+	 *
+	 * We need to load a PACA very early if we are using kcov. kcov will
+	 * call in_task() in its instrumentation, which relies on the current
+	 * task from the PACA. dt_cpu_ftrs_init is coveraged-enabled and also
+	 * calls into the coverage-enabled generic dt library.
+	 *
+	 * Set up a temporary paca. It is going to be replaced below.
+	 */
 
-	/* Assume we're on cpu 0 for now. Don't write to the paca yet! */
 	initialise_paca(&boot_paca, 0);
 	setup_paca(&boot_paca);
 	fixup_boot_paca();
 
 	/* -------- printk is now safe to use ------- */
+
+	/* Try new device tree based feature discovery ... */
+	if (!dt_cpu_ftrs_init(__va(dt_ptr)))
+		/* Otherwise use the old style CPU table */
+		identify_cpu(0, mfspr(SPRN_PVR));
 
 	/* Enable early debugging if any specified (see udbg.h) */
 	udbg_early_init();
