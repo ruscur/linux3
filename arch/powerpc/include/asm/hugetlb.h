@@ -13,6 +13,8 @@
 #include <asm/nohash/32/hugetlb-8xx.h>
 #endif /* CONFIG_PPC_BOOK3S_64 */
 
+#define hugepd_none(hpd)	(hpd_val(hpd) == 0)
+
 extern bool hugetlb_disabled;
 
 void hugetlbpage_init_default(void);
