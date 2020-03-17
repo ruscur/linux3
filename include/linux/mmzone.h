@@ -798,8 +798,10 @@ typedef struct pglist_data {
 	atomic_long_t		vm_stat[NR_VM_NODE_STAT_ITEMS];
 } pg_data_t;
 
-#define node_present_pages(nid)	(NODE_DATA(nid)->node_present_pages)
-#define node_spanned_pages(nid)	(NODE_DATA(nid)->node_spanned_pages)
+#define node_present_pages(nid)		\
+	(node_online(nid) ? NODE_DATA(nid)->node_present_pages : 0)
+#define node_spanned_pages(nid)		\
+	(node_online(nid) ? NODE_DATA(nid)->node_spanned_pages : 0)
 #ifdef CONFIG_FLAT_NODE_MEM_MAP
 #define pgdat_page_nr(pgdat, pagenr)	((pgdat)->node_mem_map + (pagenr))
 #else
