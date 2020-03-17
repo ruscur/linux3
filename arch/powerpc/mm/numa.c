@@ -827,7 +827,16 @@ void __init dump_numa_cpu_topology(void)
 	if (!numa_enabled)
 		return;
 
-	for_each_online_node(node) {
+	for_each_node(node) {
+		/*
+		 * For all possible but not yet online nodes, ensure their
+		 * node_numa_mem is set correctly so that kmalloc_node works
+		 * for such nodes.
+		 */
+		if (!node_online(node)) {
+			reset_numa_mem(node);
+			continue;
+		}
 		pr_info("Node %d CPUs:", node);
 
 		count = 0;
