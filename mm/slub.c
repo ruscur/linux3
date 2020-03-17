@@ -1969,14 +1969,8 @@ static void *get_partial(struct kmem_cache *s, gfp_t flags, int node,
 		struct kmem_cache_cpu *c)
 {
 	void *object;
-	int searchnode = node;
 
-	if (node == NUMA_NO_NODE)
-		searchnode = numa_mem_id();
-	else if (!node_present_pages(node))
-		searchnode = node_to_mem_node(node);
-
-	object = get_partial_node(s, get_node(s, searchnode), c, flags);
+	object = get_partial_node(s, get_node(s, node), c, flags);
 	if (object || node != NUMA_NO_NODE)
 		return object;
 
@@ -2469,6 +2463,11 @@ static inline void *new_slab_objects(struct kmem_cache *s, gfp_t flags,
 
 	WARN_ON_ONCE(s->ctor && (flags & __GFP_ZERO));
 
+	if (node == NUMA_NO_NODE)
+		node = numa_mem_id();
+	else if (!node_present_pages(node))
+		node = node_to_mem_node(node);
+
 	freelist = get_partial(s, flags, node, c);
 
 	if (freelist)
@@ -2568,12 +2567,10 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
 redo:
 
 	if (unlikely(!node_match(page, node))) {
-		int searchnode = node;
-
 		if (node != NUMA_NO_NODE && !node_present_pages(node))
-			searchnode = node_to_mem_node(node);
+			node = node_to_mem_node(node);
 
-		if (unlikely(!node_match(page, searchnode))) {
+		if (unlikely(!node_match(page, node))) {
 			stat(s, ALLOC_NODE_MISMATCH);
 			deactivate_slab(s, page, c->freelist, c);
 			goto new_slab;
