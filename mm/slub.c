@@ -2474,6 +2474,9 @@ static inline void *new_slab_objects(struct kmem_cache *s, gfp_t flags,
 	if (freelist)
 		return freelist;
 
+	if (node != NUMA_NO_NODE && !node_present_pages(node))
+		node = node_to_mem_node(node);
+
 	page = new_slab(s, flags, node);
 	if (page) {
 		c = raw_cpu_ptr(s->cpu_slab);
@@ -2568,12 +2571,10 @@ static void *___slab_alloc(struct kmem_cache *s, gfp_t gfpflags, int node,
 redo:
 
 	if (unlikely(!node_match(page, node))) {
-		int searchnode = node;
-
 		if (node != NUMA_NO_NODE && !node_present_pages(node))
-			searchnode = node_to_mem_node(node);
+			node = node_to_mem_node(node);
 
-		if (unlikely(!node_match(page, searchnode))) {
+		if (unlikely(!node_match(page, node))) {
 			stat(s, ALLOC_NODE_MISMATCH);
 			deactivate_slab(s, page, c->freelist, c);
 			goto new_slab;
