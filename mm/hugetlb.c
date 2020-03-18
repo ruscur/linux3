@@ -2869,12 +2869,6 @@ static int __init hugetlb_init(void)
 }
 subsys_initcall(hugetlb_init);
 
-/* Should be called on processing a hugepagesz=... option */
-void __init hugetlb_bad_size(void)
-{
-	parsed_valid_hugepagesz = false;
-}
-
 void __init hugetlb_add_hstate(unsigned int order)
 {
 	struct hstate *h;
@@ -2943,6 +2937,24 @@ static int __init hugetlb_nrpages_setup(char *s)
 	return 1;
 }
 __setup("hugepages=", hugetlb_nrpages_setup);
+
+static int __init hugepagesz_setup(char *s)
+{
+	unsigned long long size;
+	char *saved_s = s;
+
+	size = memparse(s, &s);
+
+	if (!arch_hugetlb_valid_size(size)) {
+		parsed_valid_hugepagesz = false;
+		pr_err("HugeTLB: unsupported hugepagesz %s\n", saved_s);
+		return 0;
+	}
+
+	hugetlb_add_hstate(ilog2(size) - PAGE_SHIFT);
+	return 1;
+}
+__setup("hugepagesz=", hugepagesz_setup);
 
 static int __init default_hugepagesz_setup(char *s)
 {
