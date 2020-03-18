@@ -62,6 +62,21 @@ static inline int early_cpu_to_node(int cpu)
 	 */
 	return (nid < 0) ? 0 : nid;
 }
+
+static inline int update_default_numa_mem(void)
+{
+	unsigned int node;
+
+	for_each_node(node) {
+		/*
+		 * For all possible but not yet online nodes, ensure their
+		 * node_numa_mem is set correctly so that kmalloc_node works
+		 * for such nodes.
+		 */
+		if (!node_online(node))
+			reset_numa_mem(node);
+	}
+}
 #else
 
 static inline int early_cpu_to_node(int cpu) { return 0; }
@@ -90,6 +105,7 @@ static inline int cpu_distance(__be32 *cpu1_assoc, __be32 *cpu2_assoc)
 	return 0;
 }
 
+static inline int update_default_numa_mem(void) {}
 #endif /* CONFIG_NUMA */
 
 #if defined(CONFIG_NUMA) && defined(CONFIG_PPC_SPLPAR)

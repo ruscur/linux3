@@ -1383,6 +1383,7 @@ void __init smp_cpus_done(unsigned int max_cpus)
 	if (smp_ops && smp_ops->bringup_done)
 		smp_ops->bringup_done();
 
+	update_default_numa_mem();
 	dump_numa_cpu_topology();
 
 #ifdef CONFIG_SCHED_SMT
