@@ -633,6 +633,13 @@ static inline spinlock_t *huge_pte_lockptr(struct hstate *h,
 	return &mm->page_table_lock;
 }
 
+#ifndef arch_hugetlb_valid_size
+static inline bool arch_hugetlb_valid_size(unsigned long long size)
+{
+	return (size == HPAGE_SIZE);
+}
+#endif
+
 #ifndef hugepages_supported
 /*
  * Some platform decide whether they support huge pages at boot

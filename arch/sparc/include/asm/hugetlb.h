@@ -10,6 +10,9 @@ struct pud_huge_patch_entry {
 	unsigned int insn;
 };
 extern struct pud_huge_patch_entry __pud_huge_patch, __pud_huge_patch_end;
+
+extern bool __init arch_hugetlb_valid_size(unsigned long long size);
+#define arch_hugetlb_valid_size arch_hugetlb_valid_size
 #endif
 
 #define __HAVE_ARCH_HUGE_SET_HUGE_PTE_AT

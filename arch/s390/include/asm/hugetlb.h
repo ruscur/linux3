@@ -15,6 +15,9 @@
 #define hugetlb_free_pgd_range			free_pgd_range
 #define hugepages_supported()			(MACHINE_HAS_EDAT1)
 
+extern bool __init arch_hugetlb_valid_size(unsigned long long size);
+#define arch_hugetlb_valid_size arch_hugetlb_valid_size
+
 void set_huge_pte_at(struct mm_struct *mm, unsigned long addr,
 		     pte_t *ptep, pte_t pte);
 pte_t huge_ptep_get(pte_t *ptep);

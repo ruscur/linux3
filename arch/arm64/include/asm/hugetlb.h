@@ -59,6 +59,8 @@ extern void huge_pte_clear(struct mm_struct *mm, unsigned long addr,
 extern void set_huge_swap_pte_at(struct mm_struct *mm, unsigned long addr,
 				 pte_t *ptep, pte_t pte, unsigned long sz);
 #define set_huge_swap_pte_at set_huge_swap_pte_at
+extern bool __init arch_hugetlb_valid_size(unsigned long long size);
+#define arch_hugetlb_valid_size arch_hugetlb_valid_size
 
 #include <asm-generic/hugetlb.h>
 

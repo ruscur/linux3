@@ -5,6 +5,9 @@
 #include <asm-generic/hugetlb.h>
 #include <asm/page.h>
 
+extern bool __init arch_hugetlb_valid_size(unsigned long long size);
+#define arch_hugetlb_valid_size arch_hugetlb_valid_size
+
 static inline int is_hugepage_only_range(struct mm_struct *mm,
 					 unsigned long addr,
 					 unsigned long len) {
