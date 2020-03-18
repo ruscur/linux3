@@ -579,7 +579,7 @@ static void ebb_switch_out(unsigned long mmcr0)
 		return;
 
 	current->thread.siar  = mfspr(SPRN_SIAR);
-	current->thread.sier  = mfspr(SPRN_SIER);
+	current->thread.sier  = mfspr(SPRN_SIER) & SIER_USER_MASK;
 	current->thread.sdar  = mfspr(SPRN_SDAR);
 	current->thread.mmcr0 = mmcr0 & MMCR0_USER_MASK;
 	current->thread.mmcr2 = mfspr(SPRN_MMCR2) & MMCR2_USER_MASK;
