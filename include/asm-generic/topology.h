@@ -68,6 +68,9 @@
 #ifndef set_numa_mem
 #define set_numa_mem(node)
 #endif
+#ifndef reset_numa_mem
+#define reset_numa_mem(node)
+#endif
 #ifndef set_cpu_numa_mem
 #define set_cpu_numa_mem(cpu, node)
 #endif

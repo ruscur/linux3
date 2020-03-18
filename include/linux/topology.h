@@ -147,6 +147,13 @@ static inline int node_to_mem_node(int node)
 }
 #endif
 
+#ifndef reset_numa_mem
+static inline void reset_numa_mem(int node)
+{
+	_node_numa_mem_[node] = first_memory_node;
+}
+#endif
+
 #ifndef numa_mem_id
 /* Returns the number of the nearest Node with memory */
 static inline int numa_mem_id(void)
