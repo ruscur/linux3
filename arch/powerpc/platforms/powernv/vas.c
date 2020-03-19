@@ -14,6 +14,8 @@
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 #include <linux/of.h>
+#include <linux/irqdomain.h>
+#include <linux/interrupt.h>
 #include <asm/prom.h>
 #include <asm/xive.h>
 
@@ -24,9 +26,53 @@ static LIST_HEAD(vas_instances);
 
 static DEFINE_PER_CPU(int, cpu_vas_id);
 
+static irqreturn_t vas_fault_handler(int irq, void *dev_id)
+{
+	struct vas_instance *vinst = dev_id;
+	irqreturn_t ret = IRQ_WAKE_THREAD;
+	unsigned long flags;
+
+	/*
+	 * NX can generate an interrupt for multiple faults. So the
+	 * fault handler thread process all CRBs until finds invalid
+	 * entry. In case if NX sees continuous faults, it is possible
+	 * that the thread function entered with the first interrupt
+	 * can execute and process all valid CRBs.
+	 * So wake up thread only if the fault thread is not in progress.
+	 */
+	spin_lock_irqsave(&vinst->fault_lock, flags);
+
+	if (atomic_read(&vinst->faults_in_progress))
+		ret = IRQ_HANDLED;
+	else
+		atomic_set(&vinst->faults_in_progress, 1);
+
+	spin_unlock_irqrestore(&vinst->fault_lock, flags);
+
+	return ret;
+}
+
 static int vas_irq_fault_window_setup(struct vas_instance *vinst)
 {
-	return vas_setup_fault_window(vinst);
+	char devname[64];
+	int rc = 0;
+
+	snprintf(devname, sizeof(devname), "vas-%d", vinst->vas_id);
+	rc = request_threaded_irq(vinst->virq, vas_fault_handler,
+				vas_fault_thread_fn, 0, devname, vinst);
+
+	if (rc) {
+		pr_err("VAS[%d]: Request IRQ(%d) failed with %d\n",
+				vinst->vas_id, vinst->virq, rc);
+		goto out;
+	}
+
+	rc = vas_setup_fault_window(vinst);
+	if (rc)
+		free_irq(vinst->virq, vinst);
+
+out:
+	return rc;
 }
 
 static int init_vas_instance(struct platform_device *pdev)
@@ -109,6 +155,7 @@ static int init_vas_instance(struct platform_device *pdev)
 	list_add(&vinst->node, &vas_instances);
 	mutex_unlock(&vas_mutex);
 
+	spin_lock_init(&vinst->fault_lock);
 	/*
 	 * IRQ and fault handling setup is needed only for user space
 	 * send windows.
