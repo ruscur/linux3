@@ -485,7 +485,7 @@ EXPORT_SYMBOL(flush_dcache_page);
 
 void flush_dcache_icache_page(struct page *page)
 {
-#ifdef CONFIG_HUGETLB_PAGE
+#if defined(CONFIG_TRANSPARENT_HUGEPAGE) || defined(CONFIG_HUGETLB_PAGE)
 	if (PageCompound(page)) {
 		flush_dcache_icache_hugepage(page);
 		return;
