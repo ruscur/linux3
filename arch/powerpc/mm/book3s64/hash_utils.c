@@ -354,6 +354,7 @@ int htab_remove_mapping(unsigned long vstart, unsigned long vend,
 }
 
 static bool disable_1tb_segments = false;
+bool torture_segments_enabled __read_mostly = false;
 
 static int __init parse_disable_1tb_segments(char *p)
 {
@@ -361,6 +362,13 @@ static int __init parse_disable_1tb_segments(char *p)
 	return 0;
 }
 early_param("disable_1tb_segments", parse_disable_1tb_segments);
+
+static int __init parse_torture_segments(char *p)
+{
+	torture_segments_enabled = true;
+	return 0;
+}
+early_param("torture_segments", parse_torture_segments);
 
 static int __init htab_dt_scan_seg_sizes(unsigned long node,
 					 const char *uname, int depth,
@@ -853,6 +861,8 @@ static void __init hash_init_partition_table(phys_addr_t hash_table,
 	pr_info("Partition table %p\n", partition_tb);
 }
 
+DEFINE_STATIC_KEY_FALSE(torture_segments_key);
+
 static void __init htab_initialize(void)
 {
 	unsigned long table;
@@ -868,6 +878,9 @@ static void __init htab_initialize(void)
 		mmu_highuser_ssize = MMU_SEGSIZE_1T;
 		printk(KERN_INFO "Using 1TB segments\n");
 	}
+
+	if (torture_segments_enabled)
+		static_branch_enable(&torture_segments_key);
 
 	/*
 	 * Calculate the required size of the htab.  We want the number of

@@ -865,6 +865,10 @@
 			can be useful when debugging issues that require an SLB
 			miss to occur.
 
+	torture_segments [PPC]
+			Limits the number of SLB entries used, and flushes
+			them frequently to stress SLB faults.
+
 	disable=	[IPV6]
 			See Documentation/networking/ipv6.txt.
 
