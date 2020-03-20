@@ -234,9 +234,10 @@ repeat:
 		goto repeat;
 }
 
-void rcuwait_wake_up(struct rcuwait *w)
+bool rcuwait_wake_up(struct rcuwait *w)
 {
 	struct task_struct *task;
+	bool ret = false;
 
 	rcu_read_lock();
 
@@ -254,10 +255,15 @@ void rcuwait_wake_up(struct rcuwait *w)
 	smp_mb(); /* (B) */
 
 	task = rcu_dereference(w->task);
-	if (task)
+	if (task) {
 		wake_up_process(task);
+	        ret = true;
+	}
 	rcu_read_unlock();
+
+	return ret;
 }
+EXPORT_SYMBOL_GPL(rcuwait_wake_up);
 
 /*
  * Determine if a process group is "orphaned", according to the POSIX
