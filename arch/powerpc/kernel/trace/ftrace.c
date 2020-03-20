@@ -949,6 +949,9 @@ unsigned long prepare_ftrace_return(unsigned long parent, unsigned long ip,
 {
 	unsigned long return_hooker;
 
+	if (WARN_ON_ONCE((mfmsr() & (MSR_IR|MSR_DR)) != (MSR_IR|MSR_DR)))
+		goto out;
+
 	if (unlikely(ftrace_graph_is_dead()))
 		goto out;
 

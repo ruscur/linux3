@@ -51,15 +51,20 @@ _GLOBAL(ftrace_regs_caller)
 	SAVE_10GPRS(12, r1)
 	SAVE_10GPRS(22, r1)
 
-	/* Save previous stack pointer (r1) */
-	addi	r8, r1, SWITCH_FRAME_SIZE
-	std	r8, GPR1(r1)
-
 	/* Load special regs for save below */
 	mfmsr   r8
 	mfctr   r9
 	mfxer   r10
 	mfcr	r11
+
+	/* Shouldn't be called in real mode */
+	andi.	r3,r8,(MSR_IR|MSR_DR)
+	cmpdi	r3,(MSR_IR|MSR_DR)
+	bne	ftrace_bad_realmode
+
+	/* Save previous stack pointer (r1) */
+	addi	r8, r1, SWITCH_FRAME_SIZE
+	std	r8, GPR1(r1)
 
 	/* Get the _mcount() call site out of LR */
 	mflr	r7
@@ -141,6 +146,12 @@ _GLOBAL(ftrace_graph_stub)
 _GLOBAL(ftrace_stub)
 	blr
 
+ftrace_bad_realmode:
+	REST_4GPRS(8, r1)
+#ifdef CONFIG_BUG
+1:	trap
+	EMIT_BUG_ENTRY 1b,__FILE__,__LINE__,(BUGFLAG_WARNING | BUGFLAG_ONCE)
+#endif
 ftrace_no_trace:
 	mflr	r3
 	mtctr	r3
