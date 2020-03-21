@@ -146,6 +146,25 @@
 				  0 0x00010000>;
 		};
 	};
+
+	gpio-poweroff {
+		compatible = "gpio-poweroff";
+		gpios = <&gpio0 3 1>;
+	};
+
+	gpio-restart {
+		compatible = "gpio-restart";
+		gpios = <&gpio0 2 1>;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		hdd {
+			label = "Disk activity";
+			gpios = <&gpio0 5 0>;
+			linux,default-trigger = "disk-activity";
+		};
+	};
 };
 
 /include/ "p5020si-post.dtsi"
