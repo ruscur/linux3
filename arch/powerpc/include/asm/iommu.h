@@ -161,6 +161,7 @@ struct iommu_table_group;
 
 struct iommu_table_group_ops {
 	unsigned long (*get_table_size)(
+			int num,
 			__u32 page_shift,
 			__u64 window_size,
 			__u32 levels);

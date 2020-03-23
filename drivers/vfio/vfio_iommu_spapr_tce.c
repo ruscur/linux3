@@ -613,8 +613,8 @@ static long tce_iommu_create_table(struct tce_container *container,
 {
 	long ret, table_size;
 
-	table_size = table_group->ops->get_table_size(page_shift, window_size,
-			levels);
+	table_size = table_group->ops->get_table_size(num, page_shift,
+			window_size, levels);
 	if (!table_size)
 		return -EINVAL;
 
