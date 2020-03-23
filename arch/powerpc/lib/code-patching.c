@@ -19,6 +19,7 @@
 #include <asm/page.h>
 #include <asm/code-patching.h>
 #include <asm/setup.h>
+#include <asm/mmu_context.h>
 
 static int __patch_instruction(unsigned int *exec_addr, unsigned int instr,
 			       unsigned int *patch_addr)
@@ -65,99 +66,79 @@ void __init poking_init(void)
 	pte_unmap_unlock(ptep, ptl);
 }
 
-static DEFINE_PER_CPU(struct vm_struct *, text_poke_area);
-
-static int text_area_cpu_up(unsigned int cpu)
-{
-	struct vm_struct *area;
-
-	area = get_vm_area(PAGE_SIZE, VM_ALLOC);
-	if (!area) {
-		WARN_ONCE(1, "Failed to create text area for cpu %d\n",
-			cpu);
-		return -1;
-	}
-	this_cpu_write(text_poke_area, area);
-
-	return 0;
-}
-
-static int text_area_cpu_down(unsigned int cpu)
-{
-	free_vm_area(this_cpu_read(text_poke_area));
-	return 0;
-}
-
-/*
- * Run as a late init call. This allows all the boot time patching to be done
- * simply by patching the code, and then we're called here prior to
- * mark_rodata_ro(), which happens after all init calls are run. Although
- * BUG_ON() is rude, in this case it should only happen if ENOMEM, and we judge
- * it as being preferable to a kernel that will crash later when someone tries
- * to use patch_instruction().
- */
-static int __init setup_text_poke_area(void)
-{
-	BUG_ON(!cpuhp_setup_state(CPUHP_AP_ONLINE_DYN,
-		"powerpc/text_poke:online", text_area_cpu_up,
-		text_area_cpu_down));
-
-	return 0;
-}
-late_initcall(setup_text_poke_area);
+struct patch_mapping {
+	spinlock_t *ptl; /* for protecting pte table */
+	struct temp_mm temp_mm;
+};
 
 /*
  * This can be called for kernel text or a module.
  */
-static int map_patch_area(void *addr, unsigned long text_poke_addr)
+static int map_patch(const void *addr, struct patch_mapping *patch_mapping)
 {
-	unsigned long pfn;
-	int err;
+	struct page *page;
+	pte_t pte, *ptep;
+	pgprot_t pgprot;
 
 	if (is_vmalloc_addr(addr))
-		pfn = vmalloc_to_pfn(addr);
+		page = vmalloc_to_page(addr);
 	else
-		pfn = __pa_symbol(addr) >> PAGE_SHIFT;
+		page = virt_to_page(addr);
 
-	err = map_kernel_page(text_poke_addr, (pfn << PAGE_SHIFT), PAGE_KERNEL);
+	if (radix_enabled())
+		pgprot = __pgprot(pgprot_val(PAGE_KERNEL));
+	else
+		pgprot = PAGE_SHARED;
 
-	pr_devel("Mapped addr %lx with pfn %lx:%d\n", text_poke_addr, pfn, err);
-	if (err)
+	ptep = get_locked_pte(patching_mm, patching_addr, &patch_mapping->ptl);
+	if (unlikely(!ptep)) {
+		pr_warn("map patch: failed to allocate pte for patching\n");
 		return -1;
+	}
+
+	pte = mk_pte(page, pgprot);
+	set_pte_at(patching_mm, patching_addr, ptep, pte);
+
+	init_temp_mm(&patch_mapping->temp_mm, patching_mm);
+	use_temporary_mm(&patch_mapping->temp_mm);
 
 	return 0;
 }
 
-static inline int unmap_patch_area(unsigned long addr)
+static int unmap_patch(struct patch_mapping *patch_mapping)
 {
 	pte_t *ptep;
 	pmd_t *pmdp;
 	pud_t *pudp;
 	pgd_t *pgdp;
 
-	pgdp = pgd_offset_k(addr);
+	pgdp = pgd_offset(patching_mm, patching_addr);
 	if (unlikely(!pgdp))
 		return -EINVAL;
 
-	pudp = pud_offset(pgdp, addr);
+	pudp = pud_offset(pgdp, patching_addr);
 	if (unlikely(!pudp))
 		return -EINVAL;
 
-	pmdp = pmd_offset(pudp, addr);
+	pmdp = pmd_offset(pudp, patching_addr);
 	if (unlikely(!pmdp))
 		return -EINVAL;
 
-	ptep = pte_offset_kernel(pmdp, addr);
+	ptep = pte_offset_kernel(pmdp, patching_addr);
 	if (unlikely(!ptep))
 		return -EINVAL;
 
-	pr_devel("clearing mm %p, pte %p, addr %lx\n", &init_mm, ptep, addr);
+	/*
+	 * In hash, pte_clear flushes the tlb
+	 */
+	pte_clear(patching_mm, patching_addr, ptep);
+	unuse_temporary_mm(&patch_mapping->temp_mm);
 
 	/*
-	 * In hash, pte_clear flushes the tlb, in radix, we have to
+	 * In radix, we have to explicitly flush the tlb (no-op in hash)
 	 */
-	pte_clear(&init_mm, addr, ptep);
-	flush_tlb_kernel_range(addr, addr + PAGE_SIZE);
+	local_flush_tlb_mm(patching_mm);
+	pte_unmap_unlock(ptep, patch_mapping->ptl);
 
 	return 0;
 }
@@ -167,33 +148,38 @@ static int do_patch_instruction(unsigned int *addr, unsigned int instr)
 	int err;
 	unsigned int *patch_addr = NULL;
 	unsigned long flags;
-	unsigned long text_poke_addr;
-	unsigned long kaddr = (unsigned long)addr;
+	struct patch_mapping patch_mapping;
 
 	/*
-	 * During early early boot patch_instruction is called
-	 * when text_poke_area is not ready, but we still need
-	 * to allow patching. We just do the plain old patching
+	 * The patching_mm is initialized before calling mark_rodata_ro. Prior
+	 * to this, patch_instruction is called when we don't have (and don't
+	 * need) the patching_mm so just do plain old patching.
 	 */
-	if (!this_cpu_read(text_poke_area))
+	if (!patching_mm)
 		return raw_patch_instruction(addr, instr);
 
 	local_irq_save(flags);
 
-	text_poke_addr = (unsigned long)__this_cpu_read(text_poke_area)->addr;
-	if (map_patch_area(addr, text_poke_addr)) {
-		err = -1;
+	err = map_patch(addr, &patch_mapping);
+	if (err)
 		goto out;
-	}
 
-	patch_addr = (unsigned int *)(text_poke_addr) +
-			((kaddr & ~PAGE_MASK) / sizeof(unsigned int));
+	patch_addr = (unsigned int *)(patching_addr) +
+			(offset_in_page((unsigned long)addr) /
+				sizeof(unsigned int));
 
 	__patch_instruction(addr, instr, patch_addr);
 
-	err = unmap_patch_area(text_poke_addr);
+	err = unmap_patch(&patch_mapping);
 	if (err)
-		pr_warn("failed to unmap %lx\n", text_poke_addr);
+		pr_warn("unmap patch: failed to unmap patch\n");
+
+	/*
+	 * Something is wrong if what we just wrote doesn't match what we
+	 * think we just wrote.
+	 * XXX: BUG_ON() instead?
+	 */
+	WARN_ON(memcmp(addr, &instr, sizeof(instr)));
 
 out:
 	local_irq_restore(flags);
