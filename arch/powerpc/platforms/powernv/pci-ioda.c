@@ -2367,7 +2367,7 @@ static long pnv_pci_ioda2_set_window(struct iommu_table_group *table_group,
 }
 
 static long pnv_pci_ioda2_set_bypass_iommu(struct pnv_ioda_pe *pe,
-		unsigned long bus_offset)
+		unsigned long bus_offset, unsigned long tbl_offset)
 {
 	struct pnv_phb *phb = pe->phb;
 	long rc;
@@ -2376,6 +2376,8 @@ static long pnv_pci_ioda2_set_bypass_iommu(struct pnv_ioda_pe *pe,
 
 
 	pgsizes = pnv_ioda_parse_tce_sizes(phb);
+	/* Filter sizes to have round number of TCEs to cover 0..tbl_offset */
+	pgsizes &= tbl_offset | (tbl_offset - 1);
 	if (!pgsizes)
 		return -1;
 
@@ -2386,17 +2388,19 @@ static long pnv_pci_ioda2_set_bypass_iommu(struct pnv_ioda_pe *pe,
 				1 /* window number */,
 				bus_offset,
 				__fls(pgsizes),
-				roundup_pow_of_two(memory_hotplug_max()),
+				roundup_pow_of_two(memory_hotplug_max() +
+						   tbl_offset),
 				2 /* levels */,
 				false /* userspace cache */,
 				&tbl);
 		if (rc)
 			return -1;
 
+		tbl->it_tceoff = tbl_offset >> tbl->it_page_shift;
 		for_each_memblock(memory, r)
 			pnv_ioda2_tce_build(tbl,
 					    (r->base >> tbl->it_page_shift) +
-					    tbl->it_offset,
+					    tbl->it_offset + tbl->it_tceoff,
 					    r->size >> tbl->it_page_shift,
 					    (unsigned long) __va(r->base),
 					    DMA_BIDIRECTIONAL,
@@ -2438,8 +2442,22 @@ static void pnv_pci_ioda2_set_bypass(struct pnv_ioda_pe *pe, bool enable)
 	}
 
 	if (pnv_iommu_bypass_mode == PNV_IOMMU_TCE_BYPASS) {
+		if (!opal_phb_set_option(phb->opal_id,
+					OPAL_PHB_OPTION_TVE1_4GB, 1)) {
+			pe->table_group.tce64_start = SZ_4G;
+			if (!pnv_pci_ioda2_set_bypass_iommu(pe,
+					pe->table_group.tce64_start, SZ_4G)) {
+				pe->tce_bypass_enabled = true;
+				pe_info(pe, "Enabled 64-bit IOMMU bypass at %llx\n",
+						pe->table_group.tce64_start);
+				return;
+			}
+			pe_err(pe, "Enabled TVE1_4GB but failed to configure TCE table");
+			opal_phb_set_option(phb->opal_id,
+					    OPAL_PHB_OPTION_TVE1_4GB, 0);
+		}
 		if (!pnv_pci_ioda2_set_bypass_iommu(pe,
-				pe->table_group.tce64_start)) {
+				pe->table_group.tce64_start, 0)) {
 			pe->tce_bypass_enabled = true;
 			pe_info(pe, "Enabled 64-bit IOMMU bypass at %llx\n",
 				pe->table_group.tce64_start);
@@ -2450,6 +2468,10 @@ static void pnv_pci_ioda2_set_bypass(struct pnv_ioda_pe *pe, bool enable)
 	}
 
 	if (pnv_iommu_bypass_mode == PNV_IOMMU_NO_TRANSLATE) {
+		/*
+		 * FIXME: if we enable dynamic switch, here we need to disable
+		 * OPAL_PCI_PHB_FLAG_TVE1_4GB
+		 */
 		top = roundup_pow_of_two(memblock_end_of_DRAM());
 		if (!opal_pci_map_pe_dma_window_real(phb->opal_id,
 					pe->pe_number, window_id,
@@ -2521,6 +2543,15 @@ static long pnv_pci_ioda2_setup_default_config(struct pnv_ioda_pe *pe)
 	 */
 	/* iommu_table::it_map uses 1 bit per IOMMU page, hence 8 */
 	window_size = min((maxblock * 8) << tceshift, max_memory);
+
+	/*
+	 * If we get TVE#1_4GB on, there is no point in having a huge default
+	 * DMA window.
+	 */
+	if (pnv_iommu_bypass_mode == PNV_IOMMU_TCE_BYPASS)
+		window_size = min_t(u64, pe->table_group.tce32_size,
+				window_size);
+
 	/* Each TCE level cannot exceed maxblock so go multilevel if needed */
 	tces_order = ilog2(window_size >> tceshift);
 	tcelevel_order = ilog2(maxblock >> 3);
@@ -2611,6 +2642,9 @@ unsigned long pnv_pci_ioda2_get_table_size(int num, __u32 page_shift,
 			!is_power_of_2(window_size))
 		return 0;
 
+	if (pnv_iommu_bypass_mode == PNV_IOMMU_TCE_BYPASS && num == 1)
+		window_size = roundup_pow_of_two(window_size + SZ_4G);
+
 	/* Calculate a direct table size from window_size and levels */
 	entries_shift = (entries_shift + levels - 1) / levels;
 	table_shift = entries_shift + 3;
@@ -2636,15 +2670,29 @@ static long pnv_pci_ioda2_create_table_userspace(
 {
 	struct pnv_ioda_pe *pe = container_of(table_group, struct pnv_ioda_pe,
 			table_group);
-	__u64 bus_offset = num ?
-		pe->table_group.tce64_start : table_group->tce32_start;
-	long ret = pnv_pci_ioda2_create_table(pe->phb->hose->node,
-			num, bus_offset, page_shift, window_size, levels, true,
+	__u64 bus_offset, tce_offset = 0, win_size = window_size;
+	long ret;
+
+	if (num == 0) {
+		bus_offset = table_group->tce32_start;
+	} else if (table_group->tce64_start == SZ_4G) {
+		bus_offset = table_group->tce32_start;
+		tce_offset = SZ_4G;
+		win_size = roundup_pow_of_two(window_size + tce_offset);
+	} else {
+		bus_offset = table_group->tce64_start;
+	}
+
+	ret = pnv_pci_ioda2_create_table(pe->phb->hose->node,
+			num, bus_offset, page_shift, win_size, levels, true,
 			ptbl);
 
-	if (!ret)
+	if (!ret) {
 		(*ptbl)->it_allocated_size = pnv_pci_ioda2_get_table_size(
 				num, page_shift, window_size, levels);
+		(*ptbl)->it_tceoff = tce_offset >> page_shift;
+	}
+
 	return ret;
 }
 
