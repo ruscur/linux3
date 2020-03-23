@@ -335,11 +335,6 @@ static inline void cflush(void *p)
 	asm volatile ("dcbf 0,%0; icbi 0,%0" : : "r" (p));
 }
 
-static inline void cinval(void *p)
-{
-	asm volatile ("dcbi 0,%0; icbi 0,%0" : : "r" (p));
-}
-
 /**
  * write_ciabr() - write the CIABR SPR
  * @ciabr:	The value to write.
@@ -1791,29 +1786,16 @@ static void prregs(struct pt_regs *fp)
 
 static void cacheflush(void)
 {
-	int cmd;
 	unsigned long nflush;
 
-	cmd = inchar();
-	if (cmd != 'i')
-		termch = cmd;
-	scanhex((void *)&adrs);
-	if (termch != '\n')
-		termch = 0;
 	nflush = 1;
 	scanhex(&nflush);
 	nflush = (nflush + L1_CACHE_BYTES - 1) / L1_CACHE_BYTES;
 	if (setjmp(bus_error_jmp) == 0) {
 		catch_memory_errors = 1;
 		sync();
-
-		if (cmd != 'i') {
-			for (; nflush > 0; --nflush, adrs += L1_CACHE_BYTES)
-				cflush((void *) adrs);
-		} else {
-			for (; nflush > 0; --nflush, adrs += L1_CACHE_BYTES)
-				cinval((void *) adrs);
-		}
+		for (; nflush > 0; --nflush, adrs += L1_CACHE_BYTES)
+			cflush((void *)adrs);
 		sync();
 		/* wait a little while to see if we get a machine check */
 		__delay(200);
