@@ -7,9 +7,10 @@
 #include <linux/mm.h>
 #include <linux/sched.h>
 #include <linux/spinlock.h>
-#include <asm/mmu.h>	
+#include <asm/mmu.h>
 #include <asm/cputable.h>
 #include <asm/cputhreads.h>
+#include <asm/hw_breakpoint.h>
 
 /*
  * Most if the context management is out of line
@@ -268,6 +269,59 @@ static inline int arch_dup_mmap(struct mm_struct *oldmm,
 {
 	arch_dup_pkeys(oldmm, mm);
 	return 0;
+}
+
+struct temp_mm {
+	struct mm_struct *temp;
+	struct mm_struct *prev;
+	bool is_kernel_thread;
+	struct arch_hw_breakpoint brk;
+};
+
+static inline void init_temp_mm(struct temp_mm *temp_mm, struct mm_struct *mm)
+{
+	temp_mm->temp = mm;
+	temp_mm->prev = NULL;
+	temp_mm->is_kernel_thread = false;
+	memset(&temp_mm->brk, 0, sizeof(temp_mm->brk));
+}
+
+static inline void use_temporary_mm(struct temp_mm *temp_mm)
+{
+	lockdep_assert_irqs_disabled();
+
+	temp_mm->is_kernel_thread = current->mm == NULL;
+	if (temp_mm->is_kernel_thread)
+		temp_mm->prev = current->active_mm;
+	else
+		temp_mm->prev = current->mm;
+
+	/*
+	 * Hash requires a non-NULL current->mm to allocate a userspace address
+	 * when handling a page fault. Does not appear to hurt in Radix either.
+	 */
+	current->mm = temp_mm->temp;
+	switch_mm_irqs_off(NULL, temp_mm->temp, current);
+
+	if (ppc_breakpoint_available()) {
+		__get_breakpoint(&temp_mm->brk);
+		if (temp_mm->brk.type != 0)
+			hw_breakpoint_disable();
+	}
+}
+
+static inline void unuse_temporary_mm(struct temp_mm *temp_mm)
+{
+	lockdep_assert_irqs_disabled();
+
+	if (temp_mm->is_kernel_thread)
+		current->mm = NULL;
+	else
+		current->mm = temp_mm->prev;
+	switch_mm_irqs_off(NULL, temp_mm->prev, current);
+
+	if (ppc_breakpoint_available() && temp_mm->brk.type != 0)
+		__set_breakpoint(&temp_mm->brk);
 }
 
 #endif /* __KERNEL__ */
