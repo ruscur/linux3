@@ -81,6 +81,10 @@
 		cpu0: PowerPC,e6500@0 {
 			device_type = "cpu";
 			reg = <0 1>;
+			d-cache-line-size = <64>;
+			i-cache-line-size = <64>;
+			d-cache-size = <32768>;
+			i-cache-size = <32768>;
 			clocks = <&clockgen 1 0>;
 			next-level-cache = <&L2_1>;
 			fsl,portid-mapping = <0x80000000>;
@@ -88,6 +92,10 @@
 		cpu1: PowerPC,e6500@2 {
 			device_type = "cpu";
 			reg = <2 3>;
+			d-cache-line-size = <64>;
+			i-cache-line-size = <64>;
+			d-cache-size = <32768>;
+			i-cache-size = <32768>;
 			clocks = <&clockgen 1 0>;
 			next-level-cache = <&L2_1>;
 			fsl,portid-mapping = <0x80000000>;
@@ -95,6 +103,10 @@
 		cpu2: PowerPC,e6500@4 {
 			device_type = "cpu";
 			reg = <4 5>;
+			d-cache-line-size = <64>;
+			i-cache-line-size = <64>;
+			d-cache-size = <32768>;
+			i-cache-size = <32768>;
 			clocks = <&clockgen 1 0>;
 			next-level-cache = <&L2_1>;
 			fsl,portid-mapping = <0x80000000>;
@@ -102,6 +114,10 @@
 		cpu3: PowerPC,e6500@6 {
 			device_type = "cpu";
 			reg = <6 7>;
+			d-cache-line-size = <64>;
+			i-cache-line-size = <64>;
+			d-cache-size = <32768>;
+			i-cache-size = <32768>;
 			clocks = <&clockgen 1 0>;
 			next-level-cache = <&L2_1>;
 			fsl,portid-mapping = <0x80000000>;
