@@ -981,6 +981,7 @@ start_here_multiplatform:
 
 	/* This is where all platforms converge execution */
 
+__REF
 start_here_common:
 	/* relocation is on at this point */
 	std	r1,PACAKSAVE(r13)
