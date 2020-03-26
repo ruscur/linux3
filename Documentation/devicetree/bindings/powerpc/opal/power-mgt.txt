@@ -116,3 +116,21 @@ otherwise. The length of all the property arrays must be the same.
 	which of the fields of the PMICR are set in the corresponding
 	entries in ibm,cpu-idle-state-pmicr. This is an optional
 	property on POWER8 and is absent on POWER9.
+
+- self-restore:
+ Array of unsigned 64-bit values containing a property for sprn-mask
+ with each bit indicating the index of the supported SPR for the
+ functionality. This is an optional property for both Power8 and Power9
+
+- self-save:
+  Array of unsigned 64-bit values containing a property for sprn-mask
+  with each bit indicating the index of the supported SPR for the
+  functionality. This is an optional property for both Power8 and Power9
+
+Example of arrangement of self-restore and self-save arrays:
+For instance if PSSCR is supported, the value is 0x357 = 855.
+Since the array is of 64 bit values, the index of the array is determined by
+855 / 64 = 13th element. Within that index, the bit number is determined by
+855 % 64 = 23rd bit.
+This means that if the 23rd bit in array[13] is set, then that SPR is supported
+by the corresponding self-save or self-restore API.
