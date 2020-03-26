@@ -32,9 +32,66 @@
 #define P9_STOP_SPR_MSR 2000
 #define P9_STOP_SPR_PSSCR      855
 
+/*
+ * Type of support for each SPR
+ * FIRMWARE_RESTORE: firmware restoration supported: calls self-restore OPAL API
+ */
+#define UNSUPPORTED           0x0
+#define FIRMWARE_RESTORE      0x1
+
 static u32 supported_cpuidle_states;
 struct pnv_idle_states_t *pnv_idle_states;
 int nr_pnv_idle_states;
+
+struct preferred_sprs {
+	u64 spr;
+	u32 supported_mode;
+};
+
+/*
+ * Supported mode: Default support. Can be overwritten during system
+ *		   initialization
+ */
+struct preferred_sprs preferred_sprs[] = {
+	{
+		.spr = SPRN_HSPRG0,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_LPCR,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_HMEER,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_HID0,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = P9_STOP_SPR_MSR,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = P9_STOP_SPR_PSSCR,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_HID1,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_HID4,
+		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_HID5,
+		.supported_mode = FIRMWARE_RESTORE,
+	}
+};
+
+const int nr_preferred_sprs = ARRAY_SIZE(preferred_sprs);
 
 /*
  * The default stop state that will be used by ppc_md.power_save
@@ -61,78 +118,125 @@ static bool deepest_stop_found;
 
 static unsigned long power7_offline_type;
 
-static int pnv_save_sprs_for_deep_states(void)
+static int pnv_self_restore_sprs(u64 pir, int cpu, u64 spr)
 {
-	int cpu;
+	u64 reg_val;
 	int rc;
 
-	/*
-	 * hid0, hid1, hid4, hid5, hmeer and lpcr values are symmetric across
-	 * all cpus at boot. Get these reg values of current cpu and use the
-	 * same across all cpus.
-	 */
-	uint64_t lpcr_val	= mfspr(SPRN_LPCR);
-	uint64_t hid0_val	= mfspr(SPRN_HID0);
-	uint64_t hid1_val	= mfspr(SPRN_HID1);
-	uint64_t hid4_val	= mfspr(SPRN_HID4);
-	uint64_t hid5_val	= mfspr(SPRN_HID5);
-	uint64_t hmeer_val	= mfspr(SPRN_HMEER);
-	uint64_t msr_val = MSR_IDLE;
-	uint64_t psscr_val = pnv_deepest_stop_psscr_val;
-
-	for_each_present_cpu(cpu) {
-		uint64_t pir = get_hard_smp_processor_id(cpu);
-		uint64_t hsprg0_val = (uint64_t)paca_ptrs[cpu];
-
-		rc = opal_slw_set_reg(pir, SPRN_HSPRG0, hsprg0_val);
+	switch (spr) {
+	case SPRN_HSPRG0:
+		reg_val = (uint64_t)paca_ptrs[cpu];
+		rc = opal_slw_set_reg(pir, SPRN_HSPRG0, reg_val);
 		if (rc != 0)
 			return rc;
-
-		rc = opal_slw_set_reg(pir, SPRN_LPCR, lpcr_val);
+		break;
+	case SPRN_LPCR:
+		reg_val = mfspr(SPRN_LPCR);
+		rc = opal_slw_set_reg(pir, SPRN_LPCR, reg_val);
 		if (rc != 0)
 			return rc;
-
+		break;
+	case P9_STOP_SPR_MSR:
+		reg_val = MSR_IDLE;
 		if (cpu_has_feature(CPU_FTR_ARCH_300)) {
-			rc = opal_slw_set_reg(pir, P9_STOP_SPR_MSR, msr_val);
-			if (rc)
-				return rc;
-
-			rc = opal_slw_set_reg(pir,
-					      P9_STOP_SPR_PSSCR, psscr_val);
-
+			rc = opal_slw_set_reg(pir, P9_STOP_SPR_MSR, reg_val);
 			if (rc)
 				return rc;
 		}
-
-		/* HIDs are per core registers */
+		break;
+	case P9_STOP_SPR_PSSCR:
+		reg_val = pnv_deepest_stop_psscr_val;
+		if (cpu_has_feature(CPU_FTR_ARCH_300)) {
+			rc = opal_slw_set_reg(pir, P9_STOP_SPR_PSSCR, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_HMEER:
+		reg_val = mfspr(SPRN_HMEER);
 		if (cpu_thread_in_core(cpu) == 0) {
-
-			rc = opal_slw_set_reg(pir, SPRN_HMEER, hmeer_val);
-			if (rc != 0)
+			rc = opal_slw_set_reg(pir, SPRN_HMEER, reg_val);
+			if (rc)
 				return rc;
-
-			rc = opal_slw_set_reg(pir, SPRN_HID0, hid0_val);
-			if (rc != 0)
+		}
+		break;
+	case SPRN_HID0:
+		reg_val = mfspr(SPRN_HID0);
+		if (cpu_thread_in_core(cpu) == 0) {
+			rc = opal_slw_set_reg(pir, SPRN_HID0, reg_val);
+			if (rc)
 				return rc;
+		}
+		break;
+	case SPRN_HID1:
+		reg_val = mfspr(SPRN_HID1);
+		if (!cpu_has_feature(CPU_FTR_ARCH_300) &&
+		    cpu_thread_in_core(cpu) == 0) {
+			rc = opal_slw_set_reg(pir, SPRN_HID1, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_HID4:
+		reg_val = mfspr(SPRN_HID4);
+		if (!cpu_has_feature(CPU_FTR_ARCH_300) &&
+		    cpu_thread_in_core(cpu) == 0) {
+			rc = opal_slw_set_reg(pir, SPRN_HID4, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	case SPRN_HID5:
+		reg_val = mfspr(SPRN_HID5);
+		if (!cpu_has_feature(CPU_FTR_ARCH_300) &&
+		    cpu_thread_in_core(cpu) == 0) {
+			rc = opal_slw_set_reg(pir, SPRN_HID5, reg_val);
+			if (rc)
+				return rc;
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
 
-			/* Only p8 needs to set extra HID regiters */
-			if (!cpu_has_feature(CPU_FTR_ARCH_300)) {
+static int pnv_self_save_restore_sprs(void)
+{
+	int rc, index, cpu;
+	u64 pir;
+	struct preferred_sprs curr_spr;
 
-				rc = opal_slw_set_reg(pir, SPRN_HID1, hid1_val);
-				if (rc != 0)
-					return rc;
-
-				rc = opal_slw_set_reg(pir, SPRN_HID4, hid4_val);
-				if (rc != 0)
-					return rc;
-
-				rc = opal_slw_set_reg(pir, SPRN_HID5, hid5_val);
+	for_each_present_cpu(cpu) {
+		pir = get_hard_smp_processor_id(cpu);
+		for (index = 0; index < nr_preferred_sprs; index++) {
+			curr_spr = preferred_sprs[index];
+			/* HIDs are per core register */
+			if (cpu_thread_in_core(cpu) != 0 &&
+			    (curr_spr.spr == SPRN_HMEER ||
+			     curr_spr.spr == SPRN_HID0  ||
+			     curr_spr.spr == SPRN_HID1  ||
+			     curr_spr.spr == SPRN_HID4  ||
+			     curr_spr.spr == SPRN_HID5))
+				continue;
+			if (curr_spr.supported_mode & FIRMWARE_RESTORE) {
+				rc = pnv_self_restore_sprs(pir, cpu,
+							   curr_spr.spr);
 				if (rc != 0)
 					return rc;
 			}
 		}
 	}
+	return 0;
+}
 
+static int pnv_save_sprs_for_deep_states(void)
+{
+	int rc;
+
+	rc = pnv_self_save_restore_sprs();
+	if (rc != 0)
+		return rc;
 	return 0;
 }
 
