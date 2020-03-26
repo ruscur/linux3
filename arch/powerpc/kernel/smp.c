@@ -473,7 +473,7 @@ static int __smp_send_nmi_ipi(int cpu, void (*fn)(struct pt_regs *),
 		return 0;
 
 	nmi_ipi_lock_start(&flags);
-	while (nmi_ipi_busy) {
+	if (nmi_ipi_busy) {
 		nmi_ipi_unlock_end(&flags);
 		spin_until_cond(!nmi_ipi_busy);
 		nmi_ipi_lock_start(&flags);
