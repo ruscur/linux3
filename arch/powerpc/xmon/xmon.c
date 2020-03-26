@@ -335,10 +335,12 @@ static inline void cflush(void *p)
 	asm volatile ("dcbf 0,%0; icbi 0,%0" : : "r" (p));
 }
 
+#ifndef CONFIG_PPC_BOOK3S_64
 static inline void cinval(void *p)
 {
 	asm volatile ("dcbi 0,%0; icbi 0,%0" : : "r" (p));
 }
+#endif
 
 /**
  * write_ciabr() - write the CIABR SPR
@@ -1791,8 +1793,9 @@ static void prregs(struct pt_regs *fp)
 
 static void cacheflush(void)
 {
-	int cmd;
 	unsigned long nflush;
+#ifndef CONFIG_PPC_BOOK3S_64
+	int cmd;
 
 	cmd = inchar();
 	if (cmd != 'i')
@@ -1800,13 +1803,14 @@ static void cacheflush(void)
 	scanhex((void *)&adrs);
 	if (termch != '\n')
 		termch = 0;
+#endif
 	nflush = 1;
 	scanhex(&nflush);
 	nflush = (nflush + L1_CACHE_BYTES - 1) / L1_CACHE_BYTES;
 	if (setjmp(bus_error_jmp) == 0) {
 		catch_memory_errors = 1;
 		sync();
-
+#ifndef CONFIG_PPC_BOOK3S_64
 		if (cmd != 'i') {
 			for (; nflush > 0; --nflush, adrs += L1_CACHE_BYTES)
 				cflush((void *) adrs);
@@ -1814,6 +1818,10 @@ static void cacheflush(void)
 			for (; nflush > 0; --nflush, adrs += L1_CACHE_BYTES)
 				cinval((void *) adrs);
 		}
+#else
+		for (; nflush > 0; --nflush, adrs += L1_CACHE_BYTES)
+			cflush((void *)adrs);
+#endif
 		sync();
 		/* wait a little while to see if we get a machine check */
 		__delay(200);
