@@ -34,6 +34,8 @@
 #define IFETCH_ALIGN_BYTES	(1 << IFETCH_ALIGN_SHIFT)
 
 #if !defined(__ASSEMBLY__)
+#include <ppu_intrinsics.h>
+
 #ifdef CONFIG_PPC64
 
 struct ppc_cache_info {
@@ -111,29 +113,14 @@ extern void _set_L3CR(unsigned long);
 #define _set_L3CR(val)	do { } while(0)
 #endif
 
-static inline void dcbz(void *addr)
-{
-	__asm__ __volatile__ ("dcbz 0, %0" : : "r"(addr) : "memory");
-}
+#define dcbz	__dcbz
+#define dcbf	__dcbf
+#define dcbst	__dcbst
+#define icbi	__icbi
 
 static inline void dcbi(void *addr)
 {
 	__asm__ __volatile__ ("dcbi 0, %0" : : "r"(addr) : "memory");
-}
-
-static inline void dcbf(void *addr)
-{
-	__asm__ __volatile__ ("dcbf 0, %0" : : "r"(addr) : "memory");
-}
-
-static inline void dcbst(void *addr)
-{
-	__asm__ __volatile__ ("dcbst 0, %0" : : "r"(addr) : "memory");
-}
-
-static inline void icbi(void *addr)
-{
-	asm volatile ("icbi 0, %0" : : "r"(addr) : "memory");
 }
 
 static inline void iccci(void *addr)

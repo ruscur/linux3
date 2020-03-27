@@ -8,6 +8,8 @@
 
 #include <linux/bitops.h>
 #include <linux/in6.h>
+
+#include <ppu_intrinsics.h>
 /*
  * Computes the checksum of a memory block at src, length len,
  * and adds in "sum" (32-bit), while copying the block to dst.
@@ -42,7 +44,7 @@ static inline __sum16 csum_fold(__wsum sum)
 	unsigned int tmp;
 
 	/* swap the two 16-bit halves of sum */
-	__asm__("rlwinm %0,%1,16,0,31" : "=r" (tmp) : "r" (sum));
+	tmp = __rlwinm(sum, 16, 0, 31);
 	/* if there is a carry from adding the two 16-bit halves,
 	   it will carry from the lower half into the upper half,
 	   giving us the correct sum in the upper half. */

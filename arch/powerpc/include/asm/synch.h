@@ -7,19 +7,15 @@
 #include <asm/asm-const.h>
 
 #ifndef __ASSEMBLY__
+#include <ppu_intrinsics.h>
+
 extern unsigned int __start___lwsync_fixup, __stop___lwsync_fixup;
 extern void do_lwsync_fixups(unsigned long value, void *fixup_start,
 			     void *fixup_end);
 
-static inline void eieio(void)
-{
-	__asm__ __volatile__ ("eieio" : : : "memory");
-}
+#define eieio __eieio
+#define isync __isync
 
-static inline void isync(void)
-{
-	__asm__ __volatile__ ("isync" : : : "memory");
-}
 #endif /* __ASSEMBLY__ */
 
 #if defined(__powerpc64__)
