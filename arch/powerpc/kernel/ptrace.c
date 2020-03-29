@@ -3314,7 +3314,7 @@ long do_syscall_trace_enter(struct pt_regs *regs)
 
 	/* Avoid trace and audit when syscall is invalid. */
 	if (regs->gpr[0] >= NR_syscalls)
-		goto skip;
+		return regs->gpr[0];
 
 	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))
 		trace_sys_enter(regs, regs->gpr[0]);
