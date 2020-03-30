@@ -1106,6 +1106,32 @@ static int eeh_init(void)
 
 core_initcall_sync(eeh_init);
 
+static int eeh_device_notifier(struct notifier_block *nb,
+			       unsigned long action, void *data)
+{
+	struct device *dev = data;
+
+	switch (action) {
+	case BUS_NOTIFY_DEL_DEVICE:
+		eeh_remove_device(to_pci_dev(dev));
+		break;
+	default:
+		break;
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block eeh_device_nb = {
+	.notifier_call = eeh_device_notifier,
+};
+
+static __init int eeh_set_bus_notifier(void)
+{
+	bus_register_notifier(&pci_bus_type, &eeh_device_nb);
+	return 0;
+}
+arch_initcall(eeh_set_bus_notifier);
+
 /**
  * eeh_add_device_early - Enable EEH for the indicated device node
  * @pdn: PCI device node for which to set up EEH
