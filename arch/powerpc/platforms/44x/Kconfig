@@ -199,6 +199,7 @@ config FSP2
 config AKEBONO
 	bool "IBM Akebono (476gtr) Support"
 	depends on PPC_47x
+	depends on NET
 	select SWIOTLB
 	select 476FPE
 	select PPC4xx_PCI_EXPRESS
