@@ -2352,12 +2352,12 @@ handle_dabr_fault:
 h_doorbell_common_msgclr:
 	LOAD_REG_IMMEDIATE(r3, PPC_DBELL_MSGTYPE << (63-36))
 	PPC_MSGCLR(3)
-	b 	h_doorbell_common
+	b 	h_doorbell_common_virt
 
 doorbell_super_common_msgclr:
 	LOAD_REG_IMMEDIATE(r3, PPC_DBELL_MSGTYPE << (63-36))
 	PPC_MSGCLRP(3)
-	b 	doorbell_super_common
+	b 	doorbell_super_common_virt
 
 /*
  * Called from arch_local_irq_enable when an interrupt needs
@@ -2383,20 +2383,20 @@ _GLOBAL(__replay_interrupt)
 	mfcr	r9
 	ori	r12,r12,MSR_EE
 	cmpwi	r3,0x900
-	beq	decrementer_common
+	beq	decrementer_common_virt
 	cmpwi	r3,0x500
 BEGIN_FTR_SECTION
-	beq	h_virt_irq_common
+	beq	h_virt_irq_common_virt
 FTR_SECTION_ELSE
-	beq	hardware_interrupt_common
+	beq	hardware_interrupt_common_virt
 ALT_FTR_SECTION_END_IFSET(CPU_FTR_HVMODE | CPU_FTR_ARCH_300)
 	cmpwi	r3,0xf00
-	beq	performance_monitor_common
+	beq	performance_monitor_common_virt
 BEGIN_FTR_SECTION
 	cmpwi	r3,0xa00
 	beq	h_doorbell_common_msgclr
 	cmpwi	r3,0xe60
-	beq	hmi_exception_common
+	beq	hmi_exception_common_virt
 FTR_SECTION_ELSE
 	cmpwi	r3,0xa00
 	beq	doorbell_super_common_msgclr
