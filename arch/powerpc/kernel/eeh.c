@@ -1206,28 +1206,7 @@ void eeh_add_device_late(struct pci_dev *dev)
 		eeh_edev_dbg(edev, "Device already referenced!\n");
 		return;
 	}
-
-	/*
-	 * The EEH cache might not be removed correctly because of
-	 * unbalanced kref to the device during unplug time, which
-	 * relies on pcibios_release_device(). So we have to remove
-	 * that here explicitly.
-	 */
-	if (edev->pdev) {
-		eeh_rmv_from_parent_pe(edev);
-		eeh_addr_cache_rmv_dev(edev->pdev);
-		eeh_sysfs_remove_device(edev->pdev);
-
-		/*
-		 * We definitely should have the PCI device removed
-		 * though it wasn't correctly. So we needn't call
-		 * into error handler afterwards.
-		 */
-		edev->mode |= EEH_DEV_NO_HANDLER;
-
-		edev->pdev = NULL;
-		dev->dev.archdata.edev = NULL;
-	}
+	WARN_ON_ONCE(edev->pdev);
 
 	if (eeh_has_flag(EEH_PROBE_MODE_DEV))
 		eeh_ops->probe(pdn, NULL);
