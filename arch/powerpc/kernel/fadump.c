@@ -32,6 +32,15 @@
 #include <asm/fadump-internal.h>
 #include <asm/setup.h>
 
+
+/* The CPU who acquired the lock to trigger the fadump crash should
+ * wait for other CPUs to complete their tasks (for example updating
+ * pstore) before triggering the crash.
+ *
+ * The timeout is in milliseconds.
+ */
+#define CRASH_TIMEOUT		100
+
 static struct fw_dump fw_dump;
 
 static void __init fadump_reserve_crash_area(u64 base);
@@ -635,6 +644,13 @@ void crash_fadump(struct pt_regs *regs, const char *str)
 		ppc_save_regs(&fdh->regs);
 
 	fdh->online_mask = *cpu_online_mask;
+
+
+	/* If we reached here via system reset path then let's
+	 * wait for other CPU to complete the pstore update.
+	 */
+	if (TRAP(regs) == 0x100)
+		mdelay(CRASH_TIMEOUT);
 
 	fw_dump.ops->fadump_trigger(fdh, str);
 }
