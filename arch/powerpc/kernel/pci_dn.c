@@ -236,14 +236,7 @@ void remove_sriov_vf_pdns(struct pci_dev *pdev)
 			 */
 			edev = pdn_to_eeh_dev(pdn);
 			if (edev) {
-				/*
-				 * We allocate pci_dn's for the totalvfs count,
-				 * but only only the vfs that were activated
-				 * have a configured PE.
-				 */
-				if (edev->pe)
-					eeh_rmv_from_parent_pe(edev);
-
+				WARN_ON_ONCE(edev->pe);
 				pdn->edev = NULL;
 				kfree(edev);
 			}
