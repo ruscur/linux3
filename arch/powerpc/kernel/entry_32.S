@@ -203,7 +203,7 @@ transfer_to_handler_cont:
 	mtspr	SPRN_SRR1,r10
 	mtlr	r9
 	SYNC
-	RFI				/* jump to handler, enable MMU */
+	rfi				/* jump to handler, enable MMU */
 
 #ifdef CONFIG_TRACE_IRQFLAGS
 1:	/* MSR is changing, re-enable MMU so we can notify lockdep. We need to
@@ -216,7 +216,7 @@ transfer_to_handler_cont:
 	mtspr	SPRN_SRR0,r12
 	mtspr	SPRN_SRR1,r0
 	SYNC
-	RFI
+	rfi
 
 reenable_mmu:
 	/*
@@ -290,7 +290,7 @@ stack_ovf:
 	mtspr	SPRN_SRR0,r9
 	mtspr	SPRN_SRR1,r10
 	SYNC
-	RFI
+	rfi
 #endif
 
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -439,7 +439,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	mtspr	SPRN_SRR0,r7
 	mtspr	SPRN_SRR1,r8
 	SYNC
-	RFI
+	rfi
 #ifdef CONFIG_44x
 2:	li	r7,0
 	iccci	r0,r0
@@ -570,7 +570,7 @@ ret_from_kernel_syscall:
 	mtspr	SPRN_SRR0, r9
 	mtspr	SPRN_SRR1, r10
 	SYNC
-	RFI
+	rfi
 
 /*
  * The fork/clone functions need to copy the full register set into
@@ -773,7 +773,7 @@ fast_exception_return:
 	REST_GPR(12, r11)
 	lwz	r11,GPR11(r11)
 	SYNC
-	RFI
+	rfi
 
 #ifndef CONFIG_BOOKE
 /* check if the exception happened in a restartable section */
@@ -1008,7 +1008,7 @@ exc_exit_restart:
 	.globl exc_exit_restart_end
 exc_exit_restart_end:
 	SYNC
-	RFI
+	rfi
 
 #else /* !CONFIG_BOOKE */
 	/*
@@ -1313,7 +1313,7 @@ _GLOBAL(enter_rtas)
 	stw	r7, THREAD + RTAS_SP(r2)
 	mtspr	SPRN_SRR0,r8
 	mtspr	SPRN_SRR1,r9
-	RFI
+	rfi
 1:	tophys_novmstack r9, r1
 #ifdef CONFIG_VMAP_STACK
 	li	r0, MSR_KERNEL & ~MSR_IR	/* can take DTLB miss */
@@ -1328,7 +1328,7 @@ _GLOBAL(enter_rtas)
 	stw	r0, THREAD + RTAS_SP(r7)
 	mtspr	SPRN_SRR0,r8
 	mtspr	SPRN_SRR1,r9
-	RFI			/* return to caller */
+	rfi			/* return to caller */
 
 	.globl	machine_check_in_rtas
 machine_check_in_rtas:
