@@ -220,7 +220,7 @@ turn_on_mmu:
 	ori	r0,r0,start_here@l
 	mtspr	SPRN_SRR0,r0
 	SYNC
-	RFI				/* enables MMU */
+	rfi				/* enables MMU */
 
 /*
  * We need __secondary_hold as a place to hold the other cpus on
@@ -784,14 +784,14 @@ fast_hash_page_return:
 	lwz	r11, THR11(r10)
 	mfspr	r10, SPRN_SPRG_SCRATCH0
 	SYNC
-	RFI
+	rfi
 
 1:	/* ISI */
 	mtcr	r11
 	mfspr	r11, SPRN_SPRG_SCRATCH1
 	mfspr	r10, SPRN_SPRG_SCRATCH0
 	SYNC
-	RFI
+	rfi
 
 stack_overflow:
 	vmap_stack_overflow_exception
@@ -930,7 +930,7 @@ __secondary_start:
 	mtspr	SPRN_SRR0,r3
 	mtspr	SPRN_SRR1,r4
 	SYNC
-	RFI
+	rfi
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_KVM_BOOK3S_HANDLER
@@ -1074,7 +1074,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
 	mtspr	SPRN_SRR0,r4
 	mtspr	SPRN_SRR1,r3
 	SYNC
-	RFI
+	rfi
 /* Load up the kernel context */
 2:	bl	load_up_mmu
 
@@ -1099,7 +1099,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
 	mtspr	SPRN_SRR0,r3
 	mtspr	SPRN_SRR1,r4
 	SYNC
-	RFI
+	rfi
 
 /*
  * void switch_mmu_context(struct mm_struct *prev, struct mm_struct *next);
@@ -1217,7 +1217,7 @@ _ENTRY(update_bats)
 	mtspr	SPRN_SRR0, r4
 	mtspr	SPRN_SRR1, r3
 	SYNC
-	RFI
+	rfi
 1:	bl	clear_bats
 	lis	r3, BATS@ha
 	addi	r3, r3, BATS@l
@@ -1237,7 +1237,7 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_USE_HIGH_BATS)
 	mtspr	SPRN_SRR0, r7
 	mtspr	SPRN_SRR1, r6
 	SYNC
-	RFI
+	rfi
 
 flush_tlbs:
 	lis	r10, 0x40
@@ -1258,7 +1258,7 @@ mmu_off:
 	mtspr	SPRN_SRR0,r4
 	mtspr	SPRN_SRR1,r3
 	sync
-	RFI
+	rfi
 
 /*
  * On 601, we use 3 BATs to map up to 24M of RAM at _PAGE_OFFSET
