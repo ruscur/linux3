@@ -234,7 +234,7 @@ _GLOBAL(_nmask_and_or_msr)
  */
 #ifndef CONFIG_PPC_8xx
 _GLOBAL(flush_instruction_cache)
-#if defined(CONFIG_4xx)
+#ifdef CONFIG_44x
 	lis	r3, KERNELBASE@h
 	iccci	0,r3
 #elif defined(CONFIG_FSL_BOOKE)
@@ -256,7 +256,7 @@ _GLOBAL(flush_instruction_cache)
 	mfspr	r3,SPRN_HID0
 	ori	r3,r3,HID0_ICFI
 	mtspr	SPRN_HID0,r3
-#endif /* CONFIG_4xx */
+#endif /* CONFIG_44x */
 	isync
 	blr
 EXPORT_SYMBOL(flush_instruction_cache)
