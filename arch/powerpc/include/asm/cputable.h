@@ -377,7 +377,6 @@ static inline void cpu_feature_keys_init(void) { }
 	    CPU_FTR_COMMON | CPU_FTR_FPU_UNAVAILABLE  | CPU_FTR_NOEXECUTE)
 #define CPU_FTRS_CLASSIC32	(CPU_FTR_COMMON)
 #define CPU_FTRS_8XX	(CPU_FTR_NOEXECUTE)
-#define CPU_FTRS_40X	(CPU_FTR_NODSISRALIGN | CPU_FTR_NOEXECUTE)
 #define CPU_FTRS_44X	(CPU_FTR_NODSISRALIGN | CPU_FTR_NOEXECUTE)
 #define CPU_FTRS_440x6	(CPU_FTR_NODSISRALIGN | CPU_FTR_NOEXECUTE | \
 	    CPU_FTR_INDEXED_DCR)
@@ -516,9 +515,6 @@ enum {
 #ifdef CONFIG_PPC_8xx
 	    CPU_FTRS_8XX |
 #endif
-#ifdef CONFIG_40x
-	    CPU_FTRS_40X |
-#endif
 #ifdef CONFIG_44x
 	    CPU_FTRS_44X | CPU_FTRS_440x6 |
 #endif
@@ -593,9 +589,6 @@ enum {
 #endif
 #ifdef CONFIG_PPC_8xx
 	    CPU_FTRS_8XX &
-#endif
-#ifdef CONFIG_40x
-	    CPU_FTRS_40X &
 #endif
 #ifdef CONFIG_44x
 	    CPU_FTRS_44X & CPU_FTRS_440x6 &

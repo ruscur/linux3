@@ -228,45 +228,6 @@ _GLOBAL(_nmask_and_or_msr)
 	isync
 	blr			/* Done */
 
-#ifdef CONFIG_40x
-
-/*
- * Do an IO access in real mode
- */
-_GLOBAL(real_readb)
-	mfmsr	r7
-	rlwinm	r0,r7,0,~MSR_DR
-	sync
-	mtmsr	r0
-	sync
-	isync
-	lbz	r3,0(r3)
-	sync
-	mtmsr	r7
-	sync
-	isync
-	blr
-
-	/*
- * Do an IO access in real mode
- */
-_GLOBAL(real_writeb)
-	mfmsr	r7
-	rlwinm	r0,r7,0,~MSR_DR
-	sync
-	mtmsr	r0
-	sync
-	isync
-	stb	r3,0(r4)
-	sync
-	mtmsr	r7
-	sync
-	isync
-	blr
-
-#endif /* CONFIG_40x */
-
-
 /*
  * Flush instruction cache.
  * This is a no-op on the 601.
@@ -274,17 +235,8 @@ _GLOBAL(real_writeb)
 #ifndef CONFIG_PPC_8xx
 _GLOBAL(flush_instruction_cache)
 #if defined(CONFIG_4xx)
-#ifdef CONFIG_403GCX
-	li      r3, 512
-	mtctr   r3
-	lis     r4, KERNELBASE@h
-1:	iccci   0, r4
-	addi    r4, r4, 16
-	bdnz    1b
-#else
 	lis	r3, KERNELBASE@h
 	iccci	0,r3
-#endif
 #elif defined(CONFIG_FSL_BOOKE)
 #ifdef CONFIG_E200
 	mfspr   r3,SPRN_L1CSR0
