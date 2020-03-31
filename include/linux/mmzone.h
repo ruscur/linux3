@@ -917,11 +917,7 @@ extern int movable_zone;
 #ifdef CONFIG_HIGHMEM
 static inline int zone_movable_is_highmem(void)
 {
-#ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
 	return movable_zone == ZONE_HIGHMEM;
-#else
-	return (ZONE_MOVABLE - 1) == ZONE_HIGHMEM;
-#endif
 }
 #endif
 
@@ -1119,15 +1115,6 @@ static inline struct zoneref *first_zones_zonelist(struct zonelist *zonelist,
 
 #ifdef CONFIG_SPARSEMEM
 #include <asm/sparsemem.h>
-#endif
-
-#if !defined(CONFIG_HAVE_ARCH_EARLY_PFN_TO_NID) && \
-	!defined(CONFIG_HAVE_MEMBLOCK_NODE_MAP)
-static inline unsigned long early_pfn_to_nid(unsigned long pfn)
-{
-	BUILD_BUG_ON(IS_ENABLED(CONFIG_NUMA));
-	return 0;
-}
 #endif
 
 #ifdef CONFIG_FLATMEM
