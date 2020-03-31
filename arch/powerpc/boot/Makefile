@@ -71,15 +71,11 @@ DTC_FLAGS	?= -p 1024
 
 $(obj)/4xx.o: BOOTCFLAGS += -mcpu=405
 $(obj)/ebony.o: BOOTCFLAGS += -mcpu=405
-$(obj)/cuboot-hotfoot.o: BOOTCFLAGS += -mcpu=405
 $(obj)/cuboot-taishan.o: BOOTCFLAGS += -mcpu=405
 $(obj)/cuboot-katmai.o: BOOTCFLAGS += -mcpu=405
-$(obj)/cuboot-acadia.o: BOOTCFLAGS += -mcpu=405
-$(obj)/treeboot-walnut.o: BOOTCFLAGS += -mcpu=405
 $(obj)/treeboot-iss4xx.o: BOOTCFLAGS += -mcpu=405
 $(obj)/treeboot-currituck.o: BOOTCFLAGS += -mcpu=405
 $(obj)/treeboot-akebono.o: BOOTCFLAGS += -mcpu=405
-$(obj)/virtex405-head.o: BOOTAFLAGS += -mcpu=405
 
 # The pre-boot decompressors pull in a lot of kernel headers and other source
 # files. This creates a bit of a dependency headache since we need to copy
@@ -124,7 +120,6 @@ src-wlib-$(CONFIG_PPC64_BOOT_WRAPPER) += opal-calls.S opal.c
 ifndef CONFIG_PPC64_BOOT_WRAPPER
 src-wlib-y += crtsavres.S
 endif
-src-wlib-$(CONFIG_40x) += 4xx.c planetcore.c
 src-wlib-$(CONFIG_44x) += 4xx.c ebony.c bamboo.c
 src-wlib-$(CONFIG_PPC_8xx) += mpc8xx.c planetcore.c fsl-soc.c
 src-wlib-$(CONFIG_PPC_82xx) += pq2.c fsl-soc.c planetcore.c
@@ -133,10 +128,6 @@ src-wlib-$(CONFIG_XILINX_VIRTEX) += uartlite.c
 src-wlib-$(CONFIG_CPM) += cpm-serial.c
 
 src-plat-y := of.c epapr.c
-src-plat-$(CONFIG_40x) += fixed-head.S ep405.c cuboot-hotfoot.c \
-				treeboot-walnut.c cuboot-acadia.c \
-				cuboot-kilauea.c simpleboot.c \
-				virtex405-head.S virtex.c
 src-plat-$(CONFIG_44x) += treeboot-ebony.c cuboot-ebony.c treeboot-bamboo.c \
 				cuboot-bamboo.c cuboot-sam440ep.c \
 				cuboot-sequoia.c cuboot-rainier.c \
@@ -277,13 +268,6 @@ image-$(CONFIG_EPAPR_BOOT)		+= zImage.epapr
 # They are only required on boards which do not have FDT support in firmware.
 # Boards with newish u-boot firmware can use the uImage target above
 #
-
-# Board ports in arch/powerpc/platform/40x/Kconfig
-image-$(CONFIG_EP405)			+= dtbImage.ep405
-image-$(CONFIG_HOTFOOT)			+= cuImage.hotfoot
-image-$(CONFIG_WALNUT)			+= treeImage.walnut
-image-$(CONFIG_ACADIA)			+= cuImage.acadia
-image-$(CONFIG_OBS600)			+= uImage.obs600
 
 # Board ports in arch/powerpc/platform/44x/Kconfig
 image-$(CONFIG_EBONY)			+= treeImage.ebony cuImage.ebony
