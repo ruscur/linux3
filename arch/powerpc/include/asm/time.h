@@ -52,24 +52,12 @@ struct div_result {
 
 static inline unsigned long get_tbl(void)
 {
-#if defined(CONFIG_403GCX)
-	unsigned long tbl;
-	asm volatile("mfspr %0, 0x3dd" : "=r" (tbl));
-	return tbl;
-#else
 	return mftbl();
-#endif
 }
 
 static inline unsigned int get_tbu(void)
 {
-#ifdef CONFIG_403GCX
-	unsigned int tbu;
-	asm volatile("mfspr %0, 0x3dc" : "=r" (tbu));
-	return tbu;
-#else
 	return mftbu();
-#endif
 }
 #endif /* !CONFIG_PPC64 */
 
@@ -141,11 +129,7 @@ static inline void set_tb(unsigned int upper, unsigned int lower)
  */
 static inline u64 get_dec(void)
 {
-#if defined(CONFIG_40x)
-	return (mfspr(SPRN_PIT));
-#else
 	return (mfspr(SPRN_DEC));
-#endif
 }
 
 /*
@@ -155,14 +139,10 @@ static inline u64 get_dec(void)
  */
 static inline void set_dec(u64 val)
 {
-#if defined(CONFIG_40x)
-	mtspr(SPRN_PIT, (u32) val);
-#else
 #ifndef CONFIG_BOOKE
 	--val;
 #endif
 	mtspr(SPRN_DEC, val);
-#endif /* not 40x */
 }
 
 static inline unsigned long tb_ticks_since(unsigned long tstamp)
