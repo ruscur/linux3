@@ -3424,7 +3424,7 @@ static int kvmhv_load_hv_regs_and_go(struct kvm_vcpu *vcpu, u64 time_limit,
 	mtspr(SPRN_IC, vcpu->arch.ic);
 	mtspr(SPRN_PID, vcpu->arch.pid);
 
-	mtspr(SPRN_PSSCR, vcpu->arch.psscr | PSSCR_EC |
+	mtspr(SPRN_PSSCR, (vcpu->arch.psscr  & ~(PSSCR_EC | PSSCR_ESL)) |
 	      (local_paca->kvm_hstate.fake_suspend << PSSCR_FAKE_SUSPEND_LG));
 
 	mtspr(SPRN_HFSCR, vcpu->arch.hfscr);

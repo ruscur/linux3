@@ -823,6 +823,18 @@ END_FTR_SECTION_IFCLR(CPU_FTR_ARCH_207S)
 	mtspr	SPRN_PID, r7
 	mtspr	SPRN_WORT, r8
 BEGIN_FTR_SECTION
+	/* POWER9-only registers */
+	ld	r5, VCPU_TID(r4)
+	ld	r6, VCPU_PSSCR(r4)
+	lbz	r8, HSTATE_FAKE_SUSPEND(r13)
+	lis 	r7, (PSSCR_EC | PSSCR_ESL)@h /* Allow guest to call stop */
+	andc	r6, r6, r7
+	rldimi	r6, r8, PSSCR_FAKE_SUSPEND_LG, 63 - PSSCR_FAKE_SUSPEND_LG
+	ld	r7, VCPU_HFSCR(r4)
+	mtspr	SPRN_TIDR, r5
+	mtspr	SPRN_PSSCR, r6
+	mtspr	SPRN_HFSCR, r7
+FTR_SECTION_ELSE
 	/* POWER8-only registers */
 	ld	r5, VCPU_TCSCR(r4)
 	ld	r6, VCPU_ACOP(r4)
@@ -833,18 +845,7 @@ BEGIN_FTR_SECTION
 	mtspr	SPRN_CSIGR, r7
 	mtspr	SPRN_TACR, r8
 	nop
-FTR_SECTION_ELSE
-	/* POWER9-only registers */
-	ld	r5, VCPU_TID(r4)
-	ld	r6, VCPU_PSSCR(r4)
-	lbz	r8, HSTATE_FAKE_SUSPEND(r13)
-	oris	r6, r6, PSSCR_EC@h	/* This makes stop trap to HV */
-	rldimi	r6, r8, PSSCR_FAKE_SUSPEND_LG, 63 - PSSCR_FAKE_SUSPEND_LG
-	ld	r7, VCPU_HFSCR(r4)
-	mtspr	SPRN_TIDR, r5
-	mtspr	SPRN_PSSCR, r6
-	mtspr	SPRN_HFSCR, r7
-ALT_FTR_SECTION_END_IFCLR(CPU_FTR_ARCH_300)
+ALT_FTR_SECTION_END_IFSET(CPU_FTR_ARCH_300)
 8:
 
 	ld	r5, VCPU_SPRG0(r4)
