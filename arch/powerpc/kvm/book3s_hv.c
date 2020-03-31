@@ -1419,7 +1419,11 @@ static int kvmppc_handle_exit_hv(struct kvm_run *run, struct kvm_vcpu *vcpu,
 		if (((vcpu->arch.hfscr >> 56) == FSCR_MSGP_LG) &&
 		    cpu_has_feature(CPU_FTR_ARCH_300))
 			r = kvmppc_emulate_doorbell_instr(vcpu);
-		if (r == EMULATE_FAIL) {
+		else if (((vcpu->arch.hfscr >> 56) == FSCR_STOP_LG) &&
+			cpu_has_feature(CPU_FTR_ARCH_300)) {
+			kvmppc_set_pc(vcpu, kvmppc_get_pc(vcpu) + 4);
+			r = RESUME_GUEST;
+		} else if (r == EMULATE_FAIL) {
 			kvmppc_core_queue_program(vcpu, SRR1_PROGILL);
 			r = RESUME_GUEST;
 		}
