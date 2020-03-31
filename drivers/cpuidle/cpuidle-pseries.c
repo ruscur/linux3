@@ -20,6 +20,7 @@
 #include <asm/firmware.h>
 #include <asm/runlatch.h>
 #include <asm/plpar_wrappers.h>
+#include <asm/processor.h>
 
 struct cpuidle_driver pseries_idle_driver = {
 	.name             = "pseries_idle",
@@ -170,6 +171,26 @@ static struct cpuidle_state dedicated_states[] = {
 		.enter = &dedicated_cede_loop },
 };
 
+
+
+static int stop_loop(struct cpuidle_device *dev,
+		     struct cpuidle_driver *drv,
+		     int index)
+{
+	unsigned long srr1 = 0;
+
+	if (!prep_irq_for_idle_irqsoff())
+		return index;
+
+	__ppc64_runlatch_off();
+	asm volatile("stop");
+	__ppc64_runlatch_on();
+	fini_irq_for_idle_irqsoff();
+	irq_set_pending_from_srr1(srr1);
+
+	return index;
+}
+
 /*
  * States for shared partition case.
  */
@@ -180,6 +201,12 @@ static struct cpuidle_state shared_states[] = {
 		.exit_latency = 0,
 		.target_residency = 0,
 		.enter = &snooze_loop },
+	{ /* stop0_lite */
+		.name = "stop0lite",
+		.desc = "Pauses the CPU",
+		.exit_latency = 2,
+		.target_residency=20,
+		.enter = &stop_loop },
 	{ /* Shared Cede */
 		.name = "Shared Cede",
 		.desc = "Shared Cede",
