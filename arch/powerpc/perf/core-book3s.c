@@ -1285,6 +1285,11 @@ static void power_pmu_enable(struct pmu *pmu)
 		goto out;
 
 	if (cpuhw->n_events == 0) {
+		/*
+		 * Indicate PMU not in-use to Hypervisor.
+		 * We end-up here via "ctx_sched_out()" from common code and
+		 * "power_pmu_del()".
+		 */
 		ppc_set_pmu_inuse(0);
 		goto out;
 	}
@@ -1341,6 +1346,11 @@ static void power_pmu_enable(struct pmu *pmu)
 	 * Write the new configuration to MMCR* with the freeze
 	 * bit set and set the hardware events to their initial values.
 	 * Then unfreeze the events.
+	 * ppc_set_pmu_inuse(1): "power_pmu_enable" will unset the
+	 * "pmcregs_in_use" flag when a previous profiling/sampling session
+	 * is completed and un-setting of flag will notify the Hypervisor to
+	 * drop save/restore of PMU sprs. Now that PMU need to be enabled, first
+	 * set the "pmcregs_in_use" flag in VPA.
 	 */
 	ppc_set_pmu_inuse(1);
 	mtspr(SPRN_MMCRA, cpuhw->mmcr[2] & ~MMCRA_SAMPLE_ENABLE);
