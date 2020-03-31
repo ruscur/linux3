@@ -104,9 +104,6 @@ extern const int vle_num_opcodes;
 /* Opcode is supported by Altivec Vector Unit */
 #define PPC_OPCODE_ALTIVEC	     0x100
 
-/* Opcode is supported by PowerPC 403 processor.  */
-#define PPC_OPCODE_403		     0x200
-
 /* Opcode is supported by PowerPC BookE processor.  */
 #define PPC_OPCODE_BOOKE	     0x400
 
@@ -157,9 +154,6 @@ extern const int vle_num_opcodes;
 
 /* Opcode is supported by Power E500MC */
 #define PPC_OPCODE_E500MC        0x4000000
-
-/* Opcode is supported by PowerPC 405 processor.  */
-#define PPC_OPCODE_405		 0x8000000
 
 /* Opcode is supported by Vector-Scalar (VSX) Unit */
 #define PPC_OPCODE_VSX		0x10000000
