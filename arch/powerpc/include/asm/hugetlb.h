@@ -64,6 +64,9 @@ static inline void arch_clear_hugepage_flags(struct page *page)
 {
 }
 
+#define arch_hugetlb_valid_size arch_hugetlb_valid_size
+bool __init arch_hugetlb_valid_size(unsigned long size);
+
 #include <asm-generic/hugetlb.h>
 
 #else /* ! CONFIG_HUGETLB_PAGE */

@@ -7,6 +7,11 @@
 
 #define hugepages_supported() boot_cpu_has(X86_FEATURE_PSE)
 
+#ifdef CONFIG_X86_64
+bool __init arch_hugetlb_valid_size(unsigned long size);
+#define arch_hugetlb_valid_size arch_hugetlb_valid_size
+#endif
+
 static inline int is_hugepage_only_range(struct mm_struct *mm,
 					 unsigned long addr,
 					 unsigned long len) {
