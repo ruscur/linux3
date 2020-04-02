@@ -1228,7 +1228,8 @@ struct task_struct *__switch_to(struct task_struct *prev,
 		 * mappings, we must issue a cp_abort to clear any state and
 		 * prevent snooping, corruption or a covert channel.
 		 */
-		if (current->thread.used_vas)
+		if (current->mm &&
+			atomic_read(&current->mm->context.vas_windows))
 			asm volatile(PPC_CP_ABORT);
 	}
 #endif /* CONFIG_PPC_BOOK3S_64 */
@@ -1473,7 +1474,10 @@ int set_thread_uses_vas(void)
 	if (!cpu_has_feature(CPU_FTR_ARCH_300))
 		return -EINVAL;
 
-	current->thread.used_vas = 1;
+	if (!current->mm)
+		return -EINVAL;
+
+	mm_context_add_vas_windows(current->mm);
 
 	/*
 	 * Even a process that has no foreign real address mapping can use

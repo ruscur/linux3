@@ -1333,6 +1333,7 @@ int vas_win_close(struct vas_window *window)
 			put_pid(window->pid);
 			if (window->mm) {
 				mm_context_remove_copro(window->mm);
+				mm_context_remove_vas_windows(window->mm);
 				mmdrop(window->mm);
 			}
 		}
