@@ -456,14 +456,15 @@ extern long __copy_from_user_flushcache(void *dst, const void __user *src,
 extern void memcpy_page_flushcache(char *to, struct page *page, size_t offset,
 			   size_t len);
 
-static __must_check inline bool user_access_begin(const void __user *ptr, size_t len)
+static __must_check inline bool
+user_full_access_begin(const void __user *ptr, size_t len)
 {
 	if (unlikely(!access_ok(ptr, len)))
 		return false;
 	allow_read_write_user((void __user *)ptr, ptr, len);
 	return true;
 }
-#define user_access_begin	user_access_begin
+#define user_full_access_begin	user_full_access_begin
 #define user_access_end		prevent_current_access_user
 #define user_access_save	prevent_user_access_return
 #define user_access_restore	restore_user_access

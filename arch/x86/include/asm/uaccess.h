@@ -463,16 +463,17 @@ extern struct movsl_mask {
  * The "unsafe" user accesses aren't really "unsafe", but the naming
  * is a big fat warning: you have to not only do the access_ok()
  * checking before using them, but you have to surround them with the
- * user_access_begin/end() pair.
+ * user_full_access_begin/end() pair.
  */
-static __must_check __always_inline bool user_access_begin(const void __user *ptr, size_t len)
+static __must_check __always_inline bool
+user_full_access_begin(const void __user *ptr, size_t len)
 {
 	if (unlikely(!access_ok(ptr,len)))
 		return 0;
 	__uaccess_begin_nospec();
 	return 1;
 }
-#define user_access_begin(a,b)	user_access_begin(a,b)
+#define user_full_access_begin(a,b)	user_full_access_begin(a,b)
 #define user_access_end()	__uaccess_end()
 
 #define user_access_save()	smap_save()

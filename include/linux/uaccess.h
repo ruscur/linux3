@@ -368,8 +368,8 @@ extern long strnlen_unsafe_user(const void __user *unsafe_addr, long count);
 #define probe_kernel_address(addr, retval)		\
 	probe_kernel_read(&retval, addr, sizeof(retval))
 
-#ifndef user_access_begin
-#define user_access_begin(ptr,len) access_ok(ptr, len)
+#ifndef user_full_access_begin
+#define user_full_access_begin(ptr,len) access_ok(ptr, len)
 #define user_access_end() do { } while (0)
 #define unsafe_op_wrap(op, err) do { if (unlikely(op)) goto err; } while (0)
 #define unsafe_get_user(x,p,e) unsafe_op_wrap(__get_user(x,p),e)
@@ -379,11 +379,11 @@ static inline unsigned long user_access_save(void) { return 0UL; }
 static inline void user_access_restore(unsigned long flags) { }
 #endif
 #ifndef user_write_access_begin
-#define user_write_access_begin user_access_begin
+#define user_write_access_begin user_full_access_begin
 #define user_write_access_end user_access_end
 #endif
 #ifndef user_read_access_begin
-#define user_read_access_begin user_access_begin
+#define user_read_access_begin user_full_access_begin
 #define user_read_access_end user_access_end
 #endif
 
