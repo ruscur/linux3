@@ -48,16 +48,16 @@ static inline void set_fs(mm_segment_t fs)
  * gap between user addresses and the kernel addresses
  */
 #define __access_ok(addr, size, segment)	\
-	(((addr) <= (segment).seg) && ((size) <= (segment).seg))
+	likely(((addr) <= (segment).seg) && ((size) <= (segment).seg))
 
 #else
 
 static inline int __access_ok(unsigned long addr, unsigned long size,
 			mm_segment_t seg)
 {
-	if (addr > seg.seg)
+	if (unlikely(addr > seg.seg))
 		return 0;
-	return (size == 0 || size - 1 <= seg.seg - addr);
+	return likely(size == 0 || size - 1 <= seg.seg - addr);
 }
 
 #endif
@@ -177,7 +177,7 @@ do {								\
 	else									\
 		__put_user_size_allowed(__pu_val, __pu_addr, __pu_size, __pu_err); \
 								\
-	__pu_err;						\
+	__builtin_expect(__pu_err, 0);				\
 })
 
 #define __put_user_check(x, ptr, size)					\
@@ -192,6 +192,7 @@ do {								\
 		__put_user_size(__pu_val, __pu_addr, __pu_size, __pu_err); \
 									\
 	__pu_err;							\
+	__builtin_expect(__pu_err, 0);					\
 })
 
 #define __put_user_nosleep(x, ptr, size)			\
@@ -204,7 +205,7 @@ do {								\
 	__chk_user_ptr(__pu_addr);				\
 	__put_user_size(__pu_val, __pu_addr, __pu_size, __pu_err); \
 								\
-	__pu_err;						\
+	__builtin_expect(__pu_err, 0);				\
 })
 
 
@@ -307,7 +308,7 @@ do {								\
 		__get_user_size_allowed(__gu_val, __gu_addr, __gu_size, __gu_err); \
 	(x) = (__typeof__(*(ptr)))__gu_val;			\
 								\
-	__gu_err;						\
+	__builtin_expect(__gu_err, 0);				\
 })
 
 #define __get_user_check(x, ptr, size)					\
@@ -325,6 +326,7 @@ do {								\
 	(x) = (__force __typeof__(*(ptr)))__gu_val;				\
 									\
 	__gu_err;							\
+	__builtin_expect(__gu_err, 0);					\
 })
 
 #define __get_user_nosleep(x, ptr, size)			\
@@ -339,7 +341,7 @@ do {								\
 	__get_user_size(__gu_val, __gu_addr, __gu_size, __gu_err); \
 	(x) = (__force __typeof__(*(ptr)))__gu_val;			\
 								\
-	__gu_err;						\
+	__builtin_expect(__gu_err, 0);				\
 })
 
 
