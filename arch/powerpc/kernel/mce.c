@@ -571,10 +571,13 @@ EXPORT_SYMBOL_GPL(machine_check_print_event_info);
  *
  * regs->nip and regs->msr contains srr0 and ssr1.
  */
-long machine_check_early(struct pt_regs *regs)
+long notrace machine_check_early(struct pt_regs *regs)
 {
 	long handled = 0;
 	bool nested = in_nmi();
+	u8 ftrace_enabled = local_paca->ftrace_enabled;
+
+	local_paca->ftrace_enabled = 0;
 	if (!nested)
 		nmi_enter();
 
@@ -588,6 +591,7 @@ long machine_check_early(struct pt_regs *regs)
 
 	if (!nested)
 		nmi_exit();
+	local_paca->ftrace_enabled = ftrace_enabled;
 
 	return handled;
 }
