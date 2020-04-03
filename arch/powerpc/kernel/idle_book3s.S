@@ -49,6 +49,8 @@ _GLOBAL(isa300_idle_stop_noloss)
  */
 _GLOBAL(isa300_idle_stop_mayloss)
 	mtspr 	SPRN_PSSCR,r3
+	mr	r6, r13
+	mfspr	r13, SPRN_HSPRG0
 	std	r1,PACAR1(r13)
 	mflr	r4
 	mfcr	r5
@@ -74,6 +76,7 @@ _GLOBAL(isa300_idle_stop_mayloss)
 	std	r31,-8*18(r1)
 	std	r4,-8*19(r1)
 	std	r5,-8*20(r1)
+	std	r6,-8*21(r1)
 	/* 168 bytes */
 	PPC_STOP
 	b	.	/* catch bugs */
@@ -91,8 +94,10 @@ _GLOBAL(idle_return_gpr_loss)
 	ld	r1,PACAR1(r13)
 	ld	r4,-8*19(r1)
 	ld	r5,-8*20(r1)
+	ld	r6,-8*21(r1)
 	mtlr	r4
 	mtcr	r5
+	mr	r13,r6
 	/*
 	 * KVM nap requires r2 to be saved, rather than just restoring it
 	 * from PACATOC. This could be avoided for that less common case
