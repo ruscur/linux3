@@ -710,6 +710,9 @@ void __init exc_lvl_early_init(void)
 void __init emergency_stack_init(void)
 {
 	u64 limit;
+#ifdef CONFIG_PPC_BOOK3S_64
+	u64 mce_limit;
+#endif
 	unsigned int i;
 
 	/*
@@ -728,6 +731,18 @@ void __init emergency_stack_init(void)
 	 */
 	limit = min(ppc64_bolted_size(), ppc64_rma_size);
 
+	/*
+	 * Machine check on pseries calls rtas, but can't use the static
+	 * rtas_args due to a machine check hitting while the lock is held.
+	 * rtas args have to be under 4GB, so the machine check stack is
+	 * limited to 4GB so args can be put on stack.
+	 */
+#ifdef CONFIG_PPC_BOOK3S_64
+	mce_limit = limit;
+	if (firmware_has_feature(FW_FEATURE_LPAR) && mce_limit > 4UL*1024*1024*1024)
+		mce_limit = 4UL*1024*1024*1024;
+#endif
+
 	for_each_possible_cpu(i) {
 		paca_ptrs[i]->emergency_sp = alloc_stack(limit, i) + THREAD_SIZE;
 
@@ -736,7 +751,7 @@ void __init emergency_stack_init(void)
 		paca_ptrs[i]->nmi_emergency_sp = alloc_stack(limit, i) + THREAD_SIZE;
 
 		/* emergency stack for machine check exception handling. */
-		paca_ptrs[i]->mc_emergency_sp = alloc_stack(limit, i) + THREAD_SIZE;
+		paca_ptrs[i]->mc_emergency_sp = alloc_stack(mce_limit, i) + THREAD_SIZE;
 #endif
 	}
 }
