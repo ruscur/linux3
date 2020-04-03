@@ -79,7 +79,7 @@ static inline void kuap_check_amr(void)
 
 static inline unsigned long get_kuap(void)
 {
-	if (!early_mmu_has_feature(MMU_FTR_RADIX_KUAP))
+	if (!mmu_has_feature(MMU_FTR_RADIX_KUAP))
 		return 0;
 
 	return mfspr(SPRN_AMR);
@@ -87,7 +87,7 @@ static inline unsigned long get_kuap(void)
 
 static inline void set_kuap(unsigned long value)
 {
-	if (!early_mmu_has_feature(MMU_FTR_RADIX_KUAP))
+	if (!mmu_has_feature(MMU_FTR_RADIX_KUAP))
 		return;
 
 	/*
