@@ -637,7 +637,6 @@ int bman_p_irqsource_add(struct bman_portal *p, u32 bits)
 
 int bm_shutdown_pool(u32 bpid)
 {
-	int err = 0;
 	struct bm_mc_command *bm_cmd;
 	union bm_mc_result *bm_res;
 
@@ -650,7 +649,6 @@ int bm_shutdown_pool(u32 bpid)
 		bm_mc_commit(&p->p, BM_MCC_VERB_CMD_ACQUIRE | 1);
 		if (!bm_mc_result_timeout(&p->p, &bm_res)) {
 			pr_crit("BMan Acquire Command timedout\n");
-			err = -ETIMEDOUT;
 			goto done;
 		}
 		if (!(bm_res->verb & BM_MCR_VERB_ACQUIRE_BUFCOUNT)) {
