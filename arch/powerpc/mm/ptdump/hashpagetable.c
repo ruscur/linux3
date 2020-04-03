@@ -20,6 +20,7 @@
 #include <asm/page.h>
 #include <asm/pgalloc.h>
 #include <asm/plpar_wrappers.h>
+#include <asm/hvcall.h>
 #include <linux/memblock.h>
 #include <asm/firmware.h>
 
