@@ -91,6 +91,8 @@ notrace long system_call_exception(long r3, long r4, long r5,
 
 	} else if (unlikely(r0 >= NR_syscalls)) {
 		return -ENOSYS;
+	} else {
+		r3 = regs->orig_gpr3;
 	}
 
 	/* May be faster to do array_index_nospec? */
