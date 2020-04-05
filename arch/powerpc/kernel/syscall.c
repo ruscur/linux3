@@ -164,7 +164,7 @@ notrace unsigned long syscall_exit_prepare(unsigned long r3,
 again:
 #endif
 	local_irq_disable();
-	ti_flags = READ_ONCE(*ti_flagsp);
+	ti_flags = current_thread_info()->flags;
 	while (unlikely(ti_flags & (_TIF_USER_WORK_MASK & ~_TIF_RESTORE_TM))) {
 		local_irq_enable();
 		if (ti_flags & _TIF_NEED_RESCHED) {
@@ -180,7 +180,7 @@ again:
 			do_notify_resume(regs, ti_flags);
 		}
 		local_irq_disable();
-		ti_flags = READ_ONCE(*ti_flagsp);
+		ti_flags = current_thread_info()->flags;
 	}
 
 	if (IS_ENABLED(CONFIG_PPC_BOOK3S) && IS_ENABLED(CONFIG_PPC_FPU)) {
