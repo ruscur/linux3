@@ -25,8 +25,10 @@ notrace long system_call_exception(long r3, long r4, long r5,
 	unsigned long ti_flags;
 	syscall_fn f;
 
+#ifdef CONFIG_PPC64
 	if (IS_ENABLED(CONFIG_PPC_IRQ_SOFT_MASK_DEBUG))
 		BUG_ON(irq_soft_mask_return() != IRQS_ALL_DISABLED);
+#endif
 
 	trace_hardirqs_off(); /* finish reconciling */
 
@@ -34,7 +36,9 @@ notrace long system_call_exception(long r3, long r4, long r5,
 		BUG_ON(!(regs->msr & MSR_RI));
 	BUG_ON(!(regs->msr & MSR_PR));
 	BUG_ON(!FULL_REGS(regs));
+#ifdef CONFIG_PPC64
 	BUG_ON(regs->softe != IRQS_ENABLED);
+#endif
 
 	account_cpu_user_entry();
 
@@ -56,7 +60,9 @@ notrace long system_call_exception(long r3, long r4, long r5,
 	 * frame, or if the unwinder was taught the first stack frame always
 	 * returns to user with IRQS_ENABLED, this store could be avoided!
 	 */
+#ifdef CONFIG_PPC64
 	regs->softe = IRQS_ENABLED;
+#endif
 
 	local_irq_enable();
 
@@ -148,7 +154,9 @@ notrace unsigned long syscall_exit_prepare(unsigned long r3,
 		ret |= _TIF_RESTOREALL;
 	}
 
+#ifdef CONFIG_PPC64
 again:
+#endif
 	local_irq_disable();
 	ti_flags = READ_ONCE(*ti_flagsp);
 	while (unlikely(ti_flags & (_TIF_USER_WORK_MASK & ~_TIF_RESTORE_TM))) {
@@ -191,6 +199,7 @@ again:
 
 	/* This pattern matches prep_irq_for_idle */
 	__hard_EE_RI_disable();
+#ifdef CONFIG_PPC64
 	if (unlikely(lazy_irq_pending())) {
 		__hard_RI_enable();
 		trace_hardirqs_off();
@@ -201,6 +210,7 @@ again:
 	}
 	local_paca->irq_happened = 0;
 	irq_soft_mask_set(IRQS_ENABLED);
+#endif
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
 	local_paca->tm_scratch = regs->msr;
