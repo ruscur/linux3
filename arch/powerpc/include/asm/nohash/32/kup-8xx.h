@@ -34,6 +34,19 @@
 
 #include <asm/reg.h>
 
+static inline void kuap_restore(struct pt_regs *regs)
+{
+	mtspr(SPRN_MD_AP, regs->kuap);
+}
+
+static inline void kuap_check(void)
+{
+	if (!IS_ENABLED(CONFIG_PPC_KUAP_DEBUG))
+		return;
+
+	WARN_ON_ONCE((mfspr(SPRN_MD_AP) & 0xffff0000) != (MD_APG_KUAP & 0xffff0000));
+}
+
 static inline void allow_user_access(void __user *to, const void __user *from,
 				     unsigned long size, unsigned long dir)
 {
