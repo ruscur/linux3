@@ -8,4 +8,9 @@
 
 #define ppc_inst(x) (x)
 
+static inline int ppc_inst_opcode(u32 x)
+{
+	return x >> 26;
+}
+
 #endif /* _ASM_INST_H */
