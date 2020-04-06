@@ -761,8 +761,8 @@ static int xmon_bpt(struct pt_regs *regs)
 
 	/* Are we at the trap at bp->instr[1] for some bp? */
 	bp = in_breakpoint_table(regs->nip, &offset);
-	if (bp != NULL && offset == 4) {
-		regs->nip = bp->address + 4;
+	if (bp != NULL && (offset == 4 || offset == 8)) {
+		regs->nip = bp->address + offset;
 		atomic_dec(&bp->ref_count);
 		return 1;
 	}
@@ -863,7 +863,7 @@ static struct bpt *in_breakpoint_table(unsigned long nip, unsigned long *offp)
 	if (off >= sizeof(bpt_table))
 		return NULL;
 	*offp = off % BPT_SIZE;
-	if (*offp != 0 && *offp != 4)
+	if (*offp != 0 && *offp != 4 && *offp != 8)
 		return NULL;
 	return bpts + (off / BPT_SIZE);
 }

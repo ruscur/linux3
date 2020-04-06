@@ -105,11 +105,34 @@ static inline int __access_ok(unsigned long addr, unsigned long size,
 #define __put_user_inatomic(x, ptr) \
 	__put_user_nosleep((__typeof__(*(ptr)))(x), (ptr), sizeof(*(ptr)))
 
-#define __get_user_instr(x, ptr) \
-	__get_user_nocheck((x).val, (u32 *)(ptr), sizeof(u32), true)
+#define __get_user_instr(x, ptr)			\
+({							\
+	long __gui_ret = 0;				\
+	unsigned int prefix, suffix;			\
+	__gui_ret = __get_user(prefix, (unsigned int __user *)ptr);		\
+	if (!__gui_ret && (prefix >> 26) == 1) {	\
+		__gui_ret = __get_user(suffix, (unsigned int __user *)ptr + 1);	\
+		(x) = ppc_inst_prefix(prefix, suffix);	\
+	} else {					\
+		(x) = ppc_inst(prefix);			\
+	}						\
+	__gui_ret;					\
+})
 
-#define __get_user_instr_inatomic(x, ptr) \
-	__get_user_nosleep((x).val, (u32 *)(ptr), sizeof(u32))
+#define __get_user_instr_inatomic(x, ptr)		\
+({							\
+	long __gui_ret = 0;				\
+	unsigned int prefix, suffix;			\
+	__gui_ret = __get_user_inatomic(prefix, (unsigned int __user *)ptr);		\
+	if (!__gui_ret && (prefix >> 26) == 1) {	\
+		__gui_ret = __get_user_inatomic(suffix, (unsigned int __user *)ptr + 1);	\
+		(x) = ppc_inst_prefix(prefix, suffix);	\
+	} else {					\
+		(x) = ppc_inst(prefix);			\
+	}						\
+	__gui_ret;					\
+})
+
 extern long __put_user_bad(void);
 
 /*

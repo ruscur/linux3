@@ -3,6 +3,8 @@
 #include <asm/asm-compat.h>
 #include "xmon_bpts.h"
 
+/* Prefixed instructions can not cross 64 byte boundaries */
+.align 6
 .global bpt_table
 bpt_table:
-	.space NBPTS * 8
+	.space NBPTS * 16

@@ -24,12 +24,19 @@ static int __patch_instruction(struct ppc_inst *exec_addr, struct ppc_inst instr
 {
 	int err = 0;
 
-	__put_user_asm(ppc_inst_val(instr), patch_addr, err, "stw");
-	if (err)
-		return err;
-
-	asm ("dcbst 0, %0; sync; icbi 0,%1; sync; isync" :: "r" (patch_addr),
-							    "r" (exec_addr));
+	if (!ppc_inst_prefixed(instr)) {
+		__put_user_asm(ppc_inst_val(instr), patch_addr, err, "stw");
+		if (err)
+			return err;
+		asm ("dcbst 0, %0; sync; icbi 0,%1; sync; isync" :: "r" (patch_addr),
+								    "r" (exec_addr));
+	} else {
+		__put_user_asm((u64)ppc_inst_suffix(instr) << 32 | ppc_inst_val(instr), patch_addr, err, "std");
+		if (err)
+			return err;
+		asm ("dcbst 0, %0; sync; icbi 0,%1; sync; isync" :: "r" (patch_addr),
+								    "r" (exec_addr));
+	}
 
 	return 0;
 }

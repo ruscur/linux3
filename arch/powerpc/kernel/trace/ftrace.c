@@ -41,11 +41,35 @@
 #define	NUM_FTRACE_TRAMPS	8
 static unsigned long ftrace_tramps[NUM_FTRACE_TRAMPS];
 
+#ifdef __powerpc64__
 static long
 probe_kernel_read_inst(struct ppc_inst *inst, const void *src)
 {
-	return probe_kernel_read((void *)inst, src, MCOUNT_INSN_SIZE);
+	u32 val, suffix = 0;
+	long err;
+
+	err = probe_kernel_read((void *)&val,
+				src, sizeof(val));
+	if (err)
+		return err;
+
+	if ((val >> 26) == 1)
+		err = probe_kernel_read((void *)&suffix,
+					src + 4, MCOUNT_INSN_SIZE);
+	if (err)
+		return err;
+
+	*inst = ppc_inst_prefix(val, suffix);
+
+	return 0;
 }
+#else
+static long
+probe_kernel_read_inst(struct ppc_inst *inst, const void *src)
+{
+	return probe_kernel_read((void *)inst, src, MCOUNT_INSN_SIZE)
+}
+#endif
 
 static struct ppc_inst
 ftrace_call_replace(unsigned long ip, unsigned long addr, int link)
