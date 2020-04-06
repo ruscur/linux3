@@ -114,6 +114,13 @@ void pte_fragment_free(unsigned long *table, int kernel)
 	if (atomic_dec_and_test(&page->pt_frag_refcount)) {
 		if (!kernel)
 			pgtable_pte_page_dtor(page);
-		__free_page(page);
+		/*
+		 * Early pte pages allocated via memblock
+		 * allocator need to be freed differently
+		 */
+		if (PageReserved(page))
+			free_reserved_page(page);
+		else
+			__free_page(page);
 	}
 }
