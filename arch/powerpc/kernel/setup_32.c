@@ -76,7 +76,7 @@ EXPORT_SYMBOL(DMA_MODE_WRITE);
 notrace void __init machine_init(u64 dt_ptr)
 {
 	unsigned int *addr = (unsigned int *)patch_site_addr(&patch__memset_nocache);
-	unsigned long insn;
+	struct ppc_inst insn;
 
 	/* Configure static keys first, now that we're relocated. */
 	setup_feature_keys();

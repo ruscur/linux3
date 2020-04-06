@@ -461,7 +461,7 @@ struct compute_test {
 	struct {
 		char *descr;
 		unsigned long flags;
-		unsigned int instr;
+		struct ppc_inst instr;
 		struct pt_regs regs;
 	} subtests[MAX_SUBTESTS + 1];
 };
@@ -842,7 +842,7 @@ static struct compute_test compute_tests[] = {
 };
 
 static int __init emulate_compute_instr(struct pt_regs *regs,
-					unsigned int instr)
+					struct ppc_inst instr)
 {
 	struct instruction_op op;
 
@@ -860,7 +860,7 @@ static int __init emulate_compute_instr(struct pt_regs *regs,
 }
 
 static int __init execute_compute_instr(struct pt_regs *regs,
-					unsigned int instr)
+					struct ppc_inst instr)
 {
 	extern int exec_instr(struct pt_regs *regs);
 	extern s32 patch__exec_instr;
@@ -891,7 +891,8 @@ static void __init run_tests_compute(void)
 	unsigned long flags;
 	struct compute_test *test;
 	struct pt_regs *regs, exp, got;
-	unsigned int i, j, k, instr;
+	unsigned int i, j, k;
+	struct ppc_inst instr;
 	bool ignore_gpr, ignore_xer, ignore_ccr, passed;
 
 	for (i = 0; i < ARRAY_SIZE(compute_tests); i++) {

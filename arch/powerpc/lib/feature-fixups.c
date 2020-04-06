@@ -32,26 +32,26 @@ struct fixup_entry {
 	long		alt_end_off;
 };
 
-static unsigned int *calc_addr(struct fixup_entry *fcur, long offset)
+static struct ppc_inst *calc_addr(struct fixup_entry *fcur, long offset)
 {
 	/*
 	 * We store the offset to the code as a negative offset from
 	 * the start of the alt_entry, to support the VDSO. This
 	 * routine converts that back into an actual address.
 	 */
-	return (unsigned int *)((unsigned long)fcur + offset);
+	return (struct ppc_inst *)((unsigned long)fcur + offset);
 }
 
-static int patch_alt_instruction(unsigned int *src, unsigned int *dest,
-				 unsigned int *alt_start, unsigned int *alt_end)
+static int patch_alt_instruction(struct ppc_inst *src, struct ppc_inst *dest,
+				 struct ppc_inst *alt_start, struct ppc_inst *alt_end)
 {
 	int err;
-	unsigned int instr;
+	struct ppc_inst instr;
 
 	instr = *src;
 
 	if (instr_is_relative_branch(*src)) {
-		unsigned int *target = (unsigned int *)branch_target(src);
+		struct ppc_inst *target = (struct ppc_inst *)branch_target(src);
 
 		/* Branch within the section doesn't need translating */
 		if (target < alt_start || target > alt_end) {
@@ -68,7 +68,7 @@ static int patch_alt_instruction(unsigned int *src, unsigned int *dest,
 
 static int patch_feature_section(unsigned long value, struct fixup_entry *fcur)
 {
-	unsigned int *start, *end, *alt_start, *alt_end, *src, *dest;
+	struct ppc_inst *start, *end, *alt_start, *alt_end, *src, *dest;
 
 	start = calc_addr(fcur, fcur->start_off);
 	end = calc_addr(fcur, fcur->end_off);
@@ -147,15 +147,15 @@ static void do_stf_entry_barrier_fixups(enum stf_barrier_type types)
 
 		pr_devel("patching dest %lx\n", (unsigned long)dest);
 
-		patch_instruction(dest, ppc_inst(instrs[0]));
+		patch_instruction((struct ppc_inst *)dest, ppc_inst(instrs[0]));
 
 		if (types & STF_BARRIER_FALLBACK)
-			patch_branch(dest + 1, (unsigned long)&stf_barrier_fallback,
+			patch_branch((struct ppc_inst *)(dest + 1), (unsigned long)&stf_barrier_fallback,
 				     BRANCH_SET_LINK);
 		else
-			patch_instruction(dest + 1, ppc_inst(instrs[1]));
+			patch_instruction((struct ppc_inst *)(dest + 1), ppc_inst(instrs[1]));
 
-		patch_instruction(dest + 2, ppc_inst(instrs[2]));
+		patch_instruction((struct ppc_inst *)(dest + 2), ppc_inst(instrs[2]));
 	}
 
 	printk(KERN_DEBUG "stf-barrier: patched %d entry locations (%s barrier)\n", i,
@@ -208,12 +208,12 @@ static void do_stf_exit_barrier_fixups(enum stf_barrier_type types)
 
 		pr_devel("patching dest %lx\n", (unsigned long)dest);
 
-		patch_instruction(dest, ppc_inst(instrs[0]));
-		patch_instruction(dest + 1, ppc_inst(instrs[1]));
-		patch_instruction(dest + 2, ppc_inst(instrs[2]));
-		patch_instruction(dest + 3, ppc_inst(instrs[3]));
-		patch_instruction(dest + 4, ppc_inst(instrs[4]));
-		patch_instruction(dest + 5, ppc_inst(instrs[5]));
+		patch_instruction((struct ppc_inst *)dest, ppc_inst(instrs[0]));
+		patch_instruction((struct ppc_inst *)(dest + 1), ppc_inst(instrs[1]));
+		patch_instruction((struct ppc_inst *)(dest + 2), ppc_inst(instrs[2]));
+		patch_instruction((struct ppc_inst *)(dest + 3), ppc_inst(instrs[3]));
+		patch_instruction((struct ppc_inst *)(dest + 4), ppc_inst(instrs[4]));
+		patch_instruction((struct ppc_inst *)(dest + 5), ppc_inst(instrs[5]));
 	}
 	printk(KERN_DEBUG "stf-barrier: patched %d exit locations (%s barrier)\n", i,
 		(types == STF_BARRIER_NONE)                  ? "no" :
@@ -261,9 +261,9 @@ void do_rfi_flush_fixups(enum l1d_flush_type types)
 
 		pr_devel("patching dest %lx\n", (unsigned long)dest);
 
-		patch_instruction(dest, ppc_inst(instrs[0]));
-		patch_instruction(dest + 1, ppc_inst(instrs[1]));
-		patch_instruction(dest + 2, ppc_inst(instrs[2]));
+		patch_instruction((struct ppc_inst *)dest, ppc_inst(instrs[0]));
+		patch_instruction((struct ppc_inst *)(dest + 1), ppc_inst(instrs[1]));
+		patch_instruction((struct ppc_inst *)(dest + 2), ppc_inst(instrs[2]));
 	}
 
 	printk(KERN_DEBUG "rfi-flush: patched %d locations (%s flush)\n", i,
@@ -296,7 +296,7 @@ void do_barrier_nospec_fixups_range(bool enable, void *fixup_start, void *fixup_
 		dest = (void *)start + *start;
 
 		pr_devel("patching dest %lx\n", (unsigned long)dest);
-		patch_instruction(dest, ppc_inst(instr));
+		patch_instruction((struct ppc_inst *)dest, ppc_inst(instr));
 	}
 
 	printk(KERN_DEBUG "barrier-nospec: patched %d locations\n", i);
@@ -339,8 +339,8 @@ void do_barrier_nospec_fixups_range(bool enable, void *fixup_start, void *fixup_
 		dest = (void *)start + *start;
 
 		pr_devel("patching dest %lx\n", (unsigned long)dest);
-		patch_instruction(dest, ppc_inst(instr[0]));
-		patch_instruction(dest + 1, ppc_inst(instr[1]));
+		patch_instruction((struct ppc_inst *)dest, ppc_inst(instr[0]));
+		patch_instruction((struct ppc_inst *)(dest + 1), ppc_inst(instr[1]));
 	}
 
 	printk(KERN_DEBUG "barrier-nospec: patched %d locations\n", i);
@@ -373,7 +373,7 @@ void do_btb_flush_fixups(void)
 void do_lwsync_fixups(unsigned long value, void *fixup_start, void *fixup_end)
 {
 	long *start, *end;
-	unsigned int *dest;
+	struct ppc_inst *dest;
 
 	if (!(value & CPU_FTR_LWSYNC))
 		return ;
