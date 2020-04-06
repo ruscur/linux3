@@ -18,4 +18,9 @@ static inline int ppc_inst_opcode(u32 x)
 	return x >> 26;
 }
 
+static inline u32 ppc_inst_swab(u32 x)
+{
+	return ppc_inst(swab32(ppc_inst_val(x)));
+}
+
 #endif /* _ASM_INST_H */
