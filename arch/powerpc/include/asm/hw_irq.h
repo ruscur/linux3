@@ -293,6 +293,11 @@ static inline void set_softe(struct pt_regs *regs, unsigned long val)
 }
 #else /* CONFIG_PPC64 */
 
+static inline notrace unsigned long irq_soft_mask_return(void)
+{
+	return 0;
+}
+
 static inline unsigned long arch_local_save_flags(void)
 {
 	return mfmsr();
