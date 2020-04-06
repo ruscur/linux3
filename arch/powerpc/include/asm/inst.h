@@ -17,6 +17,11 @@ static inline u32 ppc_inst_val(struct ppc_inst x)
 	return x.val;
 }
 
+static inline bool ppc_inst_len(struct ppc_inst x)
+{
+	return sizeof(struct ppc_inst);
+}
+
 static inline int ppc_inst_opcode(struct ppc_inst x)
 {
 	return x.val >> 26;
