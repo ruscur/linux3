@@ -8,6 +8,11 @@
 
 #define ppc_inst(x) (x)
 
+static inline u32 ppc_inst_val(u32 x)
+{
+	return x;
+}
+
 static inline int ppc_inst_opcode(u32 x)
 {
 	return x >> 26;
