@@ -37,7 +37,7 @@ notrace long system_call_exception(long r3, long r4, long r5,
 	if (!IS_ENABLED(CONFIG_PPC_BOOK3E))
 		BUG_ON(!(regs->msr & MSR_RI));
 	BUG_ON(IS_ENABLED(CONFIG_PPC64) && !(regs->msr & MSR_PR));
-	BUG_ON(!FULL_REGS(regs));
+	BUG_ON(IS_ENABLED(CONFIG_PPC64) && !FULL_REGS(regs));
 	BUG_ON(IS_ENABLED(CONFIG_PPC64) && get_softe(regs) != IRQS_ENABLED);
 
 	account_cpu_user_entry();
@@ -145,19 +145,15 @@ static notrace inline bool prep_irq_for_enabled_exit(void)
  * The function graph tracer can not trace the return side of this function,
  * because RI=0 and soft mask state is "unreconciled", so it is marked notrace.
  */
-notrace unsigned long syscall_exit_prepare(unsigned long r3,
-					   struct pt_regs *regs)
+static64 notrace unsigned long
+syscall_exit_prepare_begin(unsigned long r3, struct pt_regs *regs, unsigned long ti_flags)
 {
-	unsigned long *ti_flagsp = &current_thread_info()->flags;
-	unsigned long ti_flags;
 	unsigned long ret = 0;
 
 	regs->result = r3;
 
 	/* Check whether the syscall is issued inside a restartable sequence */
 	rseq_syscall(regs);
-
-	ti_flags = *ti_flagsp;
 
 	if (unlikely(r3 >= (unsigned long)-MAX_ERRNO)) {
 		if (likely(!(ti_flags & (_TIF_NOERROR | _TIF_RESTOREALL)))) {
@@ -171,7 +167,7 @@ notrace unsigned long syscall_exit_prepare(unsigned long r3,
 			ret = _TIF_RESTOREALL;
 		else
 			regs->gpr[3] = r3;
-		clear_bits(_TIF_PERSYSCALL_MASK, ti_flagsp);
+		clear_bits(_TIF_PERSYSCALL_MASK, &current_thread_info()->flags);
 	} else {
 		regs->gpr[3] = r3;
 	}
@@ -181,27 +177,35 @@ notrace unsigned long syscall_exit_prepare(unsigned long r3,
 		ret |= _TIF_RESTOREALL;
 	}
 
-again:
 	local_irq_disable();
-	ti_flags = READ_ONCE(*ti_flagsp);
-	while (unlikely(ti_flags & (_TIF_USER_WORK_MASK & ~_TIF_RESTORE_TM))) {
-		local_irq_enable();
-		if (ti_flags & _TIF_NEED_RESCHED) {
-			schedule();
-		} else {
-			/*
-			 * SIGPENDING must restore signal handler function
-			 * argument GPRs, and some non-volatiles (e.g., r1).
-			 * Restore all for now. This could be made lighter.
-			 */
-			if (ti_flags & _TIF_SIGPENDING)
-				ret |= _TIF_RESTOREALL;
-			do_notify_resume(regs, ti_flags);
-		}
-		local_irq_disable();
-		ti_flags = READ_ONCE(*ti_flagsp);
-	}
 
+	return ret;
+}
+
+static64 notrace unsigned long
+syscall_exit_prepare_loop(unsigned long ret, struct pt_regs *regs, unsigned long ti_flags)
+{
+	local_irq_enable();
+	if (ti_flags & _TIF_NEED_RESCHED) {
+		schedule();
+	} else {
+		/*
+		 * SIGPENDING must restore signal handler function
+		 * argument GPRs, and some non-volatiles (e.g., r1).
+		 * Restore all for now. This could be made lighter.
+		 */
+		if (ti_flags & _TIF_SIGPENDING)
+			ret |= _TIF_RESTOREALL;
+		do_notify_resume(regs, ti_flags);
+	}
+	local_irq_disable();
+
+	return ret;
+}
+
+static64 notrace unsigned long
+syscall_exit_prepare_end(unsigned long ret, struct pt_regs *regs, unsigned long ti_flags)
+{
 	if (IS_ENABLED(CONFIG_PPC_BOOK3S) && IS_ENABLED(CONFIG_PPC_FPU)) {
 		if (IS_ENABLED(CONFIG_PPC_TRANSACTIONAL_MEM) &&
 				unlikely((ti_flags & _TIF_RESTORE_TM))) {
@@ -221,7 +225,8 @@ again:
 
 	if (unlikely(!prep_irq_for_enabled_exit())) {
 		local_irq_enable();
-		goto again;
+		local_irq_disable();
+		return ret | 0x80000000;
 	}
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
@@ -234,6 +239,30 @@ again:
 
 	return ret;
 }
+
+#ifdef CONFIG_PPC64
+notrace unsigned long syscall_exit_prepare(unsigned long r3, struct pt_regs *regs)
+{
+	unsigned long ret;
+	unsigned long *ti_flagsp = &current_thread_info()->flags;
+	unsigned long ti_flags = *ti_flagsp;
+
+	ret = syscall_exit_prepare_begin(r3, regs, ti_flags);
+
+again:
+	ti_flags = READ_ONCE(*ti_flagsp);
+	if (unlikely(ti_flags & (_TIF_USER_WORK_MASK & ~_TIF_RESTORE_TM))) {
+		ret = syscall_exit_prepare_loop(ret, regs, ti_flags);
+		goto again;
+	}
+	ret = syscall_exit_prepare_end(ret, regs, ti_flags);
+	if (unlikely(ret & 0x80000000)) {
+		ret &= ~0x80000000;
+		goto again;
+	}
+	return ret;
+}
+#endif
 
 #ifdef CONFIG_PPC_BOOK3S_64 /* BOOK3E not yet using this */
 notrace unsigned long interrupt_exit_user_prepare(struct pt_regs *regs, unsigned long msr)

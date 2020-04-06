@@ -315,14 +315,37 @@ stack_ovf:
 	RFI
 #endif
 
+save_nvgprs:
+	lwz	r11, _TRAP(r1)
+	andi.	r12, r11, 1
+	rlwinm	r11, r11, 0, ~1
+	beqlr
+	SAVE_NVGPRS(r1)
+	stw	r11, _TRAP(r1)
+	blr
+
 	.globl	transfer_to_syscall
 transfer_to_syscall:
+	lwz     r10, TI_FLAGS(r2)
 	mr	r9, r0
+	andi.   r10, r10, _TIF_SYSCALL_DOTRACE
 	addi	r10, r1, STACK_FRAME_OVERHEAD
+	bnel-	save_nvgprs
 	bl	system_call_exception
 ret_from_syscall:
+	lwz     r5, TI_FLAGS(r2)
 	addi    r4, r1, STACK_FRAME_OVERHEAD
-	bl	syscall_exit_prepare
+	andi.   r0, r5, _TIF_SYSCALL_DOTRACE | _TIF_SINGLESTEP | _TIF_USER_WORK_MASK
+	bnel-	save_nvgprs
+	bl	syscall_exit_prepare_begin
+1:	lwz	r5, TI_FLAGS(r2)
+	addi    r4, r1, STACK_FRAME_OVERHEAD
+	andi.	r0, r5, _TIF_USER_WORK_MASK & ~_TIF_RESTORE_TM
+	beq+	1f
+	bl	save_nvgprs
+	bl	syscall_exit_prepare_loop
+	b	1b
+1:	bl	syscall_exit_prepare_end
 	lwz	r2, _CCR(r1)
 	lwz	r4, _NIP(r1)
 	lwz	r5, _MSR(r1)

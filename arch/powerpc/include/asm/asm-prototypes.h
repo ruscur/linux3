@@ -98,6 +98,17 @@ unsigned long __init early_init(unsigned long dt_ptr);
 void __init machine_init(u64 dt_ptr);
 #endif
 long system_call_exception(long r3, long r4, long r5, long r6, long r7, long r8, unsigned long r0, struct pt_regs *regs);
+#ifdef CONFIG_PPC64
+#define static64 static
+#else
+#define static64
+#endif
+static64 notrace unsigned long
+syscall_exit_prepare_begin(unsigned long r3, struct pt_regs *regs, unsigned long ti_flags);
+static64 notrace unsigned long
+syscall_exit_prepare_loop(unsigned long ret, struct pt_regs *regs, unsigned long ti_flags);
+static64 notrace unsigned long
+syscall_exit_prepare_end(unsigned long ret, struct pt_regs *regs, unsigned long ti_flags);
 notrace unsigned long syscall_exit_prepare(unsigned long r3, struct pt_regs *regs);
 notrace unsigned long interrupt_exit_user_prepare(struct pt_regs *regs, unsigned long msr);
 notrace unsigned long interrupt_exit_kernel_prepare(struct pt_regs *regs, unsigned long msr);
