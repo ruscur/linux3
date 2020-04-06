@@ -34,7 +34,7 @@ notrace long system_call_exception(long r3, long r4, long r5,
 		BUG_ON(!(regs->msr & MSR_RI));
 	BUG_ON(!(regs->msr & MSR_PR));
 	BUG_ON(!FULL_REGS(regs));
-	BUG_ON(regs->softe != IRQS_ENABLED);
+	BUG_ON(IS_ENABLED(CONFIG_PPC64) && get_softe(regs) != IRQS_ENABLED);
 
 	account_cpu_user_entry();
 
@@ -56,7 +56,7 @@ notrace long system_call_exception(long r3, long r4, long r5,
 	 * frame, or if the unwinder was taught the first stack frame always
 	 * returns to user with IRQS_ENABLED, this store could be avoided!
 	 */
-	regs->softe = IRQS_ENABLED;
+	set_softe(regs, IRQS_ENABLED);
 
 	local_irq_enable();
 
@@ -114,6 +114,7 @@ static notrace inline bool prep_irq_for_enabled_exit(void)
 
 	/* This pattern matches prep_irq_for_idle */
 	__hard_EE_RI_disable();
+#ifdef CONFIG_PPC64
 	if (unlikely(lazy_irq_pending())) {
 		/* Took an interrupt, may have more exit work to do. */
 		__hard_RI_enable();
@@ -124,7 +125,7 @@ static notrace inline bool prep_irq_for_enabled_exit(void)
 	}
 	local_paca->irq_happened = 0;
 	irq_soft_mask_set(IRQS_ENABLED);
-
+#endif
 	return true;
 }
 
@@ -227,7 +228,7 @@ again:
 	return ret;
 }
 
-#ifdef CONFIG_PPC_BOOK3S /* BOOK3E not yet using this */
+#ifdef CONFIG_PPC_BOOK3S_64 /* BOOK3E not yet using this */
 notrace unsigned long interrupt_exit_user_prepare(struct pt_regs *regs, unsigned long msr)
 {
 #ifdef CONFIG_PPC_BOOK3E
