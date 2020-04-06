@@ -395,7 +395,8 @@ static int dlpar_remove_lmb(struct drmem_lmb *lmb)
 
 	invalidate_lmb_associativity_index(lmb);
 	lmb_clear_nid(lmb);
-	lmb->flags &= ~DRCONF_MEM_ASSIGNED;
+	lmb->flags &= ~(DRCONF_MEM_ASSIGNED |
+			DRCONF_MEM_HOTREMOVABLE);
 
 	return 0;
 }
@@ -678,7 +679,8 @@ static int dlpar_add_lmb(struct drmem_lmb *lmb)
 		invalidate_lmb_associativity_index(lmb);
 		lmb_clear_nid(lmb);
 	} else {
-		lmb->flags |= DRCONF_MEM_ASSIGNED;
+		lmb->flags |= (DRCONF_MEM_ASSIGNED |
+			       DRCONF_MEM_HOTREMOVABLE);
 	}
 
 	return rc;
