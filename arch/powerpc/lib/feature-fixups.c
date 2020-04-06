@@ -48,7 +48,7 @@ static int patch_alt_instruction(struct ppc_inst *src, struct ppc_inst *dest,
 	int err;
 	struct ppc_inst instr;
 
-	instr = *src;
+	instr = ppc_inst_read(src);
 
 	if (instr_is_relative_branch(*src)) {
 		struct ppc_inst *target = (struct ppc_inst *)branch_target(src);
