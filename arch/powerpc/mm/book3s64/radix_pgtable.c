@@ -16,6 +16,7 @@
 #include <linux/hugetlb.h>
 #include <linux/string_helpers.h>
 #include <linux/stop_machine.h>
+#include <linux/memory.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -314,6 +315,8 @@ static void __init radix_init_pgtable(void)
 {
 	unsigned long rts_field;
 	struct memblock_region *reg;
+	phys_addr_t addr;
+	u64 lmb_size = memory_block_size_bytes();
 
 	/* We don't support slb for radix */
 	mmu_slb_size = 0;
@@ -332,9 +335,15 @@ static void __init radix_init_pgtable(void)
 			continue;
 		}
 
-		WARN_ON(create_physical_mapping(reg->base,
-						reg->base + reg->size,
-						-1));
+		if (memblock_is_hotpluggable(reg)) {
+			for (addr = reg->base; addr < (reg->base + reg->size);
+				addr += lmb_size)
+				WARN_ON(create_physical_mapping(addr,
+				addr + lmb_size, -1));
+		} else
+			WARN_ON(create_physical_mapping(reg->base,
+							reg->base + reg->size,
+							-1));
 	}
 
 	/* Find out how many PID bits are supported */
