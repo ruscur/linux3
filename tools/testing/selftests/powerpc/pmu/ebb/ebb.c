@@ -258,6 +258,10 @@ int count_pmc(int pmc, uint32_t sample_period)
 	start_value = pmc_sample_period(sample_period);
 
 	val = read_pmc(pmc);
+
+	/* Ensure pmc value is consistent between freezes */
+	mb();
+
 	if (val < start_value)
 		ebb_state.stats.negative++;
 	else
