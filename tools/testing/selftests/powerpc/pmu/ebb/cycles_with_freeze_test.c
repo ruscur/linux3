@@ -81,7 +81,7 @@ int cycles_with_freeze(void)
 	{
 		counters_frozen = false;
 		mb();
-		mtspr(SPRN_MMCR0, mfspr(SPRN_MMCR0) & ~MMCR0_FC);
+		mtspr(SPRN_MMCR0, (mfspr(SPRN_MMCR0) & ~MMCR0_FC) | MMCR0_PMAE);
 
 		FAIL_IF(core_busy_loop());
 
