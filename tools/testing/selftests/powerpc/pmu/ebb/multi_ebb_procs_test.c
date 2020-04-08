@@ -61,7 +61,7 @@ static int cycles_child(void)
 	ebb_global_disable();
 	ebb_freeze_pmcs();
 
-	count_pmc(1, sample_period);
+	write_pmc(1, pmc_sample_period(sample_period));
 
 	dump_summary_ebb_state();
 

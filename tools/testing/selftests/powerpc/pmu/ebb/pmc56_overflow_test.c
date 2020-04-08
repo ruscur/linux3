@@ -76,7 +76,7 @@ int pmc56_overflow(void)
 	ebb_global_disable();
 	ebb_freeze_pmcs();
 
-	count_pmc(2, sample_period);
+	write_pmc(2, pmc_sample_period(sample_period));
 
 	dump_ebb_state();
 
