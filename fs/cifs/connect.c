@@ -2177,7 +2177,7 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 			tmp_end++;
 			if (!(tmp_end < end && tmp_end[1] == delim)) {
 				/* No it is not. Set the password to NULL */
-				kzfree(vol->password);
+				kfree_sensitive(vol->password);
 				vol->password = NULL;
 				break;
 			}
@@ -2215,7 +2215,7 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 					options = end;
 			}
 
-			kzfree(vol->password);
+			kfree_sensitive(vol->password);
 			/* Now build new password string */
 			temp_len = strlen(value);
 			vol->password = kzalloc(temp_len+1, GFP_KERNEL);
@@ -3200,7 +3200,7 @@ cifs_set_cifscreds(struct smb_vol *vol, struct cifs_ses *ses)
 			rc = -ENOMEM;
 			kfree(vol->username);
 			vol->username = NULL;
-			kzfree(vol->password);
+			kfree_sensitive(vol->password);
 			vol->password = NULL;
 			goto out_key_put;
 		}
@@ -4212,7 +4212,7 @@ void
 cifs_cleanup_volume_info_contents(struct smb_vol *volume_info)
 {
 	kfree(volume_info->username);
-	kzfree(volume_info->password);
+	kfree_sensitive(volume_info->password);
 	kfree(volume_info->UNC);
 	kfree(volume_info->domainname);
 	kfree(volume_info->iocharset);
@@ -5337,7 +5337,7 @@ cifs_construct_tcon(struct cifs_sb_info *cifs_sb, kuid_t fsuid)
 
 out:
 	kfree(vol_info->username);
-	kzfree(vol_info->password);
+	kfree_sensitive(vol_info->password);
 	kfree(vol_info);
 
 	return tcon;

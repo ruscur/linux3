@@ -2691,7 +2691,7 @@ out:
 	btrfs_put_root(root);
 out_free:
 	btrfs_free_path(path);
-	kzfree(subvol_info);
+	kfree_sensitive(subvol_info);
 	return ret;
 }
 
