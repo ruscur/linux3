@@ -434,11 +434,9 @@ static struct inode *proc_sys_make_inode(struct super_block *sb,
 	struct inode *inode;
 	struct proc_inode *ei;
 
-	inode = new_inode(sb);
+	inode = simple_new_inode(sb);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
-
-	inode->i_ino = get_next_ino();
 
 	ei = PROC_I(inode);
 
@@ -454,7 +452,6 @@ static struct inode *proc_sys_make_inode(struct super_block *sb,
 	head->count++;
 	spin_unlock(&sysctl_lock);
 
-	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	inode->i_mode = table->mode;
 	if (!S_ISDIR(table->mode)) {
 		inode->i_mode |= S_IFREG;

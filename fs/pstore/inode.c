@@ -208,16 +208,6 @@ static const struct inode_operations pstore_dir_inode_operations = {
 	.unlink		= pstore_unlink,
 };
 
-static struct inode *pstore_get_inode(struct super_block *sb)
-{
-	struct inode *inode = new_inode(sb);
-	if (inode) {
-		inode->i_ino = get_next_ino();
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-	}
-	return inode;
-}
-
 enum {
 	Opt_kmsg_bytes, Opt_err
 };
@@ -316,7 +306,7 @@ int pstore_mkfile(struct dentry *root, struct pstore_record *record)
 		return rc;
 
 	rc = -ENOMEM;
-	inode = pstore_get_inode(root->d_sb);
+	inode = simple_new_inode(root->d_sb);
 	if (!inode)
 		goto fail;
 	inode->i_mode = S_IFREG | 0444;
@@ -394,7 +384,7 @@ static int pstore_fill_super(struct super_block *sb, void *data, int silent)
 
 	parse_options(data);
 
-	inode = pstore_get_inode(sb);
+	inode = simple_new_inode(sb);
 	if (inode) {
 		inode->i_mode = S_IFDIR | 0750;
 		inode->i_op = &pstore_dir_inode_operations;

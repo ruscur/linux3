@@ -586,19 +586,6 @@ static void entry_status(Node *e, char *page)
 	}
 }
 
-static struct inode *bm_get_inode(struct super_block *sb, int mode)
-{
-	struct inode *inode = new_inode(sb);
-
-	if (inode) {
-		inode->i_ino = get_next_ino();
-		inode->i_mode = mode;
-		inode->i_atime = inode->i_mtime = inode->i_ctime =
-			current_time(inode);
-	}
-	return inode;
-}
-
 static void bm_evict_inode(struct inode *inode)
 {
 	Node *e = inode->i_private;
@@ -711,12 +698,13 @@ static ssize_t bm_register_write(struct file *file, const char __user *buffer,
 	if (d_really_is_positive(dentry))
 		goto out2;
 
-	inode = bm_get_inode(sb, S_IFREG | 0644);
+	inode = simple_new_inode(sb);
 
 	err = -ENOMEM;
 	if (!inode)
 		goto out2;
 
+	inode->i_mode = S_IFREG | 0644;
 	err = simple_pin_fs(&bm_fs, &bm_fs_type);
 	if (err) {
 		iput(inode);

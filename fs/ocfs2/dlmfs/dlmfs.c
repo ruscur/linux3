@@ -371,13 +371,11 @@ clear_fields:
 
 static struct inode *dlmfs_get_root_inode(struct super_block *sb)
 {
-	struct inode *inode = new_inode(sb);
+	struct inode *inode = simple_new_inode(sb);
 	umode_t mode = S_IFDIR | 0755;
 
 	if (inode) {
-		inode->i_ino = get_next_ino();
 		inode_init_owner(inode, NULL, mode);
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 		inc_nlink(inode);
 
 		inode->i_fop = &simple_dir_operations;
@@ -392,15 +390,13 @@ static struct inode *dlmfs_get_inode(struct inode *parent,
 				     umode_t mode)
 {
 	struct super_block *sb = parent->i_sb;
-	struct inode * inode = new_inode(sb);
+	struct inode * inode = simple_new_inode(sb);
 	struct dlmfs_inode_private *ip;
 
 	if (!inode)
 		return NULL;
 
-	inode->i_ino = get_next_ino();
 	inode_init_owner(inode, parent, mode);
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 
 	ip = DLMFS_I(inode);
 	ip->ip_conn = DLMFS_I(parent)->ip_conn;

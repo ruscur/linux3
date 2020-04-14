@@ -359,7 +359,7 @@ fail_free:
 
 struct inode *autofs_get_inode(struct super_block *sb, umode_t mode)
 {
-	struct inode *inode = new_inode(sb);
+	struct inode *inode = simple_new_inode(sb);
 
 	if (inode == NULL)
 		return NULL;
@@ -369,8 +369,6 @@ struct inode *autofs_get_inode(struct super_block *sb, umode_t mode)
 		inode->i_uid = d_inode(sb->s_root)->i_uid;
 		inode->i_gid = d_inode(sb->s_root)->i_gid;
 	}
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-	inode->i_ino = get_next_ino();
 
 	if (S_ISDIR(mode)) {
 		set_nlink(inode, 2);

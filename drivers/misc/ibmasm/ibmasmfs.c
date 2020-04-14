@@ -134,13 +134,11 @@ static int ibmasmfs_fill_super(struct super_block *sb, struct fs_context *fc)
 
 static struct inode *ibmasmfs_make_inode(struct super_block *sb, int mode)
 {
-	struct inode *ret = new_inode(sb);
+	struct inode *ret = simple_new_inode(sb);
 
-	if (ret) {
-		ret->i_ino = get_next_ino();
+	if (ret)
 		ret->i_mode = mode;
-		ret->i_atime = ret->i_mtime = ret->i_ctime = current_time(ret);
-	}
+
 	return ret;
 }
 

@@ -2241,12 +2241,10 @@ static struct inode *shmem_get_inode(struct super_block *sb, const struct inode 
 	if (shmem_reserve_inode(sb))
 		return NULL;
 
-	inode = new_inode(sb);
+	inode = simple_new_inode(sb);
 	if (inode) {
-		inode->i_ino = get_next_ino();
 		inode_init_owner(inode, dir, mode);
 		inode->i_blocks = 0;
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 		inode->i_generation = prandom_u32();
 		info = SHMEM_I(inode);
 		memset(info, 0, (char *)inode - (char *)info);

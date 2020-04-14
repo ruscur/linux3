@@ -61,17 +61,6 @@ static const struct inode_operations debugfs_symlink_inode_operations = {
 	.setattr	= debugfs_setattr,
 };
 
-static struct inode *debugfs_get_inode(struct super_block *sb)
-{
-	struct inode *inode = new_inode(sb);
-	if (inode) {
-		inode->i_ino = get_next_ino();
-		inode->i_atime = inode->i_mtime =
-			inode->i_ctime = current_time(inode);
-	}
-	return inode;
-}
-
 struct debugfs_mount_opts {
 	kuid_t uid;
 	kgid_t gid;
@@ -383,7 +372,7 @@ static struct dentry *__debugfs_create_file(const char *name, umode_t mode,
 	if (IS_ERR(dentry))
 		return dentry;
 
-	inode = debugfs_get_inode(dentry->d_sb);
+	inode = simple_new_inode(dentry->d_sb);
 	if (unlikely(!inode)) {
 		pr_err("out of free dentries, can not create file '%s'\n",
 		       name);
@@ -539,7 +528,7 @@ struct dentry *debugfs_create_dir(const char *name, struct dentry *parent)
 	if (IS_ERR(dentry))
 		return dentry;
 
-	inode = debugfs_get_inode(dentry->d_sb);
+	inode = simple_new_inode(dentry->d_sb);
 	if (unlikely(!inode)) {
 		pr_err("out of free dentries, can not create directory '%s'\n",
 		       name);
@@ -581,7 +570,7 @@ struct dentry *debugfs_create_automount(const char *name,
 	if (IS_ERR(dentry))
 		return dentry;
 
-	inode = debugfs_get_inode(dentry->d_sb);
+	inode = simple_new_inode(dentry->d_sb);
 	if (unlikely(!inode)) {
 		pr_err("out of free dentries, can not create automount '%s'\n",
 		       name);
@@ -639,7 +628,7 @@ struct dentry *debugfs_create_symlink(const char *name, struct dentry *parent,
 		return dentry;
 	}
 
-	inode = debugfs_get_inode(dentry->d_sb);
+	inode = simple_new_inode(dentry->d_sb);
 	if (unlikely(!inode)) {
 		pr_err("out of free dentries, can not create symlink '%s'\n",
 		       name);

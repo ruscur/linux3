@@ -739,13 +739,11 @@ static struct inode *hugetlbfs_get_root(struct super_block *sb,
 {
 	struct inode *inode;
 
-	inode = new_inode(sb);
+	inode = simple_new_inode(sb);
 	if (inode) {
-		inode->i_ino = get_next_ino();
 		inode->i_mode = S_IFDIR | ctx->mode;
 		inode->i_uid = ctx->uid;
 		inode->i_gid = ctx->gid;
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 		inode->i_op = &hugetlbfs_dir_inode_operations;
 		inode->i_fop = &simple_dir_operations;
 		/* directory inodes start off with i_nlink == 2 (for "." entry) */
@@ -780,16 +778,14 @@ static struct inode *hugetlbfs_get_inode(struct super_block *sb,
 			return NULL;
 	}
 
-	inode = new_inode(sb);
+	inode = simple_new_inode(sb);
 	if (inode) {
 		struct hugetlbfs_inode_info *info = HUGETLBFS_I(inode);
 
-		inode->i_ino = get_next_ino();
 		inode_init_owner(inode, dir, mode);
 		lockdep_set_class(&inode->i_mapping->i_mmap_rwsem,
 				&hugetlbfs_i_mmap_rwsem_key);
 		inode->i_mapping->a_ops = &hugetlbfs_aops;
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 		inode->i_mapping->private_data = resv_map;
 		info->seals = F_SEAL_SEAL;
 		switch (mode & S_IFMT) {

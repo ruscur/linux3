@@ -124,16 +124,6 @@ static const struct inode_operations tracefs_dir_inode_operations = {
 	.rmdir		= tracefs_syscall_rmdir,
 };
 
-static struct inode *tracefs_get_inode(struct super_block *sb)
-{
-	struct inode *inode = new_inode(sb);
-	if (inode) {
-		inode->i_ino = get_next_ino();
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-	}
-	return inode;
-}
-
 struct tracefs_mount_opts {
 	kuid_t uid;
 	kgid_t gid;
@@ -403,7 +393,7 @@ struct dentry *tracefs_create_file(const char *name, umode_t mode,
 	if (IS_ERR(dentry))
 		return NULL;
 
-	inode = tracefs_get_inode(dentry->d_sb);
+	inode = simple_new_inode(dentry->d_sb);
 	if (unlikely(!inode))
 		return failed_creating(dentry);
 
@@ -424,7 +414,7 @@ static struct dentry *__create_dir(const char *name, struct dentry *parent,
 	if (IS_ERR(dentry))
 		return NULL;
 
-	inode = tracefs_get_inode(dentry->d_sb);
+	inode = simple_new_inode(dentry->d_sb);
 	if (unlikely(!inode))
 		return failed_creating(dentry);
 

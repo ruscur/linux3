@@ -232,17 +232,15 @@ static struct dentry *fuse_ctl_add_dentry(struct dentry *parent,
 	if (!dentry)
 		return NULL;
 
-	inode = new_inode(fuse_control_sb);
+	inode = simple_new_inode(fuse_control_sb);
 	if (!inode) {
 		dput(dentry);
 		return NULL;
 	}
 
-	inode->i_ino = get_next_ino();
 	inode->i_mode = mode;
 	inode->i_uid = fc->user_id;
 	inode->i_gid = fc->group_id;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 	/* setting ->i_op to NULL is not allowed */
 	if (iop)
 		inode->i_op = iop;

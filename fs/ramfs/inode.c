@@ -63,15 +63,13 @@ static const struct address_space_operations ramfs_aops = {
 struct inode *ramfs_get_inode(struct super_block *sb,
 				const struct inode *dir, umode_t mode, dev_t dev)
 {
-	struct inode * inode = new_inode(sb);
+	struct inode * inode = simple_new_inode(sb);
 
 	if (inode) {
-		inode->i_ino = get_next_ino();
 		inode_init_owner(inode, dir, mode);
 		inode->i_mapping->a_ops = &ramfs_aops;
 		mapping_set_gfp_mask(inode->i_mapping, GFP_HIGHUSER);
 		mapping_set_unevictable(inode->i_mapping);
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 		switch (mode & S_IFMT) {
 		default:
 			init_special_inode(inode, mode, dev);

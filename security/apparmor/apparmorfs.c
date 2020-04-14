@@ -212,7 +212,7 @@ static int __aafs_setup_d_inode(struct inode *dir, struct dentry *dentry,
 			       const struct file_operations *fops,
 			       const struct inode_operations *iops)
 {
-	struct inode *inode = new_inode(dir->i_sb);
+	struct inode *inode = simple_new_inode(dir->i_sb);
 
 	AA_BUG(!dir);
 	AA_BUG(!dentry);
@@ -220,9 +220,7 @@ static int __aafs_setup_d_inode(struct inode *dir, struct dentry *dentry,
 	if (!inode)
 		return -ENOMEM;
 
-	inode->i_ino = get_next_ino();
 	inode->i_mode = mode;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 	inode->i_private = data;
 	if (S_ISDIR(mode)) {
 		inode->i_op = iops ? iops : &simple_dir_inode_operations;
@@ -2540,15 +2538,13 @@ static int aa_mk_null_file(struct dentry *parent)
 		error = PTR_ERR(dentry);
 		goto out;
 	}
-	inode = new_inode(parent->d_inode->i_sb);
+	inode = simple_new_inode(parent->d_inode->i_sb);
 	if (!inode) {
 		error = -ENOMEM;
 		goto out1;
 	}
 
-	inode->i_ino = get_next_ino();
 	inode->i_mode = S_IFCHR | S_IRUGO | S_IWUGO;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 	init_special_inode(inode, S_IFCHR | S_IRUGO | S_IWUGO,
 			   MKDEV(MEM_MAJOR, 3));
 	d_instantiate(dentry, inode);

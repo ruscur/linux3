@@ -112,14 +112,9 @@ static struct inode *bpf_get_inode(struct super_block *sb,
 		return ERR_PTR(-EINVAL);
 	}
 
-	inode = new_inode(sb);
+	inode = simple_new_inode(sb);
 	if (!inode)
 		return ERR_PTR(-ENOSPC);
-
-	inode->i_ino = get_next_ino();
-	inode->i_atime = current_time(inode);
-	inode->i_mtime = inode->i_atime;
-	inode->i_ctime = inode->i_atime;
 
 	inode_init_owner(inode, dir, mode);
 

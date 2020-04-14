@@ -136,15 +136,13 @@ static struct dentry *securityfs_create_dentry(const char *name, umode_t mode,
 		goto out1;
 	}
 
-	inode = new_inode(dir->i_sb);
+	inode = simple_new_inode(dir->i_sb);
 	if (!inode) {
 		error = -ENOMEM;
 		goto out1;
 	}
 
-	inode->i_ino = get_next_ino();
 	inode->i_mode = mode;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 	inode->i_private = data;
 	if (S_ISDIR(mode)) {
 		inode->i_op = &simple_dir_inode_operations;

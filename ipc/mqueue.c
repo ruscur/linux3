@@ -295,15 +295,13 @@ static struct inode *mqueue_get_inode(struct super_block *sb,
 	struct inode *inode;
 	int ret = -ENOMEM;
 
-	inode = new_inode(sb);
+	inode = simple_new_inode(sb);
 	if (!inode)
 		goto err;
 
-	inode->i_ino = get_next_ino();
 	inode->i_mode = mode;
 	inode->i_uid = current_fsuid();
 	inode->i_gid = current_fsgid();
-	inode->i_mtime = inode->i_ctime = inode->i_atime = current_time(inode);
 
 	if (S_ISREG(mode)) {
 		struct mqueue_inode_info *info;
