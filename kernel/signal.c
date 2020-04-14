@@ -3235,15 +3235,8 @@ int copy_siginfo_from_user(kernel_siginfo_t *to, const siginfo_t __user *from)
 }
 
 #ifdef CONFIG_COMPAT
-int copy_siginfo_to_user32(struct compat_siginfo __user *to,
-			   const struct kernel_siginfo *from)
-#if defined(CONFIG_X86_X32_ABI) || defined(CONFIG_IA32_EMULATION)
-{
-	return __copy_siginfo_to_user32(to, from, in_x32_syscall());
-}
 int __copy_siginfo_to_user32(struct compat_siginfo __user *to,
-			     const struct kernel_siginfo *from, bool x32_ABI)
-#endif
+		const struct kernel_siginfo *from, unsigned int flags)
 {
 	struct compat_siginfo new;
 	memset(&new, 0, sizeof(new));
@@ -3298,7 +3291,7 @@ int __copy_siginfo_to_user32(struct compat_siginfo __user *to,
 		new.si_uid    = from->si_uid;
 		new.si_status = from->si_status;
 #ifdef CONFIG_X86_X32_ABI
-		if (x32_ABI) {
+		if (flags & SA_X32_ABI) {
 			new._sifields._sigchld_x32._utime = from->si_utime;
 			new._sifields._sigchld_x32._stime = from->si_stime;
 		} else
@@ -3324,6 +3317,16 @@ int __copy_siginfo_to_user32(struct compat_siginfo __user *to,
 		return -EFAULT;
 
 	return 0;
+}
+
+#ifndef compat_siginfo_flags
+#define compat_siginfo_flags()		0
+#endif
+
+int copy_siginfo_to_user32(struct compat_siginfo __user *to,
+			   const struct kernel_siginfo *from)
+{
+	return __copy_siginfo_to_user32(to, from, compat_siginfo_flags());
 }
 
 static int post_copy_siginfo_from_user32(kernel_siginfo_t *to,

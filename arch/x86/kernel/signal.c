@@ -543,7 +543,8 @@ static int x32_setup_rt_frame(struct ksignal *ksig,
 	user_access_end();
 
 	if (ksig->ka.sa.sa_flags & SA_SIGINFO) {
-		if (__copy_siginfo_to_user32(&frame->info, &ksig->info, true))
+		if (__copy_siginfo_to_user32(&frame->info, &ksig->info,
+				SA_X32_ABI))
 			return -EFAULT;
 	}
 

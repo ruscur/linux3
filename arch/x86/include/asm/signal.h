@@ -28,6 +28,9 @@ typedef struct {
 #define SA_IA32_ABI	0x02000000u
 #define SA_X32_ABI	0x01000000u
 
+#define compat_siginfo_flags() \
+	(in_x32_syscall() ? SA_X32_ABI : SA_IA32_ABI)
+
 #ifndef CONFIG_COMPAT
 typedef sigset_t compat_sigset_t;
 #endif
