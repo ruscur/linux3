@@ -517,6 +517,7 @@ static int x32_setup_rt_frame(struct ksignal *ksig,
 {
 #ifdef CONFIG_X86_X32_ABI
 	struct rt_sigframe_x32 __user *frame;
+	struct compat_siginfo new;
 	unsigned long uc_flags;
 	void __user *restorer;
 	void __user *fp = NULL;
@@ -543,8 +544,8 @@ static int x32_setup_rt_frame(struct ksignal *ksig,
 	user_access_end();
 
 	if (ksig->ka.sa.sa_flags & SA_SIGINFO) {
-		if (__copy_siginfo_to_user32(&frame->info, &ksig->info,
-				SA_X32_ABI))
+		to_compat_siginfo(&new, &ksig->info, SA_X32_ABI);
+		if (copy_to_user(&frame->info, &new, sizeof(frame->info)))
 			return -EFAULT;
 	}
 

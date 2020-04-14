@@ -301,6 +301,7 @@ int ia32_setup_rt_frame(int sig, struct ksignal *ksig,
 			compat_sigset_t *set, struct pt_regs *regs)
 {
 	struct rt_sigframe_ia32 __user *frame;
+	struct compat_siginfo new;
 	void __user *restorer;
 	void __user *fp = NULL;
 
@@ -350,7 +351,8 @@ int ia32_setup_rt_frame(int sig, struct ksignal *ksig,
 	unsafe_put_user(*(__u64 *)set, (__u64 *)&frame->uc.uc_sigmask, Efault);
 	user_access_end();
 
-	if (__copy_siginfo_to_user32(&frame->info, &ksig->info, SA_IA32_ABI))
+	to_compat_siginfo(&new, &ksig->info, SA_IA32_ABI);
+	if (copy_to_user(&frame->info, &new, sizeof(frame->info)))
 		return -EFAULT;
 
 	/* Set up registers for signal handler */
