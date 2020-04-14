@@ -7,14 +7,6 @@ config ACADIA
 	help
 	  This option enables support for the AMCC 405EZ Acadia evaluation board.
 
-config EP405
-	bool "EP405/EP405PC"
-	depends on 40x
-	select 405GP
-	select FORCE_PCI
-	help
-	  This option enables support for the EP405/EP405PC boards.
-
 config HOTFOOT
 	bool "Hotfoot"
 	depends on 40x
@@ -44,16 +36,6 @@ config MAKALU
 	select PPC40x_SIMPLE
 	help
 	  This option enables support for the AMCC PPC405EX board.
-
-config WALNUT
-	bool "Walnut"
-	depends on 40x
-	default y
-	select 405GP
-	select FORCE_PCI
-	select OF_RTC
-	help
-	  This option enables support for the IBM PPC405GP evaluation board.
 
 config OBS600
 	bool "OpenBlockS 600"
