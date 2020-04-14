@@ -39,7 +39,11 @@
  */
 #define user_long_t		compat_long_t
 #define user_siginfo_t		compat_siginfo_t
-#define copy_siginfo_to_user	copy_siginfo_to_user32
+#define fill_siginfo_note(note, csigdata, siginfo)		\
+do {									\
+	to_compat_siginfo(csigdata, siginfo, compat_siginfo_flags());	\
+	fill_note(note, "CORE", NT_SIGINFO, sizeof(*csigdata), csigdata); \
+} while (0)
 
 /*
  * The machine-dependent core note format types are defined in elfcore-compat.h,
