@@ -10,7 +10,7 @@
  */
 
 #include <linux/module.h>
-#include <linux/fs.h>
+#include <linux/simplefs.h>
 #include <linux/mount.h>
 #include <linux/kobject.h>
 #include <linux/namei.h>

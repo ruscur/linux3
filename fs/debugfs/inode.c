@@ -13,7 +13,7 @@
 #define pr_fmt(fmt)	"debugfs: " fmt
 
 #include <linux/module.h>
-#include <linux/fs.h>
+#include <linux/simplefs.h>
 #include <linux/mount.h>
 #include <linux/pagemap.h>
 #include <linux/init.h>

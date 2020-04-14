@@ -10,7 +10,7 @@
  * configfs Copyright (C) 2005 Oracle.  All rights reserved.
  */
 
-#include <linux/fs.h>
+#include <linux/simplefs.h>
 #include <linux/module.h>
 #include <linux/mount.h>
 #include <linux/fs_context.h>

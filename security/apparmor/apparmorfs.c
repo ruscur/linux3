@@ -18,7 +18,7 @@
 #include <linux/namei.h>
 #include <linux/capability.h>
 #include <linux/rcupdate.h>
-#include <linux/fs.h>
+#include <linux/simplefs.h>
 #include <linux/fs_context.h>
 #include <linux/poll.h>
 #include <linux/zlib.h>
@@ -2529,6 +2529,7 @@ static int aa_mk_null_file(struct dentry *parent)
 	struct vfsmount *mount;
 	struct dentry *dentry;
 	struct inode *inode;
+	int error;
 
 	mount = vfs_kern_mount(type, SB_KERNMOUNT, type->name, NULL);
 	if (IS_ERR(mount))

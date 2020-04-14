@@ -218,6 +218,9 @@ config HUGETLB_PAGE
 config MEMFD_CREATE
 	def_bool TMPFS || HUGETLBFS
 
+config SIMPLEFS
+	bool
+
 config ARCH_HAS_GIGANTIC_PAGE
 	bool
 

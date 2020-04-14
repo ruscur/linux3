@@ -176,6 +176,7 @@ config BINFMT_EM86
 
 config BINFMT_MISC
 	tristate "Kernel support for MISC binaries"
+	select SIMPLEFS
 	---help---
 	  If you say Y here, it will be possible to plug wrapper-driven binary
 	  formats into the kernel. You will like this especially when you use

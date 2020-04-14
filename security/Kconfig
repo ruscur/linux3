@@ -39,6 +39,7 @@ config SECURITY_WRITABLE_HOOKS
 
 config SECURITYFS
 	bool "Enable the securityfs filesystem"
+	select SIMPLEFS
 	help
 	  This will build the securityfs filesystem.  It is currently used by
 	  various security modules (AppArmor, IMA, SafeSetID, TOMOYO, TPM).

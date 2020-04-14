@@ -12,7 +12,7 @@
 /* #define DEBUG */
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
-#include <linux/fs.h>
+#include <linux/simplefs.h>
 #include <linux/fs_context.h>
 #include <linux/mount.h>
 #include <linux/pagemap.h>
