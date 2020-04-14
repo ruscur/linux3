@@ -4,7 +4,12 @@
 
 #include <linux/fs.h>
 
-extern int simple_pin_fs(struct file_system_type *, struct vfsmount **mount, int *count);
-extern void simple_release_fs(struct vfsmount **mount, int *count);
+struct simple_fs {
+	struct vfsmount *mount;
+	int count;
+};
+
+extern int simple_pin_fs(struct simple_fs *, struct file_system_type *);
+extern void simple_release_fs(struct simple_fs *);
 
 #endif

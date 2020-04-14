@@ -30,8 +30,7 @@
 
 #define OCXLFLASH_FS_MAGIC      0x1697698f
 
-static int ocxlflash_fs_cnt;
-static struct vfsmount *ocxlflash_vfs_mount;
+static struct simple_fs ocxlflash_fs;
 
 static int ocxlflash_fs_init_fs_context(struct fs_context *fc)
 {
@@ -52,7 +51,7 @@ static struct file_system_type ocxlflash_fs_type = {
 static void ocxlflash_release_mapping(struct ocxlflash_context *ctx)
 {
 	if (ctx->mapping)
-		simple_release_fs(&ocxlflash_vfs_mount, &ocxlflash_fs_cnt);
+		simple_release_fs(&ocxlflash_fs);
 	ctx->mapping = NULL;
 }
 
@@ -80,15 +79,14 @@ static struct file *ocxlflash_getfile(struct device *dev, const char *name,
 		goto err1;
 	}
 
-	rc = simple_pin_fs(&ocxlflash_fs_type, &ocxlflash_vfs_mount,
-			   &ocxlflash_fs_cnt);
+	rc = simple_pin_fs(&ocxlflash_fs, &ocxlflash_fs_type);
 	if (unlikely(rc < 0)) {
 		dev_err(dev, "%s: Cannot mount ocxlflash pseudofs rc=%d\n",
 			__func__, rc);
 		goto err2;
 	}
 
-	inode = alloc_anon_inode(ocxlflash_vfs_mount->mnt_sb);
+	inode = alloc_anon_inode(ocxlflash_fs.mount->mnt_sb);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		dev_err(dev, "%s: alloc_anon_inode failed rc=%d\n",
@@ -96,7 +94,7 @@ static struct file *ocxlflash_getfile(struct device *dev, const char *name,
 		goto err3;
 	}
 
-	file = alloc_file_pseudo(inode, ocxlflash_vfs_mount, name,
+	file = alloc_file_pseudo(inode, ocxlflash_fs.mount, name,
 				 flags & (O_ACCMODE | O_NONBLOCK), fops);
 	if (IS_ERR(file)) {
 		rc = PTR_ERR(file);
@@ -111,7 +109,7 @@ out:
 err4:
 	iput(inode);
 err3:
-	simple_release_fs(&ocxlflash_vfs_mount, &ocxlflash_fs_cnt);
+	simple_release_fs(&ocxlflash_fs);
 err2:
 	module_put(fops->owner);
 err1:
