@@ -130,7 +130,7 @@ src-wlib-$(CONFIG_EMBEDDED6xx) += ugecon.c fsl-soc.c
 src-wlib-$(CONFIG_CPM) += cpm-serial.c
 
 src-plat-y := of.c epapr.c
-src-plat-$(CONFIG_40x) += fixed-head.S ep405.c cuboot-hotfoot.c \
+src-plat-$(CONFIG_40x) += fixed-head.S cuboot-hotfoot.c \
 				cuboot-acadia.c \
 				cuboot-kilauea.c simpleboot.c
 src-plat-$(CONFIG_44x) += treeboot-ebony.c cuboot-ebony.c treeboot-bamboo.c \
