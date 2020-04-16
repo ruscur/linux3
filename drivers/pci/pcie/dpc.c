@@ -281,10 +281,12 @@ static int dpc_probe(struct pcie_device *dev)
 {
 	struct pci_dev *pdev = dev->port;
 	struct device *device = &dev->device;
+	struct pci_host_bridge *host = pci_find_host_bridge(pdev->bus);
 	int status;
 	u16 ctl, cap;
 
-	if (pcie_aer_get_firmware_first(pdev) && !pcie_ports_dpc_native)
+	if (pcie_aer_get_firmware_first(pdev) && !pcie_ports_dpc_native &&
+	    !host->native_dpc)
 		return -ENOTSUPP;
 
 	status = devm_request_threaded_irq(device, dev->irq, dpc_irq,
