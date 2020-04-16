@@ -43,6 +43,31 @@
 #define FIRMWARE_SELF_SAVE    0x2
 #define KERNEL_SAVE_RESTORE   0x4
 
+#define NR_PREFERENCES    2
+#define PREFERENCE_SHIFT  4
+#define PREFERENCE_MASK   0xf
+/*
+ * Bitmask defining the kind of preferences available.
+ * Note : The higher to lower preference is from LSB to MSB, with a shift of
+ * 4 bits.
+ * ----------------------------
+ * |    | 2nd pref | 1st pref |
+ * ----------------------------
+ * MSB			      LSB
+ */
+/* Prefer Restore if available, otherwise unsupported */
+#define PREFER_SELF_RESTORE_ONLY	FIRMWARE_RESTORE
+/* Prefer Save if available, otherwise unsupported */
+#define PREFER_SELF_SAVE_ONLY		FIRMWARE_SELF_SAVE
+/* Prefer Restore when available, otherwise prefer Save */
+#define PREFER_RESTORE_SAVE		((FIRMWARE_SELF_SAVE << \
+					  PREFERENCE_SHIFT)\
+					  | FIRMWARE_RESTORE)
+/* Prefer Save when available, otherwise prefer Restore*/
+#define PREFER_SAVE_RESTORE		((FIRMWARE_RESTORE <<\
+					  PREFERENCE_SHIFT)\
+					  | FIRMWARE_SELF_SAVE)
+
 static u32 supported_cpuidle_states;
 struct pnv_idle_states_t *pnv_idle_states;
 int nr_pnv_idle_states;
@@ -52,6 +77,7 @@ DEFINE_STATIC_KEY_FALSE(is_ptcr_self_save);
 
 struct preferred_sprs {
 	u64 spr;
+	u32 preferred_mode;
 	u32 supported_mode;
 };
 
@@ -66,42 +92,52 @@ struct preferred_sprs {
 struct preferred_sprs preferred_sprs[] = {
 	{
 		.spr = SPRN_HSPRG0,
+		.preferred_mode = PREFER_RESTORE_SAVE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = SPRN_LPCR,
+		.preferred_mode = PREFER_SAVE_RESTORE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = SPRN_PTCR,
+		.preferred_mode = PREFER_RESTORE_SAVE,
 		.supported_mode = KERNEL_SAVE_RESTORE,
 	},
 	{
 		.spr = SPRN_HMEER,
+		.preferred_mode = PREFER_RESTORE_SAVE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = SPRN_HID0,
+		.preferred_mode = PREFER_RESTORE_SAVE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = P9_STOP_SPR_MSR,
+		.preferred_mode = PREFER_SAVE_RESTORE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = P9_STOP_SPR_PSSCR,
+		.preferred_mode = PREFER_SAVE_RESTORE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = SPRN_HID1,
+		.preferred_mode = PREFER_RESTORE_SAVE,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = SPRN_HID4,
+		.preferred_mode = PREFER_SELF_RESTORE_ONLY,
 		.supported_mode = FIRMWARE_RESTORE,
 	},
 	{
 		.spr = SPRN_HID5,
+		.preferred_mode = PREFER_SELF_RESTORE_ONLY,
 		.supported_mode = FIRMWARE_RESTORE,
 	}
 };
@@ -218,7 +254,9 @@ static int pnv_self_restore_sprs(u64 pir, int cpu, u64 spr)
 
 static int pnv_self_save_restore_sprs(void)
 {
-	int rc, index, cpu;
+	int rc, index, cpu, k;
+	bool is_initialized;
+	u32 preferred;
 	u64 pir;
 	struct preferred_sprs curr_spr;
 
@@ -234,26 +272,40 @@ static int pnv_self_save_restore_sprs(void)
 			     curr_spr.spr == SPRN_HID4  ||
 			     curr_spr.spr == SPRN_HID5))
 				continue;
-
-			if (curr_spr.supported_mode & FIRMWARE_SELF_SAVE) {
-				rc = opal_slw_self_save_reg(pir,
-							curr_spr.spr);
-				if (rc != 0)
-					return rc;
-				switch (curr_spr.spr) {
-				case SPRN_LPCR:
-					static_branch_enable(&is_lpcr_self_save);
+			for (k = 0; k < NR_PREFERENCES; k++) {
+				preferred = curr_spr.preferred_mode
+					& PREFERENCE_MASK;
+				if (preferred & curr_spr.supported_mode &
+				    FIRMWARE_SELF_SAVE) {
+					is_initialized = true;
+					rc = opal_slw_self_save_reg(pir,
+								    curr_spr.spr);
+					if (rc != 0)
+						return rc;
+					switch (curr_spr.spr) {
+					case SPRN_LPCR:
+						static_branch_enable(&is_lpcr_self_save);
+						break;
+					case SPRN_PTCR:
+						static_branch_enable(&is_ptcr_self_save);
+						break;
+					}
 					break;
-				case SPRN_PTCR:
-					static_branch_enable(&is_ptcr_self_save);
+				} else if (preferred & curr_spr.supported_mode &
+					   FIRMWARE_RESTORE) {
+					is_initialized = true;
+					rc = pnv_self_restore_sprs(pir, cpu,
+								   curr_spr.spr);
+					if (rc != 0)
+						return rc;
 					break;
 				}
-			} else if (curr_spr.supported_mode & FIRMWARE_RESTORE) {
-				rc = pnv_self_restore_sprs(pir, cpu,
-							   curr_spr.spr);
-				if (rc != 0)
-					return rc;
-			} else {
+				preferred_sprs[index].preferred_mode =
+					preferred_sprs[index].preferred_mode >>
+					PREFERENCE_SHIFT;
+				curr_spr = preferred_sprs[index];
+			}
+			if (!is_initialized) {
 				if (curr_spr.supported_mode & KERNEL_SAVE_RESTORE ||
 				    (cpu_has_feature(CPU_FTR_ARCH_300) &&
 				     (curr_spr.spr == SPRN_HID1 ||
