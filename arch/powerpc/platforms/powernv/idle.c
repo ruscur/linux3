@@ -35,13 +35,20 @@
 /*
  * Type of support for each SPR
  * FIRMWARE_RESTORE: firmware restoration supported: calls self-restore OPAL API
+ * FIRMWARE_SELF_SAVE: firmware save and restore: calls self-save OPAL API
+ * KERNEL_SAVE_RESTORE: kernel handles the saving and restoring of SPR
  */
 #define UNSUPPORTED           0x0
 #define FIRMWARE_RESTORE      0x1
+#define FIRMWARE_SELF_SAVE    0x2
+#define KERNEL_SAVE_RESTORE   0x4
 
 static u32 supported_cpuidle_states;
 struct pnv_idle_states_t *pnv_idle_states;
 int nr_pnv_idle_states;
+/* Caching the lpcr & ptcr support to use later */
+DEFINE_STATIC_KEY_FALSE(is_lpcr_self_save);
+DEFINE_STATIC_KEY_FALSE(is_ptcr_self_save);
 
 struct preferred_sprs {
 	u64 spr;
@@ -51,6 +58,10 @@ struct preferred_sprs {
 /*
  * Supported mode: Default support. Can be overwritten during system
  *		   initialization
+ * Note: SPRs with support for KERNEL_SAVE_RESTORE in this list are only those
+ * which have a possibility of support from another firmware mode (i.e self-save
+ * or self-restore)
+ * SPRs with exclusive kernel save support are implicit.
  */
 struct preferred_sprs preferred_sprs[] = {
 	{
@@ -60,6 +71,10 @@ struct preferred_sprs preferred_sprs[] = {
 	{
 		.spr = SPRN_LPCR,
 		.supported_mode = FIRMWARE_RESTORE,
+	},
+	{
+		.spr = SPRN_PTCR,
+		.supported_mode = KERNEL_SAVE_RESTORE,
 	},
 	{
 		.spr = SPRN_HMEER,
@@ -219,11 +234,33 @@ static int pnv_self_save_restore_sprs(void)
 			     curr_spr.spr == SPRN_HID4  ||
 			     curr_spr.spr == SPRN_HID5))
 				continue;
-			if (curr_spr.supported_mode & FIRMWARE_RESTORE) {
+
+			if (curr_spr.supported_mode & FIRMWARE_SELF_SAVE) {
+				rc = opal_slw_self_save_reg(pir,
+							curr_spr.spr);
+				if (rc != 0)
+					return rc;
+				switch (curr_spr.spr) {
+				case SPRN_LPCR:
+					static_branch_enable(&is_lpcr_self_save);
+					break;
+				case SPRN_PTCR:
+					static_branch_enable(&is_ptcr_self_save);
+					break;
+				}
+			} else if (curr_spr.supported_mode & FIRMWARE_RESTORE) {
 				rc = pnv_self_restore_sprs(pir, cpu,
 							   curr_spr.spr);
 				if (rc != 0)
 					return rc;
+			} else {
+				if (curr_spr.supported_mode & KERNEL_SAVE_RESTORE ||
+				    (cpu_has_feature(CPU_FTR_ARCH_300) &&
+				     (curr_spr.spr == SPRN_HID1 ||
+				      curr_spr.spr == SPRN_HID4 ||
+				      curr_spr.spr == SPRN_HID5)))
+					continue;
+				return OPAL_UNSUPPORTED;
 			}
 		}
 	}
@@ -762,7 +799,8 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		mmcr0		= mfspr(SPRN_MMCR0);
 	}
 	if ((psscr & PSSCR_RL_MASK) >= pnv_first_spr_loss_level) {
-		sprs.lpcr	= mfspr(SPRN_LPCR);
+		if (!static_branch_unlikely(&is_lpcr_self_save))
+			sprs.lpcr	= mfspr(SPRN_LPCR);
 		sprs.hfscr	= mfspr(SPRN_HFSCR);
 		sprs.fscr	= mfspr(SPRN_FSCR);
 		sprs.pid	= mfspr(SPRN_PID);
@@ -776,7 +814,8 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		sprs.mmcr1	= mfspr(SPRN_MMCR1);
 		sprs.mmcr2	= mfspr(SPRN_MMCR2);
 
-		sprs.ptcr	= mfspr(SPRN_PTCR);
+		if (!static_branch_unlikely(&is_ptcr_self_save))
+			sprs.ptcr	= mfspr(SPRN_PTCR);
 		sprs.rpr	= mfspr(SPRN_RPR);
 		sprs.tscr	= mfspr(SPRN_TSCR);
 		if (!firmware_has_feature(FW_FEATURE_ULTRAVISOR))
@@ -860,7 +899,8 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		goto core_woken;
 
 	/* Per-core SPRs */
-	mtspr(SPRN_PTCR,	sprs.ptcr);
+	if (!static_branch_unlikely(&is_ptcr_self_save))
+		mtspr(SPRN_PTCR,	sprs.ptcr);
 	mtspr(SPRN_RPR,		sprs.rpr);
 	mtspr(SPRN_TSCR,	sprs.tscr);
 
@@ -881,7 +921,8 @@ core_woken:
 	atomic_unlock_and_stop_thread_idle();
 
 	/* Per-thread SPRs */
-	mtspr(SPRN_LPCR,	sprs.lpcr);
+	if (!static_branch_unlikely(&is_lpcr_self_save))
+		mtspr(SPRN_LPCR,	sprs.lpcr);
 	mtspr(SPRN_HFSCR,	sprs.hfscr);
 	mtspr(SPRN_FSCR,	sprs.fscr);
 	mtspr(SPRN_PID,		sprs.pid);
@@ -1060,8 +1101,10 @@ void pnv_program_cpu_hotplug_lpcr(unsigned int cpu, u64 lpcr_val)
 	 * Program the LPCR via stop-api only if the deepest stop state
 	 * can lose hypervisor context.
 	 */
-	if (supported_cpuidle_states & OPAL_PM_LOSE_FULL_CONTEXT)
-		opal_slw_set_reg(pir, SPRN_LPCR, lpcr_val);
+	if (supported_cpuidle_states & OPAL_PM_LOSE_FULL_CONTEXT) {
+		if (!static_branch_unlikely(&is_lpcr_self_save))
+			opal_slw_set_reg(pir, SPRN_LPCR, lpcr_val);
+	}
 }
 
 /*
@@ -1317,6 +1360,81 @@ static void __init pnv_probe_idle_states(void)
 }
 
 /*
+ * Extracts and populates the self save or restore capabilities
+ * passed from the device tree node
+ * @np: /ibm,opal/power-mgt/self-save or
+ *      /ibm,opal/power-mgt/self-restore device node
+ * @support: Activation bit for each SPR to define support for the save-restore
+ *           mode
+ */
+static int extract_save_restore_state_dt(struct device_node *np, u32 support)
+{
+	int nr_sprns = 0, i, bitmask_index;
+	u64 *temp_u64;
+	u64 bit_pos;
+
+	nr_sprns = of_property_count_u64_elems(np, "sprn-bitmask");
+	if (nr_sprns <= 0)
+		return -EINVAL;
+	temp_u64 = kcalloc(nr_sprns, sizeof(u64), GFP_KERNEL);
+	if (of_property_read_u64_array(np, "sprn-bitmask",
+				       temp_u64, nr_sprns)) {
+		pr_warn("cpuidle-powernv: failed to find registers in DT\n");
+		kfree(temp_u64);
+		return -EINVAL;
+	}
+	/*
+	 * Populate acknowledgment of support for the sprs in the global vector
+	 * gotten by the registers supplied by the firmware.
+	 * The registers are in a bitmask, bit index within
+	 * that specifies the SPR
+	 */
+	for (i = 0; i < nr_preferred_sprs; i++) {
+		bitmask_index = BIT_ULL_WORD(preferred_sprs[i].spr);
+		bit_pos = BIT_ULL_MASK(preferred_sprs[i].spr);
+		if ((temp_u64[bitmask_index] & bit_pos) == 0) {
+			preferred_sprs[i].supported_mode &= ~support;
+			continue;
+		}
+		preferred_sprs[i].supported_mode |= support;
+	}
+
+	kfree(temp_u64);
+	return 0;
+}
+
+static int pnv_parse_deepstate_dt(void)
+{
+	struct device_node *np;
+	int rc = 0, i;
+
+	/*
+	 * Self restore register population
+	 * In the case the node is not found, the support for self-restore for
+	 * already populated SPRs is *not* cut. This is because self-restore
+	 * assumes legacy support. In an event, self-restore is actually not
+	 * supported then the call to the firmware fails and deep stop states
+	 * will be cut.
+	 */
+	np = of_find_compatible_node(NULL, NULL, "ibm,opal-self-restore");
+	if (np) {
+		rc = extract_save_restore_state_dt(np, FIRMWARE_RESTORE);
+		if (rc != 0)
+			return rc;
+	}
+	/* Self save register population */
+	np = of_find_compatible_node(NULL, NULL, "ibm,opal-self-save");
+	if (!np) {
+		for (i = 0; i < nr_preferred_sprs; i++)
+			preferred_sprs[i].supported_mode &= ~FIRMWARE_SELF_SAVE;
+	} else {
+		rc = extract_save_restore_state_dt(np, FIRMWARE_SELF_SAVE);
+	}
+	of_node_put(np);
+	return rc;
+}
+
+/*
  * This function parses device-tree and populates all the information
  * into pnv_idle_states structure. It also sets up nr_pnv_idle_states
  * which is the number of cpuidle states discovered through device-tree.
@@ -1464,6 +1582,9 @@ static int __init pnv_init_idle_states(void)
 		return rc;
 	pnv_probe_idle_states();
 
+	rc = pnv_parse_deepstate_dt();
+	if (rc)
+		return rc;
 	if (!cpu_has_feature(CPU_FTR_ARCH_300)) {
 		if (!(supported_cpuidle_states & OPAL_PM_SLEEP_ENABLED_ER1)) {
 			power7_fastsleep_workaround_entry = false;
