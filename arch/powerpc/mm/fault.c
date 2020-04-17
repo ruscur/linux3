@@ -233,8 +233,12 @@ static bool bad_kernel_fault(struct pt_regs *regs, unsigned long error_code,
 
 	// Read/write fault in a valid region (the exception table search passed
 	// above), but blocked by KUAP is bad, it can never succeed.
-	if (bad_kuap_fault(regs, address, is_write))
+	if (bad_kuap_fault(regs, address, is_write)) {
+		pr_crit("kernel %s to userspace (%lx) blocked by KUAP\n",
+			is_write ? "write" : "read", address);
+		_exception(SIGSEGV, regs, SEGV_ACCERR, address);
 		return true;
+	}
 
 	// What's left? Kernel fault on user in well defined regions (extable
 	// matched), and allowed by KUAP in the faulting context.

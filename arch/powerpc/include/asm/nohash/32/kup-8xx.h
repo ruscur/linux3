@@ -63,8 +63,12 @@ static inline void restore_user_access(unsigned long flags)
 static inline bool
 bad_kuap_fault(struct pt_regs *regs, unsigned long address, bool is_write)
 {
-	return WARN(!((regs->kuap ^ MD_APG_KUAP) & 0xf0000000),
-		    "Bug: fault blocked by AP register !");
+	bool is_fault = !((regs->kuap ^ MD_APG_KUAP) & 0xf0000000);
+
+	if (is_fault)
+		pr_crit("Bug: fault blocked by AP register !\n");
+
+	return is_fault;
 }
 
 #endif /* !__ASSEMBLY__ */

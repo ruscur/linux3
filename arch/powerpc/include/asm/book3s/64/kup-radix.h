@@ -137,9 +137,17 @@ static inline void restore_user_access(unsigned long flags)
 static inline bool
 bad_kuap_fault(struct pt_regs *regs, unsigned long address, bool is_write)
 {
-	return WARN(mmu_has_feature(MMU_FTR_RADIX_KUAP) &&
-		    (regs->kuap & (is_write ? AMR_KUAP_BLOCK_WRITE : AMR_KUAP_BLOCK_READ)),
-		    "Bug: %s fault blocked by AMR!", is_write ? "Write" : "Read");
+	bool is_fault;
+
+	if (!mmu_has_feature(MMU_FTR_RADIX_KUAP))
+		return false;
+
+	is_fault = regs->kuap & (is_write ? AMR_KUAP_BLOCK_WRITE : AMR_KUAP_BLOCK_READ);
+
+	if (is_fault)
+		pr_crit("Bug: %s fault blocked by AMR!", is_write ? "Write" : "Read");
+
+	return is_fault;
 }
 #else /* CONFIG_PPC_KUAP */
 static inline void kuap_restore_amr(struct pt_regs *regs)
