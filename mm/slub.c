@@ -3662,6 +3662,7 @@ static int kmem_cache_open(struct kmem_cache *s, slab_flags_t flags)
 	s->flags = kmem_cache_flags(s->size, flags, s->name, s->ctor);
 #ifdef CONFIG_SLAB_FREELIST_HARDENED
 	s->random = get_random_long();
+	pr_notice("Creating cache %s with s->random=%ld\n", s->name, s->random);
 #endif
 
 	if (!calculate_sizes(s, -1))
