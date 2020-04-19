@@ -13,6 +13,7 @@
 #include <linux/highmem.h>
 #include <linux/psp-sev.h>
 #include <linux/swap.h>
+#include <linux/pagemap.h>
 
 #include "x86.h"
 #include "svm.h"
