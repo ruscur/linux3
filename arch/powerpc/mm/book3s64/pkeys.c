@@ -15,11 +15,11 @@
 DEFINE_STATIC_KEY_FALSE(pkey_disabled);
 DEFINE_STATIC_KEY_FALSE(execute_pkey_disabled);
 int  max_pkey;			/* Maximum key value supported */
-u32  initial_allocation_mask;   /* Bits set for the initially allocated keys */
 /*
  *  Keys marked in the reservation list cannot be allocated by  userspace
  */
 u32  reserved_allocation_mask;
+static u32  initial_allocation_mask;   /* Bits set for the initially allocated keys */
 static u64 default_amr;
 static u64 default_iamr;
 /* Allow all keys to be modified by default */
