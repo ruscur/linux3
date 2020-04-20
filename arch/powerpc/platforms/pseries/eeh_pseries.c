@@ -662,7 +662,7 @@ static int pseries_eeh_configure_bridge(struct eeh_pe *pe)
 				config_addr, BUID_HI(pe->phb->buid),
 				BUID_LO(pe->phb->buid));
 
-		if (!ret)
+		if (ret <= 0)
 			return ret;
 
 		/*
