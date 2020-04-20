@@ -197,7 +197,7 @@ void __flush_hash_table_range(struct mm_struct *mm, unsigned long start,
 	unsigned long flags;
 
 	start = ALIGN_DOWN(start, PAGE_SIZE);
-	end = _ALIGN_UP(end, PAGE_SIZE);
+	end = ALIGN(end, PAGE_SIZE);
 
 	BUG_ON(!mm->pgd);
 
