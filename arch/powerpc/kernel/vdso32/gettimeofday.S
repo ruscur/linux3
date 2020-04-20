@@ -34,7 +34,7 @@ V_FUNCTION_BEGIN(__kernel_gettimeofday)
 
 	mr.	r10,r3			/* r10 saves tv */
 	mr	r11,r4			/* r11 saves tz */
-	get_datapage	r9, r0
+	get_datapage	r9
 	beq	3f
 	LOAD_REG_IMMEDIATE(r7, 1000000)	/* load up USEC_PER_SEC */
 	bl	__do_get_tspec@local	/* get sec/usec from tb & kernel */
@@ -79,7 +79,7 @@ V_FUNCTION_BEGIN(__kernel_clock_gettime)
 	mflr	r12			/* r12 saves lr */
   .cfi_register lr,r12
 	mr	r11,r4			/* r11 saves tp */
-	get_datapage	r9, r0
+	get_datapage	r9
 	LOAD_REG_IMMEDIATE(r7, NSEC_PER_SEC)	/* load up NSEC_PER_SEC */
 	beq	cr5, .Lcoarse_clocks
 .Lprecise_clocks:
@@ -206,7 +206,7 @@ V_FUNCTION_BEGIN(__kernel_clock_getres)
 
 	mflr	r12
   .cfi_register lr,r12
-	get_datapage	r3, r0
+	get_datapage	r3
 	lwz	r5, CLOCK_HRTIMER_RES(r3)
 	mtlr	r12
 1:	li	r3,0
@@ -240,7 +240,7 @@ V_FUNCTION_BEGIN(__kernel_time)
   .cfi_register lr,r12
 
 	mr	r11,r3			/* r11 holds t */
-	get_datapage	r9, r0
+	get_datapage	r9
 
 	lwz	r3,STAMP_XTIME_SEC+LOPART(r9)
 
