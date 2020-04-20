@@ -196,7 +196,7 @@ void __flush_hash_table_range(struct mm_struct *mm, unsigned long start,
 	int hugepage_shift;
 	unsigned long flags;
 
-	start = _ALIGN_DOWN(start, PAGE_SIZE);
+	start = ALIGN_DOWN(start, PAGE_SIZE);
 	end = _ALIGN_UP(end, PAGE_SIZE);
 
 	BUG_ON(!mm->pgd);
@@ -238,7 +238,7 @@ void flush_tlb_pmd_range(struct mm_struct *mm, pmd_t *pmd, unsigned long addr)
 	pte_t *start_pte;
 	unsigned long flags;
 
-	addr = _ALIGN_DOWN(addr, PMD_SIZE);
+	addr = ALIGN_DOWN(addr, PMD_SIZE);
 	/*
 	 * Note: Normally, we should only ever use a batch within a
 	 * PTE locked section. This violates the rule, but will work
