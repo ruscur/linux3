@@ -180,6 +180,8 @@ extern int ptrace_put_reg(struct task_struct *task, int regno,
 #define current_pt_regs() \
 	((struct pt_regs *)((unsigned long)task_stack_page(current) + THREAD_SIZE) - 1)
 
+#define TRAP_IS_SYSCALL(regs)	(TRAP(regs) == 0xc00)
+
 #ifdef __powerpc64__
 #ifdef CONFIG_PPC_BOOK3S
 #define TRAP(regs)		((regs)->trap)
