@@ -183,10 +183,12 @@ extern int ptrace_put_reg(struct task_struct *task, int regno,
 #ifdef __powerpc64__
 #ifdef CONFIG_PPC_BOOK3S
 #define TRAP(regs)		((regs)->trap)
+#define SET_TRAP(regs, val)	((regs)->trap = (val))
 #define FULL_REGS(regs)		true
 #define SET_FULL_REGS(regs)	do { } while (0)
 #else
 #define TRAP(regs)		((regs)->trap & ~0x1)
+#define SET_TRAP(regs, val)	((regs)->trap = ((regs)->trap & 0x1) | ((val) & ~0x1))
 #define FULL_REGS(regs)		(((regs)->trap & 1) == 0)
 #define SET_FULL_REGS(regs)	((regs)->trap |= 1)
 #endif
@@ -201,6 +203,7 @@ extern int ptrace_put_reg(struct task_struct *task, int regno,
  * is a critical exception (1 means it is).
  */
 #define TRAP(regs)		((regs)->trap & ~0xF)
+#define SET_TRAP(regs, val)	((regs)->trap = ((regs)->trap & 0xF) | ((val) & ~0xF))
 #define FULL_REGS(regs)		(((regs)->trap & 1) == 0)
 #define SET_FULL_REGS(regs)	((regs)->trap |= 1)
 #define IS_CRITICAL_EXC(regs)	(((regs)->trap & 2) != 0)
