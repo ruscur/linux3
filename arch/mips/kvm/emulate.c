@@ -1262,7 +1262,6 @@ unsigned int kvm_mips_config5_wrmask(struct kvm_vcpu *vcpu)
 
 enum emulation_result kvm_mips_emulate_CP0(union mips_instruction inst,
 					   u32 *opc, u32 cause,
-					   struct kvm_run *run,
 					   struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -1597,11 +1596,11 @@ dont_update_pc:
 
 enum emulation_result kvm_mips_emulate_store(union mips_instruction inst,
 					     u32 cause,
-					     struct kvm_run *run,
 					     struct kvm_vcpu *vcpu)
 {
 	enum emulation_result er;
 	u32 rt;
+	struct kvm_run *run = vcpu->run;
 	void *data = run->mmio.data;
 	unsigned long curr_pc;
 
@@ -1678,9 +1677,9 @@ out_fail:
 }
 
 enum emulation_result kvm_mips_emulate_load(union mips_instruction inst,
-					    u32 cause, struct kvm_run *run,
-					    struct kvm_vcpu *vcpu)
+					    u32 cause, struct kvm_vcpu *vcpu)
 {
+	struct kvm_run *run = vcpu->run;
 	enum emulation_result er;
 	unsigned long curr_pc;
 	u32 op, rt;
@@ -1752,7 +1751,6 @@ enum emulation_result kvm_mips_emulate_load(union mips_instruction inst,
 static enum emulation_result kvm_mips_guest_cache_op(int (*fn)(unsigned long),
 						     unsigned long curr_pc,
 						     unsigned long addr,
-						     struct kvm_run *run,
 						     struct kvm_vcpu *vcpu,
 						     u32 cause)
 {
@@ -1780,13 +1778,13 @@ static enum emulation_result kvm_mips_guest_cache_op(int (*fn)(unsigned long),
 			/* no matching guest TLB */
 			vcpu->arch.host_cp0_badvaddr = addr;
 			vcpu->arch.pc = curr_pc;
-			kvm_mips_emulate_tlbmiss_ld(cause, NULL, run, vcpu);
+			kvm_mips_emulate_tlbmiss_ld(cause, NULL, vcpu);
 			return EMULATE_EXCEPT;
 		case KVM_MIPS_TLBINV:
 			/* invalid matching guest TLB */
 			vcpu->arch.host_cp0_badvaddr = addr;
 			vcpu->arch.pc = curr_pc;
-			kvm_mips_emulate_tlbinv_ld(cause, NULL, run, vcpu);
+			kvm_mips_emulate_tlbinv_ld(cause, NULL, vcpu);
 			return EMULATE_EXCEPT;
 		default:
 			break;
@@ -1796,7 +1794,6 @@ static enum emulation_result kvm_mips_guest_cache_op(int (*fn)(unsigned long),
 
 enum emulation_result kvm_mips_emulate_cache(union mips_instruction inst,
 					     u32 *opc, u32 cause,
-					     struct kvm_run *run,
 					     struct kvm_vcpu *vcpu)
 {
 	enum emulation_result er = EMULATE_DONE;
@@ -1886,7 +1883,7 @@ enum emulation_result kvm_mips_emulate_cache(union mips_instruction inst,
 		 * guest's behalf.
 		 */
 		er = kvm_mips_guest_cache_op(protected_writeback_dcache_line,
-					     curr_pc, va, run, vcpu, cause);
+					     curr_pc, va, vcpu, cause);
 		if (er != EMULATE_DONE)
 			goto done;
 #ifdef CONFIG_KVM_MIPS_DYN_TRANS
@@ -1899,11 +1896,11 @@ enum emulation_result kvm_mips_emulate_cache(union mips_instruction inst,
 	} else if (op_inst == Hit_Invalidate_I) {
 		/* Perform the icache synchronisation on the guest's behalf */
 		er = kvm_mips_guest_cache_op(protected_writeback_dcache_line,
-					     curr_pc, va, run, vcpu, cause);
+					     curr_pc, va, vcpu, cause);
 		if (er != EMULATE_DONE)
 			goto done;
 		er = kvm_mips_guest_cache_op(protected_flush_icache_line,
-					     curr_pc, va, run, vcpu, cause);
+					     curr_pc, va, vcpu, cause);
 		if (er != EMULATE_DONE)
 			goto done;
 
@@ -1929,7 +1926,6 @@ done:
 }
 
 enum emulation_result kvm_mips_emulate_inst(u32 cause, u32 *opc,
-					    struct kvm_run *run,
 					    struct kvm_vcpu *vcpu)
 {
 	union mips_instruction inst;
@@ -1945,14 +1941,14 @@ enum emulation_result kvm_mips_emulate_inst(u32 cause, u32 *opc,
 
 	switch (inst.r_format.opcode) {
 	case cop0_op:
-		er = kvm_mips_emulate_CP0(inst, opc, cause, run, vcpu);
+		er = kvm_mips_emulate_CP0(inst, opc, cause, vcpu);
 		break;
 
 #ifndef CONFIG_CPU_MIPSR6
 	case cache_op:
 		++vcpu->stat.cache_exits;
 		trace_kvm_exit(vcpu, KVM_TRACE_EXIT_CACHE);
-		er = kvm_mips_emulate_cache(inst, opc, cause, run, vcpu);
+		er = kvm_mips_emulate_cache(inst, opc, cause, vcpu);
 		break;
 #else
 	case spec3_op:
@@ -1960,7 +1956,7 @@ enum emulation_result kvm_mips_emulate_inst(u32 cause, u32 *opc,
 		case cache6_op:
 			++vcpu->stat.cache_exits;
 			trace_kvm_exit(vcpu, KVM_TRACE_EXIT_CACHE);
-			er = kvm_mips_emulate_cache(inst, opc, cause, run,
+			er = kvm_mips_emulate_cache(inst, opc, cause,
 						    vcpu);
 			break;
 		default:
@@ -2000,7 +1996,6 @@ long kvm_mips_guest_exception_base(struct kvm_vcpu *vcpu)
 
 enum emulation_result kvm_mips_emulate_syscall(u32 cause,
 					       u32 *opc,
-					       struct kvm_run *run,
 					       struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2035,7 +2030,6 @@ enum emulation_result kvm_mips_emulate_syscall(u32 cause,
 
 enum emulation_result kvm_mips_emulate_tlbmiss_ld(u32 cause,
 						  u32 *opc,
-						  struct kvm_run *run,
 						  struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2079,7 +2073,6 @@ enum emulation_result kvm_mips_emulate_tlbmiss_ld(u32 cause,
 
 enum emulation_result kvm_mips_emulate_tlbinv_ld(u32 cause,
 						 u32 *opc,
-						 struct kvm_run *run,
 						 struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2121,7 +2114,6 @@ enum emulation_result kvm_mips_emulate_tlbinv_ld(u32 cause,
 
 enum emulation_result kvm_mips_emulate_tlbmiss_st(u32 cause,
 						  u32 *opc,
-						  struct kvm_run *run,
 						  struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2163,7 +2155,6 @@ enum emulation_result kvm_mips_emulate_tlbmiss_st(u32 cause,
 
 enum emulation_result kvm_mips_emulate_tlbinv_st(u32 cause,
 						 u32 *opc,
-						 struct kvm_run *run,
 						 struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2204,7 +2195,6 @@ enum emulation_result kvm_mips_emulate_tlbinv_st(u32 cause,
 
 enum emulation_result kvm_mips_emulate_tlbmod(u32 cause,
 					      u32 *opc,
-					      struct kvm_run *run,
 					      struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2244,7 +2234,6 @@ enum emulation_result kvm_mips_emulate_tlbmod(u32 cause,
 
 enum emulation_result kvm_mips_emulate_fpu_exc(u32 cause,
 					       u32 *opc,
-					       struct kvm_run *run,
 					       struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2273,7 +2262,6 @@ enum emulation_result kvm_mips_emulate_fpu_exc(u32 cause,
 
 enum emulation_result kvm_mips_emulate_ri_exc(u32 cause,
 					      u32 *opc,
-					      struct kvm_run *run,
 					      struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2308,7 +2296,6 @@ enum emulation_result kvm_mips_emulate_ri_exc(u32 cause,
 
 enum emulation_result kvm_mips_emulate_bp_exc(u32 cause,
 					      u32 *opc,
-					      struct kvm_run *run,
 					      struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2343,7 +2330,6 @@ enum emulation_result kvm_mips_emulate_bp_exc(u32 cause,
 
 enum emulation_result kvm_mips_emulate_trap_exc(u32 cause,
 						u32 *opc,
-						struct kvm_run *run,
 						struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2378,7 +2364,6 @@ enum emulation_result kvm_mips_emulate_trap_exc(u32 cause,
 
 enum emulation_result kvm_mips_emulate_msafpe_exc(u32 cause,
 						  u32 *opc,
-						  struct kvm_run *run,
 						  struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2413,7 +2398,6 @@ enum emulation_result kvm_mips_emulate_msafpe_exc(u32 cause,
 
 enum emulation_result kvm_mips_emulate_fpe_exc(u32 cause,
 					       u32 *opc,
-					       struct kvm_run *run,
 					       struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2448,7 +2432,6 @@ enum emulation_result kvm_mips_emulate_fpe_exc(u32 cause,
 
 enum emulation_result kvm_mips_emulate_msadis_exc(u32 cause,
 						  u32 *opc,
-						  struct kvm_run *run,
 						  struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2482,7 +2465,6 @@ enum emulation_result kvm_mips_emulate_msadis_exc(u32 cause,
 }
 
 enum emulation_result kvm_mips_handle_ri(u32 cause, u32 *opc,
-					 struct kvm_run *run,
 					 struct kvm_vcpu *vcpu)
 {
 	struct mips_coproc *cop0 = vcpu->arch.cop0;
@@ -2571,12 +2553,12 @@ emulate_ri:
 	 * branch target), and pass the RI exception to the guest OS.
 	 */
 	vcpu->arch.pc = curr_pc;
-	return kvm_mips_emulate_ri_exc(cause, opc, run, vcpu);
+	return kvm_mips_emulate_ri_exc(cause, opc, vcpu);
 }
 
-enum emulation_result kvm_mips_complete_mmio_load(struct kvm_vcpu *vcpu,
-						  struct kvm_run *run)
+enum emulation_result kvm_mips_complete_mmio_load(struct kvm_vcpu *vcpu)
 {
+	struct kvm_run *run = vcpu->run;
 	unsigned long *gpr = &vcpu->arch.gprs[vcpu->arch.io_gpr];
 	enum emulation_result er = EMULATE_DONE;
 
@@ -2622,7 +2604,6 @@ done:
 
 static enum emulation_result kvm_mips_emulate_exc(u32 cause,
 						  u32 *opc,
-						  struct kvm_run *run,
 						  struct kvm_vcpu *vcpu)
 {
 	u32 exccode = (cause >> CAUSEB_EXCCODE) & 0x1f;
@@ -2660,7 +2641,6 @@ static enum emulation_result kvm_mips_emulate_exc(u32 cause,
 
 enum emulation_result kvm_mips_check_privilege(u32 cause,
 					       u32 *opc,
-					       struct kvm_run *run,
 					       struct kvm_vcpu *vcpu)
 {
 	enum emulation_result er = EMULATE_DONE;
@@ -2742,7 +2722,7 @@ enum emulation_result kvm_mips_check_privilege(u32 cause,
 	}
 
 	if (er == EMULATE_PRIV_FAIL)
-		kvm_mips_emulate_exc(cause, opc, run, vcpu);
+		kvm_mips_emulate_exc(cause, opc, vcpu);
 
 	return er;
 }
@@ -2756,7 +2736,6 @@ enum emulation_result kvm_mips_check_privilege(u32 cause,
  */
 enum emulation_result kvm_mips_handle_tlbmiss(u32 cause,
 					      u32 *opc,
-					      struct kvm_run *run,
 					      struct kvm_vcpu *vcpu,
 					      bool write_fault)
 {
@@ -2780,9 +2759,9 @@ enum emulation_result kvm_mips_handle_tlbmiss(u32 cause,
 		       KVM_ENTRYHI_ASID));
 	if (index < 0) {
 		if (exccode == EXCCODE_TLBL) {
-			er = kvm_mips_emulate_tlbmiss_ld(cause, opc, run, vcpu);
+			er = kvm_mips_emulate_tlbmiss_ld(cause, opc, vcpu);
 		} else if (exccode == EXCCODE_TLBS) {
-			er = kvm_mips_emulate_tlbmiss_st(cause, opc, run, vcpu);
+			er = kvm_mips_emulate_tlbmiss_st(cause, opc, vcpu);
 		} else {
 			kvm_err("%s: invalid exc code: %d\n", __func__,
 				exccode);
@@ -2797,10 +2776,10 @@ enum emulation_result kvm_mips_handle_tlbmiss(u32 cause,
 		 */
 		if (!TLB_IS_VALID(*tlb, va)) {
 			if (exccode == EXCCODE_TLBL) {
-				er = kvm_mips_emulate_tlbinv_ld(cause, opc, run,
+				er = kvm_mips_emulate_tlbinv_ld(cause, opc,
 								vcpu);
 			} else if (exccode == EXCCODE_TLBS) {
-				er = kvm_mips_emulate_tlbinv_st(cause, opc, run,
+				er = kvm_mips_emulate_tlbinv_st(cause, opc,
 								vcpu);
 			} else {
 				kvm_err("%s: invalid exc code: %d\n", __func__,
