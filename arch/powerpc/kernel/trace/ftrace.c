@@ -31,6 +31,17 @@
 
 #ifdef CONFIG_DYNAMIC_FTRACE
 
+#define PATCH_INSN(addr, instr)						     \
+do {									     \
+	int rc = patch_instruction((unsigned int *)(addr), instr);	     \
+	if (rc) {							     \
+		pr_err("%s:%d Error patching instruction at 0x%pK (%pS): %d\n", \
+				__func__, __LINE__,			     \
+				(void *)(addr), (void *)(addr), rc);	     \
+		return -EPERM;						     \
+	}								     \
+} while (0)
+
 /*
  * We generally only have a single long_branch tramp and at most 2 or 3 plt
  * tramps generated. But, we don't use the plt tramps currently. We also allot
@@ -78,8 +89,7 @@ ftrace_modify_code(unsigned long ip, unsigned int old, unsigned int new)
 	}
 
 	/* replace the text with the new text */
-	if (patch_instruction((unsigned int *)ip, new))
-		return -EPERM;
+	PATCH_INSN(ip, new);
 
 	return 0;
 }
@@ -204,10 +214,7 @@ __ftrace_make_nop(struct module *mod,
 	}
 #endif /* CONFIG_MPROFILE_KERNEL */
 
-	if (patch_instruction((unsigned int *)ip, pop)) {
-		pr_err("Patching NOP failed.\n");
-		return -EPERM;
-	}
+	PATCH_INSN(ip, pop);
 
 	return 0;
 }
@@ -276,8 +283,7 @@ __ftrace_make_nop(struct module *mod,
 
 	op = PPC_INST_NOP;
 
-	if (patch_instruction((unsigned int *)ip, op))
-		return -EPERM;
+	PATCH_INSN(ip, op);
 
 	return 0;
 }
@@ -322,7 +328,7 @@ static int add_ftrace_tramp(unsigned long tramp)
  */
 static int setup_mcount_compiler_tramp(unsigned long tramp)
 {
-	int i, op;
+	unsigned int i, op;
 	unsigned long ptr;
 	static unsigned long ftrace_plt_tramps[NUM_FTRACE_TRAMPS];
 
@@ -366,16 +372,14 @@ static int setup_mcount_compiler_tramp(unsigned long tramp)
 #else
 	ptr = ppc_global_function_entry((void *)ftrace_caller);
 #endif
-	if (!create_branch((void *)tramp, ptr, 0)) {
+	op = create_branch((void *)tramp, ptr, 0);
+	if (!op) {
 		pr_debug("%ps is not reachable from existing mcount tramp\n",
 				(void *)ptr);
 		return -1;
 	}
 
-	if (patch_branch((unsigned int *)tramp, ptr, 0)) {
-		pr_debug("REL24 out of range!\n");
-		return -1;
-	}
+	PATCH_INSN(tramp, op);
 
 	if (add_ftrace_tramp(tramp)) {
 		pr_debug("No tramp locations left\n");
@@ -416,10 +420,7 @@ static int __ftrace_make_nop_kernel(struct dyn_ftrace *rec, unsigned long addr)
 		}
 	}
 
-	if (patch_instruction((unsigned int *)ip, PPC_INST_NOP)) {
-		pr_err("Patching NOP failed.\n");
-		return -EPERM;
-	}
+	PATCH_INSN(ip, PPC_INST_NOP);
 
 	return 0;
 }
@@ -557,15 +558,13 @@ __ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 	}
 
 	/* Ensure branch is within 24 bits */
-	if (!create_branch(ip, tramp, BRANCH_SET_LINK)) {
+	op[0] = create_branch(ip, tramp, BRANCH_SET_LINK);
+	if (!op[0]) {
 		pr_err("Branch out of range\n");
 		return -EINVAL;
 	}
 
-	if (patch_branch(ip, tramp, BRANCH_SET_LINK)) {
-		pr_err("REL24 out of range!\n");
-		return -EINVAL;
-	}
+	PATCH_INSN(ip, op[0]);
 
 	return 0;
 }
@@ -603,8 +602,7 @@ __ftrace_make_call(struct dyn_ftrace *rec, unsigned long addr)
 
 	pr_devel("write to %lx\n", rec->ip);
 
-	if (patch_instruction((unsigned int *)ip, op))
-		return -EPERM;
+	PATCH_INSN(ip, op);
 
 	return 0;
 }
@@ -650,10 +648,13 @@ static int __ftrace_make_call_kernel(struct dyn_ftrace *rec, unsigned long addr)
 		return -EINVAL;
 	}
 
-	if (patch_branch(ip, tramp, BRANCH_SET_LINK)) {
-		pr_err("Error patching branch to ftrace tramp!\n");
+	op = create_branch(ip, tramp, BRANCH_SET_LINK);
+	if (!op) {
+		pr_err("Branch out of range\n");
 		return -EINVAL;
 	}
+
+	PATCH_INSN(ip, op);
 
 	return 0;
 }
@@ -748,10 +749,8 @@ __ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
 	/* The new target may be within range */
 	if (test_24bit_addr(ip, addr)) {
 		/* within range */
-		if (patch_branch((unsigned int *)ip, addr, BRANCH_SET_LINK)) {
-			pr_err("REL24 out of range!\n");
-			return -EINVAL;
-		}
+		op = create_branch((unsigned int *)ip, addr, BRANCH_SET_LINK);
+		PATCH_INSN(ip, op);
 
 		return 0;
 	}
@@ -776,15 +775,13 @@ __ftrace_modify_call(struct dyn_ftrace *rec, unsigned long old_addr,
 	}
 
 	/* Ensure branch is within 24 bits */
-	if (!create_branch((unsigned int *)ip, tramp, BRANCH_SET_LINK)) {
+	op = create_branch((unsigned int *)ip, tramp, BRANCH_SET_LINK);
+	if (!op) {
 		pr_err("Branch out of range\n");
 		return -EINVAL;
 	}
 
-	if (patch_branch((unsigned int *)ip, tramp, BRANCH_SET_LINK)) {
-		pr_err("REL24 out of range!\n");
-		return -EINVAL;
-	}
+	PATCH_INSN(ip, op);
 
 	return 0;
 }
