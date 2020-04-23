@@ -138,7 +138,7 @@ static inline int unmap_patch_area(unsigned long addr)
 
 static int do_patch_instruction(unsigned int *addr, unsigned int instr)
 {
-	int err;
+	int err, rc = 0;
 	unsigned int *patch_addr = NULL;
 	unsigned long flags;
 	unsigned long text_poke_addr;
@@ -163,7 +163,7 @@ static int do_patch_instruction(unsigned int *addr, unsigned int instr)
 	patch_addr = (unsigned int *)(text_poke_addr) +
 			((kaddr & ~PAGE_MASK) / sizeof(unsigned int));
 
-	__patch_instruction(addr, instr, patch_addr);
+	rc = __patch_instruction(addr, instr, patch_addr);
 
 	err = unmap_patch_area(text_poke_addr);
 	if (err)
@@ -172,7 +172,7 @@ static int do_patch_instruction(unsigned int *addr, unsigned int instr)
 out:
 	local_irq_restore(flags);
 
-	return err;
+	return rc ? rc : err;
 }
 #else /* !CONFIG_STRICT_KERNEL_RWX */
 
