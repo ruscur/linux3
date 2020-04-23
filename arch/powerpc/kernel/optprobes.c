@@ -139,52 +139,67 @@ void arch_remove_optimized_kprobe(struct optimized_kprobe *op)
 	}
 }
 
+#define PATCH_INSN(addr, instr)						     \
+do {									     \
+	int rc = patch_instruction((unsigned int *)(addr), instr);	     \
+	if (rc) {							     \
+		pr_err("%s:%d Error patching instruction at 0x%pK (%pS): %d\n", \
+				__func__, __LINE__,			     \
+				(void *)(addr), (void *)(addr), rc);	     \
+		return rc;						     \
+	}								     \
+} while (0)
+
 /*
  * emulate_step() requires insn to be emulated as
  * second parameter. Load register 'r4' with the
  * instruction.
  */
-void patch_imm32_load_insns(unsigned int val, kprobe_opcode_t *addr)
+static int patch_imm32_load_insns(unsigned int val, kprobe_opcode_t *addr)
 {
 	/* addis r4,0,(insn)@h */
-	patch_instruction(addr, PPC_INST_ADDIS | ___PPC_RT(4) |
+	PATCH_INSN(addr, PPC_INST_ADDIS | ___PPC_RT(4) |
 			  ((val >> 16) & 0xffff));
 	addr++;
 
 	/* ori r4,r4,(insn)@l */
-	patch_instruction(addr, PPC_INST_ORI | ___PPC_RA(4) |
+	PATCH_INSN(addr, PPC_INST_ORI | ___PPC_RA(4) |
 			  ___PPC_RS(4) | (val & 0xffff));
+
+	return 0;
 }
 
 /*
  * Generate instructions to load provided immediate 64-bit value
  * to register 'r3' and patch these instructions at 'addr'.
  */
-void patch_imm64_load_insns(unsigned long val, kprobe_opcode_t *addr)
+static int patch_imm64_load_insns(unsigned long val, kprobe_opcode_t *addr)
 {
 	/* lis r3,(op)@highest */
-	patch_instruction(addr, PPC_INST_ADDIS | ___PPC_RT(3) |
+	PATCH_INSN(addr, PPC_INST_ADDIS | ___PPC_RT(3) |
 			  ((val >> 48) & 0xffff));
 	addr++;
 
 	/* ori r3,r3,(op)@higher */
-	patch_instruction(addr, PPC_INST_ORI | ___PPC_RA(3) |
+	PATCH_INSN(addr, PPC_INST_ORI | ___PPC_RA(3) |
 			  ___PPC_RS(3) | ((val >> 32) & 0xffff));
 	addr++;
 
 	/* rldicr r3,r3,32,31 */
-	patch_instruction(addr, PPC_INST_RLDICR | ___PPC_RA(3) |
+	PATCH_INSN(addr, PPC_INST_RLDICR | ___PPC_RA(3) |
 			  ___PPC_RS(3) | __PPC_SH64(32) | __PPC_ME64(31));
 	addr++;
 
 	/* oris r3,r3,(op)@h */
-	patch_instruction(addr, PPC_INST_ORIS | ___PPC_RA(3) |
+	PATCH_INSN(addr, PPC_INST_ORIS | ___PPC_RA(3) |
 			  ___PPC_RS(3) | ((val >> 16) & 0xffff));
 	addr++;
 
 	/* ori r3,r3,(op)@l */
-	patch_instruction(addr, PPC_INST_ORI | ___PPC_RA(3) |
+	PATCH_INSN(addr, PPC_INST_ORI | ___PPC_RA(3) |
 			  ___PPC_RS(3) | (val & 0xffff));
+
+	return 0;
 }
 
 int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
@@ -216,14 +231,18 @@ int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
 	 * be within 32MB on either side of the current instruction.
 	 */
 	b_offset = (unsigned long)buff - (unsigned long)p->addr;
-	if (!is_offset_in_branch_range(b_offset))
+	if (!is_offset_in_branch_range(b_offset)) {
+		rc = -ERANGE;
 		goto error;
+	}
 
 	/* Check if the return address is also within 32MB range */
 	b_offset = (unsigned long)(buff + TMPL_RET_IDX) -
 			(unsigned long)nip;
-	if (!is_offset_in_branch_range(b_offset))
+	if (!is_offset_in_branch_range(b_offset)) {
+		rc = -ERANGE;
 		goto error;
+	}
 
 	/* Setup template */
 	/* We can optimize this via patch_instruction_window later */
@@ -231,15 +250,22 @@ int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
 	pr_devel("Copying template to %p, size %lu\n", buff, size);
 	for (i = 0; i < size; i++) {
 		rc = patch_instruction(buff + i, *(optprobe_template_entry + i));
-		if (rc < 0)
+		if (rc) {
+			pr_err("%s: Error copying optprobe template to 0x%pK: %d\n",
+					__func__, (void *)(buff + i), rc);
+			rc = -EFAULT;
 			goto error;
+		}
 	}
 
 	/*
 	 * Fixup the template with instructions to:
 	 * 1. load the address of the actual probepoint
 	 */
-	patch_imm64_load_insns((unsigned long)op, buff + TMPL_OP_IDX);
+	if (patch_imm64_load_insns((unsigned long)op, buff + TMPL_OP_IDX)) {
+		rc = -EFAULT;
+		goto error;
+	}
 
 	/*
 	 * 2. branch to optimized_callback() and emulate_step()
@@ -248,6 +274,7 @@ int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
 	emulate_step_addr = (kprobe_opcode_t *)ppc_kallsyms_lookup_name("emulate_step");
 	if (!op_callback_addr || !emulate_step_addr) {
 		WARN(1, "Unable to lookup optimized_callback()/emulate_step()\n");
+		rc = -ERANGE;
 		goto error;
 	}
 
@@ -259,21 +286,48 @@ int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
 				(unsigned long)emulate_step_addr,
 				BRANCH_SET_LINK);
 
-	if (!branch_op_callback || !branch_emulate_step)
+	if (!branch_op_callback || !branch_emulate_step) {
+		rc = -ERANGE;
 		goto error;
+	}
 
-	patch_instruction(buff + TMPL_CALL_HDLR_IDX, branch_op_callback);
-	patch_instruction(buff + TMPL_EMULATE_IDX, branch_emulate_step);
+	rc = patch_instruction(buff + TMPL_CALL_HDLR_IDX, branch_op_callback);
+	if (rc) {
+		pr_err("%s:%d: Error patching instruction at 0x%pK: %d\n",
+				__func__, __LINE__,
+				(void *)(buff + TMPL_CALL_HDLR_IDX), rc);
+		rc = -EFAULT;
+		goto error;
+	}
+
+	rc = patch_instruction(buff + TMPL_EMULATE_IDX, branch_emulate_step);
+	if (rc) {
+		pr_err("%s:%d: Error patching instruction at 0x%pK: %d\n",
+				__func__, __LINE__,
+				(void *)(buff + TMPL_EMULATE_IDX), rc);
+		rc = -EFAULT;
+		goto error;
+	}
 
 	/*
 	 * 3. load instruction to be emulated into relevant register, and
 	 */
-	patch_imm32_load_insns(*p->ainsn.insn, buff + TMPL_INSN_IDX);
+	if (patch_imm32_load_insns(*p->ainsn.insn, buff + TMPL_INSN_IDX)) {
+		rc = -EFAULT;
+		goto error;
+	}
 
 	/*
 	 * 4. branch back from trampoline
 	 */
-	patch_branch(buff + TMPL_RET_IDX, (unsigned long)nip, 0);
+	rc = patch_branch(buff + TMPL_RET_IDX, (unsigned long)nip, 0);
+	if (rc) {
+		pr_err("%s:%d: Error patching instruction at 0x%pK: %d\n",
+				__func__, __LINE__,
+				(void *)(buff + TMPL_RET_IDX), rc);
+		rc = -EFAULT;
+		goto error;
+	}
 
 	flush_icache_range((unsigned long)buff,
 			   (unsigned long)(&buff[TMPL_END_IDX]));
@@ -284,7 +338,7 @@ int arch_prepare_optimized_kprobe(struct optimized_kprobe *op, struct kprobe *p)
 
 error:
 	free_ppc_optinsn_slot(buff, 0);
-	return -ERANGE;
+	return rc;
 
 }
 
@@ -307,6 +361,7 @@ void arch_optimize_kprobes(struct list_head *oplist)
 {
 	struct optimized_kprobe *op;
 	struct optimized_kprobe *tmp;
+	int rc;
 
 	list_for_each_entry_safe(op, tmp, oplist, list) {
 		/*
@@ -315,9 +370,13 @@ void arch_optimize_kprobes(struct list_head *oplist)
 		 */
 		memcpy(op->optinsn.copied_insn, op->kp.addr,
 					       RELATIVEJUMP_SIZE);
-		patch_instruction(op->kp.addr,
+		rc = patch_instruction(op->kp.addr,
 			create_branch((unsigned int *)op->kp.addr,
 				      (unsigned long)op->optinsn.insn, 0));
+		if (rc)
+			pr_err("%s:%d: Error patching instruction at 0x%pK: %d\n",
+					__func__, __LINE__,
+					(void *)(op->kp.addr), rc);
 		list_del_init(&op->list);
 	}
 }

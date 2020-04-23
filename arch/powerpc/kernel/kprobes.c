@@ -138,13 +138,19 @@ NOKPROBE_SYMBOL(arch_prepare_kprobe);
 
 void arch_arm_kprobe(struct kprobe *p)
 {
-	patch_instruction(p->addr, BREAKPOINT_INSTRUCTION);
+	int rc = patch_instruction(p->addr, BREAKPOINT_INSTRUCTION);
+
+	if (rc)
+		WARN("Failed to patch trap at 0x%pK: %d\n", (void *)p->addr, rc);
 }
 NOKPROBE_SYMBOL(arch_arm_kprobe);
 
 void arch_disarm_kprobe(struct kprobe *p)
 {
-	patch_instruction(p->addr, p->opcode);
+	int rc = patch_instruction(p->addr, p->opcode);
+
+	if (rc)
+		WARN("Failed to remove trap at 0x%pK: %d\n", (void *)p->addr, rc);
 }
 NOKPROBE_SYMBOL(arch_disarm_kprobe);
 
