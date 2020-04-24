@@ -115,6 +115,8 @@ int instantiate_cache_sram(struct platform_device *dev,
 	rh_attach_region(cache_sram->rh, 0, cache_sram->size);
 	spin_lock_init(&cache_sram->lock);
 
+	set_cache_sram_dev(cache_sram, &dev->dev);
+
 	dev_info(&dev->dev, "[base:0x%llx, size:0x%x] configured and loaded\n",
 		(unsigned long long)cache_sram->base_phys, cache_sram->size);
 

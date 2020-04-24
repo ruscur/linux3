@@ -10,6 +10,8 @@
 #ifndef __FSL_85XX_CACHE_CTLR_H__
 #define __FSL_85XX_CACHE_CTLR_H__
 
+#include <linux/platform_device.h>
+
 #define L2CR_L2FI		0x40000000	/* L2 flash invalidate */
 #define L2CR_L2IO		0x00200000	/* L2 instruction only */
 #define L2CR_SRAM_ZERO		0x00000000	/* L2SRAM zero size */
