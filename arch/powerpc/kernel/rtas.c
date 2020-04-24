@@ -518,7 +518,7 @@ unsigned int rtas_busy_delay(int status)
 }
 EXPORT_SYMBOL(rtas_busy_delay);
 
-static int rtas_error_rc(int rtas_rc)
+int rtas_error_rc(int rtas_rc)
 {
 	int rc;
 
@@ -546,6 +546,7 @@ static int rtas_error_rc(int rtas_rc)
 	}
 	return rc;
 }
+EXPORT_SYMBOL(rtas_error_rc);
 
 int rtas_get_power_level(int powerdomain, int *level)
 {
