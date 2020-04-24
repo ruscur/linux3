@@ -16,6 +16,16 @@ if FSL_SOC_BOOKE
 
 if PPC32
 
+config FSL_85XX_SRAM_UAPI
+	tristate "Freescale MPC85xx SRAM UAPI Support"
+	depends on FSL_SOC_BOOKE && SRAM_DYNAMIC
+	select FSL_85XX_CACHE_SRAM
+	help
+	  This registers a device of struct sram_device type which would act as
+	  an interface for user level applications to access the Freescale 85xx
+	  Cache-SRAM memory dynamically, meaning allocate on demand dynamically
+	  while they are running.
+
 config FSL_85XX_CACHE_SRAM
 	bool
 	select PPC_LIB_RHEAP

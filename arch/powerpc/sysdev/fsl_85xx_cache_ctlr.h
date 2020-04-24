@@ -10,6 +10,8 @@
 #ifndef __FSL_85XX_CACHE_CTLR_H__
 #define __FSL_85XX_CACHE_CTLR_H__
 
+#include <linux/platform_device.h>
+
 #define L2CR_L2FI		0x40000000	/* L2 flash invalidate */
 #define L2CR_L2IO		0x00200000	/* L2 instruction only */
 #define L2CR_SRAM_ZERO		0x00000000	/* L2SRAM zero size */
@@ -80,6 +82,10 @@ struct sram_parameters {
 	unsigned int sram_size;
 	phys_addr_t sram_offset;
 };
+
+#ifdef CONFIG_FSL_85XX_SRAM_UAPI
+extern struct mpc85xx_cache_sram *mpc85xx_get_cache_sram(void);
+#endif
 
 extern int instantiate_cache_sram(struct platform_device *dev,
 		struct sram_parameters sram_params);

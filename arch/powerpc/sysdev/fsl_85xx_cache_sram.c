@@ -23,6 +23,14 @@
 
 struct mpc85xx_cache_sram *cache_sram;
 
+
+#ifdef CONFIG_FSL_85XX_SRAM_UAPI
+struct mpc85xx_cache_sram *mpc85xx_get_cache_sram(void)
+{
+	return cache_sram;
+}
+#endif
+
 void *mpc85xx_cache_sram_alloc(unsigned int size,
 				phys_addr_t *phys, unsigned int align)
 {
@@ -114,6 +122,10 @@ int instantiate_cache_sram(struct platform_device *dev,
 
 	rh_attach_region(cache_sram->rh, 0, cache_sram->size);
 	spin_lock_init(&cache_sram->lock);
+
+#ifdef CONFIG_FSL_85XX_SRAM_UAPI
+	cache_sram->dev = &dev->dev;
+#endif
 
 	dev_info(&dev->dev, "[base:0x%llx, size:0x%x] configured and loaded\n",
 		(unsigned long long)cache_sram->base_phys, cache_sram->size);

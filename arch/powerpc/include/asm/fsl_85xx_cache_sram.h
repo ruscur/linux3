@@ -26,6 +26,10 @@ struct mpc85xx_cache_sram {
 	unsigned int size;
 	rh_info_t *rh;
 	spinlock_t lock;
+
+#ifdef CONFIG_FSL_85XX_SRAM_UAPI
+	struct device *dev;
+#endif
 };
 
 extern void mpc85xx_cache_sram_free(void *ptr);
