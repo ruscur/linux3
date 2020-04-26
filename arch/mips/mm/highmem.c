@@ -14,14 +14,9 @@ unsigned long highstart_pfn, highend_pfn;
 
 void *kmap(struct page *page)
 {
-	void *addr;
+	void *addr = kmap_generic(page);
 
-	might_sleep();
-	if (!PageHighMem(page))
-		return page_address(page);
-	addr = kmap_high(page);
 	flush_tlb_one((unsigned long)addr);
-
 	return addr;
 }
 EXPORT_SYMBOL(kmap);

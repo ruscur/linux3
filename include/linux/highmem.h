@@ -32,7 +32,25 @@ static inline void invalidate_kernel_vmap_range(void *vaddr, int size)
 #include <asm/kmap_types.h>
 
 #ifdef CONFIG_HIGHMEM
+extern void *kmap_high(struct page *page);
+
+/* kmap_generic: architecture independent portion of kmap calls */
+static inline void *kmap_generic(struct page *page)
+{
+	might_sleep();
+	if (!PageHighMem(page))
+		return page_address(page);
+	return kmap_high(page);
+}
+
 #include <asm/highmem.h>
+
+#ifndef ARCH_HAS_KMAP
+static inline void *kmap(struct page *page)
+{
+	return kmap_generic(page);
+}
+#endif
 
 /* declarations for linux/mm/highmem.c */
 unsigned int nr_free_highpages(void);
