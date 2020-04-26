@@ -50,7 +50,6 @@ extern void kunmap_high(struct page *page);
 
 #define ARCH_HAS_KMAP
 extern void *kmap(struct page *page);
-extern void kunmap(struct page *page);
 extern void *kmap_atomic(struct page *page);
 extern void __kunmap_atomic(void *kvaddr);
 extern void *kmap_atomic_pfn(unsigned long pfn);
