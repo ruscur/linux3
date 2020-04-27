@@ -1656,6 +1656,17 @@ static netdev_tx_t ibmvnic_xmit(struct sk_buff *skb, struct net_device *netdev)
 		lpar_rc = send_subcrq_indirect(adapter, handle_array[queue_num],
 					       (u64)tx_buff->indir_dma,
 					       (u64)num_entries);
+
+		/* Old firmware accepts max 16 num_entries */
+		if (lpar_rc == H_PARAMETER && num_entries > 16) {
+			tx_crq.v1.n_crq_elem = 16;
+			tx_buff->num_entries = 16;
+			lpar_rc = send_subcrq_indirect(adapter,
+						       handle_array[queue_num],
+						       (u64)tx_buff->indir_dma,
+						       16);
+		}
+
 		dma_unmap_single(dev, tx_buff->indir_dma,
 				 sizeof(tx_buff->indir_arr), DMA_TO_DEVICE);
 	} else {
