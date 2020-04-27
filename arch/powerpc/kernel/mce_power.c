@@ -391,6 +391,56 @@ static int mce_find_instr_ea_and_phys(struct pt_regs *regs, uint64_t *addr,
 	return -1;
 }
 
+static int mce_correct_err(unsigned int err_type)
+{
+	int handled = 0;
+
+	/* attempt to correct the error */
+	switch (err_type) {
+	case MCE_ERROR_TYPE_SLB:
+		if (local_paca->in_mce == 1)
+			slb_save_contents(local_paca->mce_faulty_slbs);
+		handled = mce_flush(MCE_FLUSH_SLB);
+		break;
+	case MCE_ERROR_TYPE_ERAT:
+		handled = mce_flush(MCE_FLUSH_ERAT);
+		break;
+	case MCE_ERROR_TYPE_TLB:
+		handled = mce_flush(MCE_FLUSH_TLB);
+		break;
+	}
+	return handled;
+}
+
+static void mce_err_get_sub_type(struct mce_error_info *mce_err,
+				 unsigned int err_type,
+				 unsigned int err_sub_type)
+{
+	switch (err_type) {
+	case MCE_ERROR_TYPE_UE:
+		mce_err->u.ue_error_type = err_sub_type;
+		break;
+	case MCE_ERROR_TYPE_SLB:
+		mce_err->u.slb_error_type = err_sub_type;
+		break;
+	case MCE_ERROR_TYPE_ERAT:
+		mce_err->u.erat_error_type = err_sub_type;
+		break;
+	case MCE_ERROR_TYPE_TLB:
+		mce_err->u.tlb_error_type = err_sub_type;
+		break;
+	case MCE_ERROR_TYPE_USER:
+		mce_err->u.user_error_type = err_sub_type;
+		break;
+	case MCE_ERROR_TYPE_RA:
+		mce_err->u.ra_error_type = err_sub_type;
+		break;
+	case MCE_ERROR_TYPE_LINK:
+		mce_err->u.link_error_type = err_sub_type;
+		break;
+	}
+}
+
 static int mce_handle_ierror(struct pt_regs *regs,
 		const struct mce_ierror_table table[],
 		struct mce_error_info *mce_err, uint64_t *addr,
@@ -405,48 +455,13 @@ static int mce_handle_ierror(struct pt_regs *regs,
 	for (i = 0; table[i].srr1_mask; i++) {
 		if ((srr1 & table[i].srr1_mask) != table[i].srr1_value)
 			continue;
-
-		/* attempt to correct the error */
-		switch (table[i].error_type) {
-		case MCE_ERROR_TYPE_SLB:
-			if (local_paca->in_mce == 1)
-				slb_save_contents(local_paca->mce_faulty_slbs);
-			handled = mce_flush(MCE_FLUSH_SLB);
-			break;
-		case MCE_ERROR_TYPE_ERAT:
-			handled = mce_flush(MCE_FLUSH_ERAT);
-			break;
-		case MCE_ERROR_TYPE_TLB:
-			handled = mce_flush(MCE_FLUSH_TLB);
-			break;
-		}
+		handled = mce_correct_err(table[i].error_type);
 
 		/* now fill in mce_error_info */
 		mce_err->error_type = table[i].error_type;
 		mce_err->error_class = table[i].error_class;
-		switch (table[i].error_type) {
-		case MCE_ERROR_TYPE_UE:
-			mce_err->u.ue_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_SLB:
-			mce_err->u.slb_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_ERAT:
-			mce_err->u.erat_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_TLB:
-			mce_err->u.tlb_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_USER:
-			mce_err->u.user_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_RA:
-			mce_err->u.ra_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_LINK:
-			mce_err->u.link_error_type = table[i].error_subtype;
-			break;
-		}
+		mce_err_get_sub_type(mce_err, table[i].error_type,
+				     table[i].error_subtype);
 		mce_err->sync_error = table[i].sync_error;
 		mce_err->severity = table[i].severity;
 		mce_err->initiator = table[i].initiator;
@@ -492,25 +507,7 @@ static int mce_handle_derror(struct pt_regs *regs,
 	for (i = 0; table[i].dsisr_value; i++) {
 		if (!(dsisr & table[i].dsisr_value))
 			continue;
-
-		/* attempt to correct the error */
-		switch (table[i].error_type) {
-		case MCE_ERROR_TYPE_SLB:
-			if (local_paca->in_mce == 1)
-				slb_save_contents(local_paca->mce_faulty_slbs);
-			if (mce_flush(MCE_FLUSH_SLB))
-				handled = 1;
-			break;
-		case MCE_ERROR_TYPE_ERAT:
-			if (mce_flush(MCE_FLUSH_ERAT))
-				handled = 1;
-			break;
-		case MCE_ERROR_TYPE_TLB:
-			if (mce_flush(MCE_FLUSH_TLB))
-				handled = 1;
-			break;
-		}
-
+		handled = mce_correct_err(table[i].error_type);
 		/*
 		 * Attempt to handle multiple conditions, but only return
 		 * one. Ensure uncorrectable errors are first in the table
@@ -522,29 +519,8 @@ static int mce_handle_derror(struct pt_regs *regs,
 		/* now fill in mce_error_info */
 		mce_err->error_type = table[i].error_type;
 		mce_err->error_class = table[i].error_class;
-		switch (table[i].error_type) {
-		case MCE_ERROR_TYPE_UE:
-			mce_err->u.ue_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_SLB:
-			mce_err->u.slb_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_ERAT:
-			mce_err->u.erat_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_TLB:
-			mce_err->u.tlb_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_USER:
-			mce_err->u.user_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_RA:
-			mce_err->u.ra_error_type = table[i].error_subtype;
-			break;
-		case MCE_ERROR_TYPE_LINK:
-			mce_err->u.link_error_type = table[i].error_subtype;
-			break;
-		}
+		mce_err_get_sub_type(mce_err, table[i].error_type,
+				     table[i].error_subtype);
 		mce_err->sync_error = table[i].sync_error;
 		mce_err->severity = table[i].severity;
 		mce_err->initiator = table[i].initiator;
