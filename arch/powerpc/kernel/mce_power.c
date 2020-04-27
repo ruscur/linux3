@@ -471,6 +471,10 @@ static int mce_handle_ierror(struct pt_regs *regs,
 				table[i].error_type == MCE_ERROR_TYPE_UE) {
 				unsigned long pfn;
 
+#ifdef CONFIG_KVM_BOOK3S_HANDLER
+				if (get_paca()->kvm_hstate.in_guest)
+					return handled;
+#endif
 				if (get_paca()->in_mce < MAX_MCE_DEPTH) {
 					pfn = addr_to_pfn(regs, regs->nip);
 					if (pfn != ULONG_MAX) {
@@ -515,6 +519,7 @@ static int mce_handle_derror(struct pt_regs *regs,
 		 */
 		if (found)
 			continue;
+		found = 1;
 
 		/* now fill in mce_error_info */
 		mce_err->error_type = table[i].error_type;
@@ -528,6 +533,10 @@ static int mce_handle_derror(struct pt_regs *regs,
 			*addr = regs->dar;
 		else if (mce_err->sync_error &&
 				table[i].error_type == MCE_ERROR_TYPE_UE) {
+#ifdef CONFIG_KVM_BOOK3S_HANDLER
+			if (get_paca()->kvm_hstate.in_guest)
+				continue;
+#endif
 			/*
 			 * We do a maximum of 4 nested MCE calls, see
 			 * kernel/exception-64s.h
@@ -536,7 +545,6 @@ static int mce_handle_derror(struct pt_regs *regs,
 				mce_find_instr_ea_and_phys(regs, addr,
 							   phys_addr);
 		}
-		found = 1;
 	}
 
 	if (found)
