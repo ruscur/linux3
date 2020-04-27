@@ -95,9 +95,13 @@ static void pSeries_show_cpuinfo(struct seq_file *m)
 	seq_printf(m, "machine\t\t: CHRP %s\n", model);
 	of_node_put(root);
 	if (radix_enabled())
-		seq_printf(m, "MMU\t\t: Radix\n");
+		seq_puts(m, "MMU\t\t: Radix\n");
 	else
-		seq_printf(m, "MMU\t\t: Hash\n");
+		seq_puts(m, "MMU\t\t: Hash\n");
+	if (xive_enabled())
+		seq_puts(m, "IRQ\t\t: XIVE\n");
+	else
+		seq_puts(m, "IRQ\t\t: XICS\n");
 }
 
 /* Initialize firmware assisted non-maskable interrupts if

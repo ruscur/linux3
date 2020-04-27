@@ -196,14 +196,18 @@ static void pnv_show_cpuinfo(struct seq_file *m)
 		model = of_get_property(root, "model", NULL);
 	seq_printf(m, "machine\t\t: PowerNV %s\n", model);
 	if (firmware_has_feature(FW_FEATURE_OPAL))
-		seq_printf(m, "firmware\t: OPAL\n");
+		seq_puts(m, "firmware\t: OPAL\n");
 	else
-		seq_printf(m, "firmware\t: BML\n");
+		seq_puts(m, "firmware\t: BML\n");
 	of_node_put(root);
 	if (radix_enabled())
-		seq_printf(m, "MMU\t\t: Radix\n");
+		seq_puts(m, "MMU\t\t: Radix\n");
 	else
-		seq_printf(m, "MMU\t\t: Hash\n");
+		seq_puts(m, "MMU\t\t: Hash\n");
+	if (xive_enabled())
+		seq_puts(m, "IRQ\t\t: XIVE\n");
+	else
+		seq_puts(m, "IRQ\t\t: XICS\n");
 }
 
 static void pnv_prepare_going_down(void)
