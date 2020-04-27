@@ -400,6 +400,9 @@ void opal_powercap_init(void);
 void opal_psr_init(void);
 void opal_sensor_groups_init(void);
 
+extern int64_t opal_register_os_ops(struct opal_os_ops *os_ops);
+extern int64_t opal_cpu_idle(__be64 srr1_addr, uint64_t psscr);
+
 #endif /* __ASSEMBLY__ */
 
 #endif /* _ASM_POWERPC_OPAL_H */

@@ -35,6 +35,7 @@
 static u32 supported_cpuidle_states;
 struct pnv_idle_states_t *pnv_idle_states;
 int nr_pnv_idle_states;
+static bool firmware_stop_supported;
 
 /*
  * The default stop state that will be used by ppc_md.power_save
@@ -602,6 +603,25 @@ struct p9_sprs {
 	u64 uamor;
 };
 
+/*
+ * This function is called from OPAL if firmware support for stop
+ * states is present and enabled. It provides a fallback for idle
+ * stop states via OPAL.
+ */
+static uint64_t os_idle_stop(uint64_t psscr, bool save_gprs)
+{
+	/*
+	 * For lite state which does not lose even GPRS we call
+	 * idle_stop_noloss while for all other states we call
+	 * idle_stop_mayloss. Saving and restoration of other additional
+	 * SPRs if required is handled in OPAL. All the quirks are also
+	 * handled in OPAL.
+	 */
+	if (!save_gprs)
+		return isa300_idle_stop_noloss(psscr);
+	return isa300_idle_stop_mayloss(psscr);
+}
+
 static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 {
 	int cpu = raw_smp_processor_id();
@@ -613,6 +633,16 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 	unsigned long mmcr0 = 0;
 	struct p9_sprs sprs = {}; /* avoid false used-uninitialised */
 	bool sprs_saved = false;
+	int rc = 0;
+
+	/*
+	 * Kernel takes decision whether to make OPAL call or not. This logic
+	 * will be combined with the logic for BE opal to take decision.
+	 */
+	if (firmware_stop_supported) {
+		rc = opal_cpu_idle(cpu_to_be64(__pa(&srr1)), (uint64_t) psscr);
+		goto out;
+	}
 
 	if (!(psscr & (PSSCR_EC|PSSCR_ESL))) {
 		/* EC=ESL=0 case */
@@ -1232,6 +1262,10 @@ static int pnv_parse_cpuidle_dt(void)
 		pr_warn("opal: PowerMgmt Node not found\n");
 		return -ENODEV;
 	}
+
+	if (of_device_is_compatible(np, "firmware-stop-supported"))
+		firmware_stop_supported = true;
+
 	nr_idle_states = of_property_count_u32_elems(np,
 						"ibm,cpu-idle-state-flags");
 
@@ -1326,6 +1360,7 @@ out:
 
 static int __init pnv_init_idle_states(void)
 {
+	struct opal_os_ops os_ops;
 	int cpu;
 	int rc = 0;
 
@@ -1349,6 +1384,8 @@ static int __init pnv_init_idle_states(void)
 		}
 	}
 
+	os_ops.os_idle_stop = be64_to_cpu(os_idle_stop);
+	rc = opal_register_os_ops((struct opal_os_ops *)(&os_ops));
 	/* In case we error out nr_pnv_idle_states will be zero */
 	nr_pnv_idle_states = 0;
 	supported_cpuidle_states = 0;
