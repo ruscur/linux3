@@ -633,16 +633,6 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 	unsigned long mmcr0 = 0;
 	struct p9_sprs sprs = {}; /* avoid false used-uninitialised */
 	bool sprs_saved = false;
-	int rc = 0;
-
-	/*
-	 * Kernel takes decision whether to make OPAL call or not. This logic
-	 * will be combined with the logic for BE opal to take decision.
-	 */
-	if (firmware_stop_supported) {
-		rc = opal_cpu_idle(cpu_to_be64(__pa(&srr1)), (uint64_t) psscr);
-		goto out;
-	}
 
 	if (!(psscr & (PSSCR_EC|PSSCR_ESL))) {
 		/* EC=ESL=0 case */
@@ -833,6 +823,19 @@ out:
 		mtmsr(MSR_KERNEL);
 
 	return srr1;
+}
+
+static unsigned long power9_firmware_idle_stop(unsigned long psscr, bool mmu_on)
+{
+	unsigned long srr1;
+	int rc;
+
+	rc = opal_cpu_idle(cpu_to_be64(__pa(&srr1)), (uint64_t) psscr);
+
+	if (mmu_on)
+		mtmsr(MSR_KERNEL);
+	return srr1;
+
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -1394,9 +1397,11 @@ static int __init pnv_init_idle_states(void)
 	    !(stop_dep.cpuidle_prop & STOP_ENABLE))
 		goto out;
 
-	/* Check for supported version in kernel */
+	/* Check for supported version in kernel or fallback to kernel*/
 	if (stop_dep.stop_version & STOP_VERSION_P9) {
 		stop_dep.idle_stop = power9_idle_stop;
+	} else if (stop_dep.cpuidle_prop & FIRMWARE_STOP_ENABLE) {
+		stop_dep.idle_stop = power9_firmware_idle_stop;
 	} else {
 		stop_dep.idle_stop = NULL;
 		goto out;
