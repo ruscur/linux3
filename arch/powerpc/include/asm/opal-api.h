@@ -214,7 +214,9 @@
 #define OPAL_SECVAR_GET				176
 #define OPAL_SECVAR_GET_NEXT			177
 #define OPAL_SECVAR_ENQUEUE_UPDATE		178
-#define OPAL_LAST				178
+#define OPAL_REGISTER_OS_OPS			181
+#define OPAL_CPU_IDLE				182
+#define OPAL_LAST				182
 
 #define QUIESCE_HOLD			1 /* Spin all calls at entry */
 #define QUIESCE_REJECT			2 /* Fail all calls with OPAL_BUSY */
@@ -1181,6 +1183,10 @@ struct opal_mpipl_fadump {
 	__be32	region_cnt;
 	struct	opal_mpipl_region region[];
 } __packed;
+
+struct opal_os_ops {
+	__be64 os_idle_stop;
+};
 
 #endif /* __ASSEMBLY__ */
 
