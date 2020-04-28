@@ -1,0 +1,34 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * In case of a 32 bit VDSO for a 64 bit kernel fake a 32 bit kernel
+ * configuration.
+ */
+
+#undef CONFIG_PPC64
+#undef CONFIG_64BIT
+#define CONFIG_PPC32
+#define CONFIG_32BIT 1
+#define CONFIG_GENERIC_ATOMIC64 1
+
+#ifdef CONFIG_PPC_BOOK3S_64
+#undef CONFIG_PPC_BOOK3S_64
+#undef CONFIG_PPC_PSERIES
+#define CONFIG_PPC_BOOK3S_32
+#else
+#define CONFIG_PPC_MMU_NOHASH_32
+#define CONFIG_FSL_BOOKE
+#endif
+
+#define CONFIG_TASK_SIZE	0
+#undef CONFIG_MMIOWB
+#undef CONFIG_PPC_SPLPAR
+#undef CONFIG_SPARSEMEM
+#undef CONFIG_PGTABLE_LEVELS
+#define CONFIG_PGTABLE_LEVELS	2
+#undef CONFIG_TRANSPARENT_HUGEPAGE
+#undef CONFIG_SPARSEMEM_VMEMMAP
+#undef CONFIG_FLATMEM
+#define CONFIG_FLATMEM
+#undef CONFIG_PPC_INDIRECT_MMIO
+#undef CONFIG_PPC_INDIRECT_PIO
+#undef CONFIG_EEH
