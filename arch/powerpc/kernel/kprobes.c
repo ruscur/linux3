@@ -19,6 +19,7 @@
 #include <linux/extable.h>
 #include <linux/kdebug.h>
 #include <linux/slab.h>
+#include <linux/bug.h>
 #include <asm/code-patching.h>
 #include <asm/cacheflush.h>
 #include <asm/sstep.h>
@@ -138,13 +139,21 @@ NOKPROBE_SYMBOL(arch_prepare_kprobe);
 
 void arch_arm_kprobe(struct kprobe *p)
 {
-	patch_instruction(p->addr, BREAKPOINT_INSTRUCTION);
+	int rc = patch_instruction(p->addr, BREAKPOINT_INSTRUCTION);
+
+	if (WARN_ON(rc))
+		pr_err("Failed to patch trap at 0x%pK: %d\n",
+				(void *)p->addr, rc);
 }
 NOKPROBE_SYMBOL(arch_arm_kprobe);
 
 void arch_disarm_kprobe(struct kprobe *p)
 {
-	patch_instruction(p->addr, p->opcode);
+	int rc = patch_instruction(p->addr, p->opcode);
+
+	if (WARN_ON(rc))
+		pr_err("Failed to remove trap at 0x%pK: %d\n",
+				(void *)p->addr, rc);
 }
 NOKPROBE_SYMBOL(arch_disarm_kprobe);
 
