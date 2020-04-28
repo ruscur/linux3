@@ -116,14 +116,14 @@ extern struct vdso_data *vdso_data;
 
 #else /* __ASSEMBLY__ */
 
-.macro get_datapage ptr
+.macro get_datapage ptr, offset=0
 	bcl	20, 31, .+4
 999:
 	mflr	\ptr
 #if CONFIG_PPC_PAGE_SHIFT > 14
-	addis	\ptr, \ptr, (_vdso_datapage - 999b)@ha
+	addis	\ptr, \ptr, (_vdso_datapage + \offset - 999b)@ha
 #endif
-	addi	\ptr, \ptr, (_vdso_datapage - 999b)@l
+	addi	\ptr, \ptr, (_vdso_datapage + \offset - 999b)@l
 .endm
 
 #endif /* __ASSEMBLY__ */
