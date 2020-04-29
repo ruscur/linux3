@@ -3175,7 +3175,8 @@ static int bond_slave_netdev_event(unsigned long event,
 		 * speeds/duplex are available.
 		 */
 		if (bond_update_speed_duplex(slave) &&
-		    BOND_MODE(bond) == BOND_MODE_8023AD) {
+		    BOND_MODE(bond) == BOND_MODE_8023AD &&
+		    slave->link == BOND_LINK_UP) {
 			if (slave->last_link_up)
 				slave->link = BOND_LINK_FAIL;
 			else
