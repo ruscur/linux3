@@ -11,6 +11,8 @@
 #include <linux/cpuhotplug.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/sched/task.h>
+#include <linux/random.h>
 
 #include <asm/pgtable.h>
 #include <asm/tlbflush.h>
@@ -39,6 +41,37 @@ int raw_patch_instruction(unsigned int *addr, unsigned int instr)
 }
 
 #ifdef CONFIG_STRICT_KERNEL_RWX
+
+static struct mm_struct *patching_mm __ro_after_init;
+static unsigned long patching_addr __ro_after_init;
+
+void __init poking_init(void)
+{
+	spinlock_t *ptl; /* for protecting pte table */
+	pte_t *ptep;
+
+	/*
+	 * Some parts of the kernel (static keys for example) depend on
+	 * successful code patching. Code patching under STRICT_KERNEL_RWX
+	 * requires this setup - otherwise we cannot patch at all. We use
+	 * BUG_ON() here and later since an early failure is preferred to
+	 * buggy behavior and/or strange crashes later.
+	 */
+	patching_mm = copy_init_mm();
+	BUG_ON(!patching_mm);
+
+	/*
+	 * In hash we cannot go above DEFAULT_MAP_WINDOW easily.
+	 * XXX: Do we want additional bits of entropy for radix?
+	 */
+	patching_addr = (get_random_long() & PAGE_MASK) %
+		(DEFAULT_MAP_WINDOW - PAGE_SIZE);
+
+	ptep = get_locked_pte(patching_mm, patching_addr, &ptl);
+	BUG_ON(!ptep);
+	pte_unmap_unlock(ptep, ptl);
+}
+
 static DEFINE_PER_CPU(struct vm_struct *, text_poke_area);
 
 static int text_area_cpu_up(unsigned int cpu)
