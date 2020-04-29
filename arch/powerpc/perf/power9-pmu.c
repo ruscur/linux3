@@ -434,6 +434,7 @@ static struct power_pmu power9_pmu = {
 	.cache_events		= &power9_cache_events,
 	.attr_groups		= power9_pmu_attr_groups,
 	.bhrb_nr		= 32,
+	.capabilities		= PERF_PMU_CAP_EXTENDED_REGS,
 };
 
 int init_power9_pmu(void)
