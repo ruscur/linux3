@@ -314,6 +314,9 @@ int pcie_aer_get_firmware_first(struct pci_dev *dev)
 	if (pcie_ports_native)
 		return 0;
 
+	if (pci_find_host_bridge(dev->bus)->native_aer)
+		return 0;
+
 	if (!dev->__aer_firmware_first_valid)
 		aer_set_firmware_first(dev);
 	return dev->__aer_firmware_first;
