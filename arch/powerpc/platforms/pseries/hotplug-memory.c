@@ -666,7 +666,7 @@ static int dlpar_add_lmb(struct drmem_lmb *lmb)
 	block_sz = memory_block_size_bytes();
 
 	/* Add the memory */
-	rc = __add_memory(lmb->nid, lmb->base_addr, block_sz);
+	rc = __add_memory(lmb->nid, lmb->base_addr, block_sz, 0);
 	if (rc) {
 		invalidate_lmb_associativity_index(lmb);
 		return rc;
