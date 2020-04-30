@@ -108,6 +108,35 @@ static void dma_iommu_unmap_sg(struct device *dev, struct scatterlist *sglist,
 		dma_direct_unmap_sg(dev, sglist, nelems, direction, attrs);
 }
 
+static dma_addr_t dma_iommu_map_resource(struct device *dev,
+					 phys_addr_t phys_addr, size_t size,
+					 enum dma_data_direction dir,
+					 unsigned long attrs)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct pci_controller *phb = pci_bus_to_host(pdev->bus);
+	struct pci_controller_ops *ops = &phb->controller_ops;
+
+	if (!dma_iommu_map_bypass(dev, attrs) ||
+	    !ops->dma_direct_map_resource ||
+	    ops->dma_direct_map_resource(pdev, phys_addr, size, dir))
+		return DMA_MAPPING_ERROR;
+
+	return dma_direct_map_resource(dev, phys_addr, size, dir, attrs);
+}
+
+static void dma_iommu_unmap_resource(struct device *dev, dma_addr_t dma_handle,
+				     size_t size, enum dma_data_direction dir,
+				     unsigned long attrs)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct pci_controller *phb = pci_bus_to_host(pdev->bus);
+	struct pci_controller_ops *ops = &phb->controller_ops;
+
+	if (dma_iommu_map_bypass(dev, attrs) && ops->dma_direct_unmap_resource)
+		ops->dma_direct_unmap_resource(pdev, dma_handle, size, dir);
+}
+
 static bool dma_iommu_bypass_supported(struct device *dev, u64 mask)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
@@ -199,6 +228,8 @@ const struct dma_map_ops dma_iommu_ops = {
 	.free			= dma_iommu_free_coherent,
 	.map_sg			= dma_iommu_map_sg,
 	.unmap_sg		= dma_iommu_unmap_sg,
+	.map_resource		= dma_iommu_map_resource,
+	.unmap_resource		= dma_iommu_unmap_resource,
 	.dma_supported		= dma_iommu_dma_supported,
 	.map_page		= dma_iommu_map_page,
 	.unmap_page		= dma_iommu_unmap_page,
