@@ -100,8 +100,8 @@ static unsigned long can_optimize(struct kprobe *p)
 	 * Ensure that the instruction is not a conditional branch,
 	 * and that can be emulated.
 	 */
-	if (!is_conditional_branch(*(struct ppc_inst *)p->ainsn.insn) &&
-			analyse_instr(&op, &regs, *(struct ppc_inst *)p->ainsn.insn) == 1) {
+	if (!is_conditional_branch(ppc_inst_read((struct ppc_inst *)p->ainsn.insn)) &&
+			analyse_instr(&op, &regs, ppc_inst_read((struct ppc_inst *)p->ainsn.insn)) == 1) {
 		emulate_update_regs(&regs, &op);
 		nip = regs.nip;
 	}
