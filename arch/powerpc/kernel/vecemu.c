@@ -266,7 +266,7 @@ int emulate_altivec(struct pt_regs *regs)
 	unsigned int va, vb, vc, vd;
 	vector128 *vrs;
 
-	if (get_user(instr.val, (unsigned int __user *) regs->nip))
+	if (__get_user_instr(instr, (void __user *) regs->nip))
 		return -EFAULT;
 
 	word = ppc_inst_val(instr);
