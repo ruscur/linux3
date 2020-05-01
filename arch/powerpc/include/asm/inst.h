@@ -39,5 +39,7 @@ static inline bool ppc_inst_equal(struct ppc_inst x, struct ppc_inst y)
 
 int probe_user_read_inst(struct ppc_inst *inst,
 			 struct ppc_inst *nip);
+int probe_kernel_read_inst(struct ppc_inst *inst,
+			   struct ppc_inst *src);
 
 #endif /* _ASM_INST_H */
