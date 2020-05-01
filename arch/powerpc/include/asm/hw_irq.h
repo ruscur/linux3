@@ -252,7 +252,7 @@ static inline bool arch_irqs_disabled(void)
 
 static inline bool lazy_irq_pending(void)
 {
-	return !!(get_paca()->irq_happened & ~PACA_IRQ_HARD_DIS);
+	return !!(local_paca->irq_happened & ~PACA_IRQ_HARD_DIS);
 }
 
 /*
