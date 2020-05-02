@@ -217,7 +217,8 @@
 #define OPAL_ADDR_TO_SYM			181
 #define OPAL_SYM_TO_ADDR			182
 #define OPAL_REPORT_TRAP			183
-#define OPAL_LAST				183
+#define OPAL_FIND_VM_AREA			184
+#define OPAL_LAST				184
 
 #define QUIESCE_HOLD			1 /* Spin all calls at entry */
 #define QUIESCE_REJECT			2 /* Fail all calls with OPAL_BUSY */
@@ -1188,6 +1189,18 @@ struct opal_mpipl_fadump {
 #define OPAL_TRAP_FATAL	1
 #define OPAL_TRAP_WARN	2
 #define OPAL_TRAP_PANIC	3
+
+#define OS_VM_FLAG_READ		0x1
+#define OS_VM_FLAG_WRITE	0x2
+#define OS_VM_FLAG_EXECUTE	0x4
+#define OS_VM_FLAG_CI		0x8
+
+struct opal_vm_area {
+	__be64  address;
+	__be64  length;
+	__be64  pa;
+	__be64  vm_flags;
+};
 
 #endif /* __ASSEMBLY__ */
 

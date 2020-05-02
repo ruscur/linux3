@@ -332,3 +332,4 @@ OPAL_CALL(opal_secvar_enqueue_update,		OPAL_SECVAR_ENQUEUE_UPDATE);
 OPAL_CALL(opal_addr_to_sym,			OPAL_ADDR_TO_SYM);
 OPAL_CALL(opal_sym_to_addr,			OPAL_SYM_TO_ADDR);
 OPAL_CALL(opal_report_trap,			OPAL_REPORT_TRAP);
+OPAL_CALL(opal_find_vm_area,			OPAL_FIND_VM_AREA);

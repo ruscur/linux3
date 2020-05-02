@@ -405,6 +405,8 @@ void opal_powercap_init(void);
 void opal_psr_init(void);
 void opal_sensor_groups_init(void);
 
+int64_t opal_find_vm_area(uint64_t addr, struct opal_vm_area *opal_vm_area);
+
 #endif /* __ASSEMBLY__ */
 
 #endif /* _ASM_POWERPC_OPAL_H */
