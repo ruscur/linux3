@@ -1095,6 +1095,61 @@ static pgprot_t opal_vm_flags_to_prot(uint64_t flags)
 	return prot;
 }
 
+static int64_t os_vm_map(uint64_t ea, uint64_t pa, uint64_t flags)
+{
+	struct mm_struct *mm = opal_mm;
+	spinlock_t *ptl;
+	pte_t pte, *ptep;
+	pgprot_t prot;
+
+	if (WARN_ON_ONCE(!opal_mm_enabled))
+		return -EINVAL;
+
+	if (WARN_ON_ONCE(!(mfmsr() & (MSR_IR|MSR_DR))))
+		return -EINVAL;
+
+	/* mm should be active_mm if MMU is on here */
+
+//	printk("os_vm_map 0x%llx->0x%llx flags=0x%llx\n", ea, pa, flags);
+
+	prot = opal_vm_flags_to_prot(flags);
+
+	pte = pfn_pte(pa >> PAGE_SHIFT, PAGE_KERNEL_X);
+
+	ptep = get_locked_pte(mm, ea, &ptl);
+	set_pte_at(mm, ea, ptep, pte);
+	pte_unmap_unlock(ptep, ptl);
+
+	return 0;
+}
+
+static void os_vm_unmap(uint64_t ea)
+{
+	struct mm_struct *mm = opal_mm;
+	spinlock_t *ptl;
+	pte_t *ptep;
+
+	if (WARN_ON_ONCE(!opal_mm_enabled))
+		return;
+
+	if (WARN_ON_ONCE(!(mfmsr() & (MSR_IR|MSR_DR))))
+		return;
+
+//	printk("os_vm_unmap 0x%llx\n", ea);
+
+	/* mm should be active_mm if MMU is on here */
+
+	ptep = get_locked_pte(mm, ea, &ptl);
+	pte_clear(mm, ea, ptep);
+	pte_unmap_unlock(ptep, ptl);
+
+	/*
+	 * This leaves potential TLBs in other CPUs for this EA, but it is
+	 * only used by this CPU. Can't do a broadcast flush here, no IPIs.
+	 */
+	local_flush_tlb_mm(mm);
+}
+
 static int __init opal_init_mm(void)
 {
 	struct mm_struct *mm;
@@ -1174,6 +1229,8 @@ static int __init opal_init_early(void)
 
 		memset(&opal_os_ops, 0, sizeof(opal_os_ops));
 		opal_os_ops.os_printf = cpu_to_be64(&os_printf);
+		opal_os_ops.os_vm_map = cpu_to_be64(&os_vm_map);
+		opal_os_ops.os_vm_unmap = cpu_to_be64(&os_vm_unmap);
 		if (opal_register_os_ops(&opal_os_ops, sizeof(opal_os_ops))) {
 			pr_warn("OPAL register OS ops failed, firmware will run in v3 mode.\n");
 		} else {

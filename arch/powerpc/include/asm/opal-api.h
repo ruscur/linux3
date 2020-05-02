@@ -1205,6 +1205,8 @@ struct opal_vm_area {
 
 struct opal_os_ops {
 	__be64  os_printf; /* void printf(int32_t level, const char *str) */
+	__be64  os_vm_map; /* int64_t os_vm_map(uint64_t ea, uint64_t pa, uint64_t flags) */
+	__be64  os_vm_unmap; /* void os_vm_unmap(uint64_t ea) */
 };
 
 #endif /* __ASSEMBLY__ */
