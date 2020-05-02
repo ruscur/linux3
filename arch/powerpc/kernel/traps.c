@@ -52,6 +52,7 @@
 #endif
 #ifdef CONFIG_PPC64
 #include <asm/firmware.h>
+#include <asm/opal.h>
 #include <asm/processor.h>
 #include <asm/tm.h>
 #endif
@@ -1471,7 +1472,6 @@ void program_check_exception(struct pt_regs *regs)
 		goto bail;
 	}
 	if (reason & REASON_TRAP) {
-		unsigned long bugaddr;
 		/* Debugger is first in line to stop recursive faults in
 		 * rcu_lock, notify_die, or atomic_notifier_call_chain */
 		if (debugger_bpt(regs))
@@ -1485,18 +1485,35 @@ void program_check_exception(struct pt_regs *regs)
 				== NOTIFY_STOP)
 			goto bail;
 
-		bugaddr = regs->nip;
-		/*
-		 * Fixup bugaddr for BUG_ON() in real mode
-		 */
-		if (!is_kernel_addr(bugaddr) && !(regs->msr & MSR_IR))
-			bugaddr += PAGE_OFFSET;
+		if (!(regs->msr & MSR_PR)) { /* not user-mode */
+			unsigned long bugaddr;
+			enum bug_trap_type t;
 
-		if (!(regs->msr & MSR_PR) &&  /* not user-mode */
-		    report_bug(bugaddr, regs) == BUG_TRAP_TYPE_WARN) {
-			regs->nip += 4;
-			goto bail;
+			/*
+			 * Fixup bugaddr for BUG_ON() in real mode
+			 */
+			bugaddr = regs->nip;
+			if (!is_kernel_addr(bugaddr) && !(regs->msr & MSR_IR))
+				bugaddr += PAGE_OFFSET;
+			t = report_bug(bugaddr, regs);
+			if (t == BUG_TRAP_TYPE_WARN) {
+				regs->nip += 4;
+				goto bail;
+			}
+			if (t == BUG_TRAP_TYPE_BUG)
+				goto bug;
+
+			if (firmware_has_feature(FW_FEATURE_OPAL)) {
+				int64_t ret;
+
+				ret = opal_report_trap(regs->nip);
+				if (ret == OPAL_TRAP_WARN) {
+					regs->nip += 4;
+					goto bail;
+				}
+			}
 		}
+bug:
 		_exception(SIGTRAP, regs, TRAP_BRKPT, regs->nip);
 		goto bail;
 	}

@@ -216,7 +216,8 @@
 #define OPAL_SECVAR_ENQUEUE_UPDATE		178
 #define OPAL_ADDR_TO_SYM			181
 #define OPAL_SYM_TO_ADDR			182
-#define OPAL_LAST				182
+#define OPAL_REPORT_TRAP			183
+#define OPAL_LAST				183
 
 #define QUIESCE_HOLD			1 /* Spin all calls at entry */
 #define QUIESCE_REJECT			2 /* Fail all calls with OPAL_BUSY */
@@ -1183,6 +1184,10 @@ struct opal_mpipl_fadump {
 	__be32	region_cnt;
 	struct	opal_mpipl_region region[];
 } __packed;
+
+#define OPAL_TRAP_FATAL	1
+#define OPAL_TRAP_WARN	2
+#define OPAL_TRAP_PANIC	3
 
 #endif /* __ASSEMBLY__ */
 

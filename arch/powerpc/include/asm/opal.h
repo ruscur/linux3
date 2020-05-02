@@ -314,6 +314,8 @@ s64 opal_quiesce(u64 shutdown_type, s32 cpu);
 
 int64_t opal_addr_to_sym(uint64_t addr, __be64 *symaddr, __be64 *symsize, char *namebuf, uint64_t buflen);
 int64_t opal_sym_to_addr(const char *name, __be64 *symaddr, __be64 *symsize);
+int64_t opal_report_trap(uint64_t nip);
+
 
 /* Internal functions */
 extern int early_init_dt_scan_opal(unsigned long node, const char *uname,
