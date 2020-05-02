@@ -87,7 +87,7 @@ static int i2c_opal_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 			OPAL_I2C_RAW_READ : OPAL_I2C_RAW_WRITE;
 		req.addr = cpu_to_be16(msgs[0].addr);
 		req.size = cpu_to_be32(msgs[0].len);
-		req.buffer_ra = cpu_to_be64(__pa(msgs[0].buf));
+		req.buffer_ra = cpu_to_be64(msgs[0].buf);
 		break;
 	case 2:
 		req.type = (msgs[1].flags & I2C_M_RD) ?
@@ -98,7 +98,7 @@ static int i2c_opal_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 			req.subaddr = (req.subaddr << 8) | msgs[0].buf[i];
 		req.subaddr = cpu_to_be32(req.subaddr);
 		req.size = cpu_to_be32(msgs[1].len);
-		req.buffer_ra = cpu_to_be64(__pa(msgs[1].buf));
+		req.buffer_ra = cpu_to_be64(msgs[1].buf);
 		break;
 	}
 
@@ -123,7 +123,7 @@ static int i2c_opal_smbus_xfer(struct i2c_adapter *adap, u16 addr,
 	req.addr = cpu_to_be16(addr);
 	switch (size) {
 	case I2C_SMBUS_BYTE:
-		req.buffer_ra = cpu_to_be64(__pa(&data->byte));
+		req.buffer_ra = cpu_to_be64(&data->byte);
 		req.size = cpu_to_be32(1);
 		/* Fall through */
 	case I2C_SMBUS_QUICK:
@@ -131,7 +131,7 @@ static int i2c_opal_smbus_xfer(struct i2c_adapter *adap, u16 addr,
 			OPAL_I2C_RAW_READ : OPAL_I2C_RAW_WRITE;
 		break;
 	case I2C_SMBUS_BYTE_DATA:
-		req.buffer_ra = cpu_to_be64(__pa(&data->byte));
+		req.buffer_ra = cpu_to_be64(&data->byte);
 		req.size = cpu_to_be32(1);
 		req.subaddr = cpu_to_be32(command);
 		req.subaddr_sz = 1;
@@ -143,7 +143,7 @@ static int i2c_opal_smbus_xfer(struct i2c_adapter *adap, u16 addr,
 			local[0] = data->word & 0xff;
 			local[1] = (data->word >> 8) & 0xff;
 		}
-		req.buffer_ra = cpu_to_be64(__pa(local));
+		req.buffer_ra = cpu_to_be64(local);
 		req.size = cpu_to_be32(2);
 		req.subaddr = cpu_to_be32(command);
 		req.subaddr_sz = 1;
@@ -151,7 +151,7 @@ static int i2c_opal_smbus_xfer(struct i2c_adapter *adap, u16 addr,
 			OPAL_I2C_SM_READ : OPAL_I2C_SM_WRITE;
 		break;
 	case I2C_SMBUS_I2C_BLOCK_DATA:
-		req.buffer_ra = cpu_to_be64(__pa(&data->block[1]));
+		req.buffer_ra = cpu_to_be64(&data->block[1]);
 		req.size = cpu_to_be32(data->block[0]);
 		req.subaddr = cpu_to_be32(command);
 		req.subaddr_sz = 1;

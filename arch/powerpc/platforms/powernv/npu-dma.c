@@ -149,7 +149,7 @@ static long pnv_npu_set_window(struct iommu_table_group *table_group, int num,
 			npe->pe_number,
 			npe->pe_number,
 			tbl->it_indirect_levels + 1,
-			__pa(tbl->it_base),
+			__pa(tbl->it_base), /* XXX? */
 			size << 3,
 			IOMMU_PAGE_SIZE(tbl));
 	if (rc) {

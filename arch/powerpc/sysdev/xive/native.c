@@ -647,7 +647,7 @@ static bool xive_native_provision_pages(void)
 			pr_err("Failed to allocate provisioning page\n");
 			return false;
 		}
-		opal_xive_donate_page(chip, __pa(p));
+		opal_xive_donate_page(chip, (u64)p);
 	}
 	return true;
 }

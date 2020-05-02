@@ -40,7 +40,7 @@ static ssize_t psr_show(struct kobject *kobj, struct kobj_attribute *attr,
 		goto out_token;
 
 	ret = opal_get_power_shift_ratio(psr_attr->handle, token,
-					    (u32 *)__pa(&psr));
+					    (u32 *)&psr);
 	switch (ret) {
 	case OPAL_ASYNC_COMPLETION:
 		ret = opal_async_wait_response(token, &msg);

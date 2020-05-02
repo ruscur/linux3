@@ -46,7 +46,7 @@ static ssize_t powercap_show(struct kobject *kobj, struct kobj_attribute *attr,
 	if (ret)
 		goto out_token;
 
-	ret = opal_get_powercap(pcap_attr->handle, token, (u32 *)__pa(&pcap));
+	ret = opal_get_powercap(pcap_attr->handle, token, &pcap);
 	switch (ret) {
 	case OPAL_ASYNC_COMPLETION:
 		ret = opal_async_wait_response(token, &msg);

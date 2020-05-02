@@ -1844,7 +1844,7 @@ static int pnv_pci_ioda_dma_64bit_bypass(struct pnv_ioda_pe *pe)
 					/* reconfigure window 0 */
 					(pe->pe_number << 1) + 0,
 					1,
-					__pa(tces),
+					__pa(tces), /* XXX? */
 					table_size,
 					1 << tce_order);
 	if (rc == OPAL_SUCCESS) {

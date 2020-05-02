@@ -33,7 +33,7 @@ static ssize_t opal_nvram_read(char *buf, size_t count, loff_t *index)
 	off = *index;
 	if ((off + count) > nvram_size)
 		count = nvram_size - off;
-	rc = opal_read_nvram(__pa(buf), count, off);
+	rc = opal_read_nvram((unsigned long)buf, count, off);
 	if (rc != OPAL_SUCCESS)
 		return -EIO;
 	*index += count;
@@ -56,7 +56,7 @@ static ssize_t opal_nvram_write(char *buf, size_t count, loff_t *index)
 		count = nvram_size - off;
 
 	while (rc == OPAL_BUSY || rc == OPAL_BUSY_EVENT) {
-		rc = opal_write_nvram(__pa(buf), count, off);
+		rc = opal_write_nvram((unsigned long)buf, count, off);
 		if (rc == OPAL_BUSY_EVENT) {
 			if (in_interrupt() || irqs_disabled())
 				mdelay(OPAL_BUSY_DELAY_MS);

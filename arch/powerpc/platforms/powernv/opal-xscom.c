@@ -58,7 +58,7 @@ static int opal_scom_read(uint32_t chip, uint64_t addr, u64 reg, u64 *value)
 	__be64 v;
 
 	reg = opal_scom_unmangle(addr + reg);
-	rc = opal_xscom_read(chip, reg, (__be64 *)__pa(&v));
+	rc = opal_xscom_read(chip, reg, &v);
 	if (rc) {
 		*value = 0xfffffffffffffffful;
 		return -EIO;

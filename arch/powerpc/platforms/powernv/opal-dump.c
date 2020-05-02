@@ -256,7 +256,7 @@ static int64_t dump_read_data(struct dump_obj *dump)
 	}
 
 	/* First entry address */
-	addr = __pa(list);
+	addr = (u64)list;
 
 	/* Fetch data */
 	rc = OPAL_BUSY_EVENT;

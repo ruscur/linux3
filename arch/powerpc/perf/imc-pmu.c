@@ -610,7 +610,7 @@ static int core_imc_mem_init(int cpu, int size)
 	mutex_init(&core_imc_refc[core_id].lock);
 
 	rc = opal_imc_counters_init(OPAL_IMC_COUNTERS_CORE,
-				__pa((void *)mem_info->vbase),
+				(u64)mem_info->vbase,
 				get_hard_smp_processor_id(cpu));
 	if (rc) {
 		free_pages((u64)mem_info->vbase, get_order(size));
@@ -1209,7 +1209,7 @@ static int trace_imc_mem_alloc(int cpu_id, int size)
 		per_cpu(trace_imc_mem, cpu_id) = local_mem;
 
 		/* Initialise the counters for trace mode */
-		rc = opal_imc_counters_init(OPAL_IMC_COUNTERS_TRACE, __pa((void *)local_mem),
+		rc = opal_imc_counters_init(OPAL_IMC_COUNTERS_TRACE, (u64)local_mem,
 					    get_hard_smp_processor_id(cpu_id));
 		if (rc) {
 			pr_info("IMC:opal init failed for trace imc\n");

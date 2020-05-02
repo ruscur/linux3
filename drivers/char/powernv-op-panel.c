@@ -175,8 +175,7 @@ static int oppanel_probe(struct platform_device *pdev)
 	memset(oppanel_data, ' ', oppanel_size);
 	for (i = 0; i < num_lines; i++) {
 		oppanel_lines[i].line_len = cpu_to_be64(line_len);
-		oppanel_lines[i].line = cpu_to_be64(__pa(&oppanel_data[i *
-						line_len]));
+		oppanel_lines[i].line = cpu_to_be64(&oppanel_data[i * line_len]);
 	}
 
 	rc = misc_register(&oppanel_dev);

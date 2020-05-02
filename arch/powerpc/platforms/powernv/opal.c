@@ -397,7 +397,7 @@ static void opal_handle_message(void)
 	s64 ret;
 	u32 type;
 
-	ret = opal_get_msg(__pa(opal_msg), opal_msg_size);
+	ret = opal_get_msg((u64)opal_msg, opal_msg_size);
 	/* No opal message pending. */
 	if (ret == OPAL_RESOURCE)
 		return;
@@ -961,7 +961,7 @@ static void __init opal_dump_region_init(void)
 		return;
 
 	rc = opal_register_dump_region(OPAL_DUMP_REGION_LOG_BUF,
-				       __pa(addr), size);
+				       (u64)addr, size);
 	/* Don't warn if this is just an older OPAL that doesn't
 	 * know about that call
 	 */
@@ -1197,7 +1197,7 @@ struct opal_sg_list *opal_vmalloc_to_sg_list(void *vmalloc_addr,
 			sg->length = cpu_to_be64(
 					i * sizeof(struct opal_sg_entry) + 16);
 			i = 0;
-			sg->next = cpu_to_be64(__pa(next));
+			sg->next = cpu_to_be64(next);
 			sg = next;
 		}
 

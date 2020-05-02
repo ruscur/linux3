@@ -130,11 +130,11 @@ static DEFINE_MUTEX(image_data_mutex);
 static inline void opal_flash_validate(void)
 {
 	long ret;
-	void *buf = validate_flash_data.buf;
+	u64 buf = (u64)validate_flash_data.buf;
 	__be32 size = cpu_to_be32(validate_flash_data.buf_size);
 	__be32 result;
 
-	ret = opal_validate_flash(__pa(buf), &size, &result);
+	ret = opal_validate_flash(buf, &size, &result);
 
 	validate_flash_data.status = ret;
 	validate_flash_data.buf_size = be32_to_cpu(size);
@@ -290,7 +290,7 @@ static int opal_flash_update(int op)
 		goto invalid_img;
 
 	/* First entry address */
-	addr = __pa(list);
+	addr = (u64)list;
 
 flash:
 	rc = opal_update_flash(addr);

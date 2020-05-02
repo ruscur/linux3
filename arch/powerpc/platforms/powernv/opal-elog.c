@@ -163,7 +163,7 @@ static ssize_t raw_attr_read(struct file *filep, struct kobject *kobj,
 		if (!elog->buffer)
 			return -EIO;
 
-		opal_rc = opal_read_elog(__pa(elog->buffer),
+		opal_rc = opal_read_elog((u64)elog->buffer,
 					 elog->size, elog->id);
 		if (opal_rc != OPAL_SUCCESS) {
 			pr_err("ELOG: log read failed for log-id=%llx\n",
@@ -206,7 +206,7 @@ static struct elog_obj *create_elog_obj(uint64_t id, size_t size, uint64_t type)
 	elog->buffer = kzalloc(elog->size, GFP_KERNEL);
 
 	if (elog->buffer) {
-		rc = opal_read_elog(__pa(elog->buffer),
+		rc = opal_read_elog((u64)elog->buffer,
 					 elog->size, elog->id);
 		if (rc != OPAL_SUCCESS) {
 			pr_err("ELOG: log read failed for log-id=%llx\n",
