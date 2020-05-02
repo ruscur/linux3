@@ -13,6 +13,7 @@
 struct opal {
 	u64 base;
 	u64 entry;
+	u64 v4_le_entry;
 } opal;
 
 static u32 opal_con_id;
@@ -75,6 +76,10 @@ static void opal_init(void)
 	if (getprop(opal_node, "opal-entry-address", &opal.entry, sizeof(u64)) < 0)
 		return;
 	opal.entry = be64_to_cpu(opal.entry);
+
+	if (getprop(opal_node, "opal-v4-le-entry-address", &opal.v4_le_entry, sizeof(u64)) < 0)
+		return;
+	opal.v4_le_entry = be64_to_cpu(opal.v4_le_entry);
 }
 
 int opal_console_init(void *devp, struct serial_console_data *scdp)

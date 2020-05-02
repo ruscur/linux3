@@ -46,13 +46,14 @@ static DEFINE_SPINLOCK(msg_list_lock);
 static LIST_HEAD(msg_list);
 
 /* /sys/firmware/opal */
-struct kobject *opal_kobj;
+struct kobject *opal_kobj __read_mostly;
 
 struct opal {
 	u64 base;
 	u64 entry;
 	u64 size;
-} opal;
+	u64 v4_le_entry;
+} opal __read_mostly;
 
 struct mcheck_recoverable_range {
 	u64 start_addr;
@@ -150,14 +151,15 @@ unsigned long arch_symbol_lookup_name(const char *name)
 int __init early_init_dt_scan_opal(unsigned long node,
 				   const char *uname, int depth, void *data)
 {
-	const void *basep, *entryp, *sizep;
-	int basesz, entrysz, runtimesz;
+	const void *basep, *entryp, *v4_le_entryp, *sizep;
+	int basesz, entrysz, v4_le_entrysz, runtimesz;
 
 	if (depth != 1 || strcmp(uname, "ibm,opal") != 0)
 		return 0;
 
 	basep  = of_get_flat_dt_prop(node, "opal-base-address", &basesz);
 	entryp = of_get_flat_dt_prop(node, "opal-entry-address", &entrysz);
+	v4_le_entryp = of_get_flat_dt_prop(node, "opal-v4-le-entry-address", &v4_le_entrysz);
 	sizep = of_get_flat_dt_prop(node, "opal-runtime-size", &runtimesz);
 
 	if (!basep || !entryp || !sizep)
@@ -166,19 +168,25 @@ int __init early_init_dt_scan_opal(unsigned long node,
 	opal.base = of_read_number(basep, basesz/4);
 	opal.entry = of_read_number(entryp, entrysz/4);
 	opal.size = of_read_number(sizep, runtimesz/4);
-
-	pr_debug("OPAL Base  = 0x%llx (basep=%p basesz=%d)\n",
-		 opal.base, basep, basesz);
-	pr_debug("OPAL Entry = 0x%llx (entryp=%p basesz=%d)\n",
-		 opal.entry, entryp, entrysz);
-	pr_debug("OPAL Entry = 0x%llx (sizep=%p runtimesz=%d)\n",
-		 opal.size, sizep, runtimesz);
+	opal.v4_le_entry = of_read_number(v4_le_entryp, v4_le_entrysz/4);
 
 	if (of_flat_dt_is_compatible(node, "ibm,opal-v3")) {
 		powerpc_firmware_features |= FW_FEATURE_OPAL;
 		pr_debug("OPAL detected !\n");
 	} else {
-		panic("OPAL != V3 detected, no longer supported.\n");
+		panic("OPAL v3 compatible firmware not detected, can not continue.\n");
+	}
+
+	pr_debug("OPAL Base  = 0x%llx (basep=%p basesz=%d)\n",
+		 opal.base, basep, basesz);
+	pr_debug("OPAL Entry = 0x%llx (entryp=%p entrysz=%d)\n",
+		 opal.entry, entryp, entrysz);
+	pr_debug("OPAL Size = 0x%llx (sizep=%p runtimesz=%d)\n",
+		 opal.size, sizep, runtimesz);
+	if (IS_ENABLED(CONFIG_CPU_LITTLE_ENDIAN) && v4_le_entryp) {
+
+		pr_debug("OPAL v4 Entry = 0x%llx (v4_le_entryp=%p v4_le_entrysz=%d)\n",
+			 opal.v4_le_entry, v4_le_entryp, v4_le_entrysz);
 	}
 
 	return 1;

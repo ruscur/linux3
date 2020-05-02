@@ -92,6 +92,18 @@ static s64 __opal_call_trace(s64 a0, s64 a1, s64 a2, s64 a3,
 #define DO_TRACE false
 #endif /* CONFIG_TRACEPOINTS */
 
+struct opal {
+	u64 base;
+	u64 entry;
+	u64 size;
+	u64 v4_le_entry;
+};
+extern struct opal opal;
+
+typedef int64_t (*opal_v4_le_entry_fn)(uint64_t r3, uint64_t r4, uint64_t r5,
+                               uint64_t r6, uint64_t r7, uint64_t r8,
+                               uint64_t r9, uint64_t r10);
+
 static int64_t opal_call(int64_t a0, int64_t a1, int64_t a2, int64_t a3,
 	     int64_t a4, int64_t a5, int64_t a6, int64_t a7, int64_t opcode)
 {
@@ -99,6 +111,30 @@ static int64_t opal_call(int64_t a0, int64_t a1, int64_t a2, int64_t a3,
 	unsigned long msr = mfmsr();
 	bool mmu = (msr & (MSR_IR|MSR_DR));
 	int64_t ret;
+	opal_v4_le_entry_fn fn;
+
+	if (IS_ENABLED(CONFIG_CPU_LITTLE_ENDIAN))
+		fn = (opal_v4_le_entry_fn)(opal.v4_le_entry);
+
+	if (fn) {
+		if (!mmu) {
+			BUG_ON(msr & MSR_EE);
+			ret = fn(opcode, a0, a1, a2, a3, a4, a5, a6);
+			return ret;
+		}
+
+		local_irq_save(flags);
+		hard_irq_disable(); /* XXX r13 */
+		msr &= ~MSR_EE;
+		mtmsr(msr & ~(MSR_IR|MSR_DR));
+
+		ret = fn(opcode, a0, a1, a2, a3, a4, a5, a6);
+
+		mtmsr(msr);
+		local_irq_restore(flags);
+
+		return ret;
+	}
 
 	msr &= ~MSR_EE;
 
