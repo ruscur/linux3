@@ -104,6 +104,9 @@ typedef int64_t (*opal_v4_le_entry_fn)(uint64_t r3, uint64_t r4, uint64_t r5,
                                uint64_t r6, uint64_t r7, uint64_t r8,
                                uint64_t r9, uint64_t r10);
 
+extern struct mm_struct *opal_mm;
+extern bool opal_mm_enabled;
+
 static int64_t opal_call(int64_t a0, int64_t a1, int64_t a2, int64_t a3,
 	     int64_t a4, int64_t a5, int64_t a6, int64_t a7, int64_t opcode)
 {
@@ -117,6 +120,8 @@ static int64_t opal_call(int64_t a0, int64_t a1, int64_t a2, int64_t a3,
 		fn = (opal_v4_le_entry_fn)(opal.v4_le_entry);
 
 	if (fn) {
+		struct mm_struct *old_mm = current->active_mm;
+
 		if (!mmu) {
 			BUG_ON(msr & MSR_EE);
 			ret = fn(opcode, a0, a1, a2, a3, a4, a5, a6);
@@ -126,11 +131,23 @@ static int64_t opal_call(int64_t a0, int64_t a1, int64_t a2, int64_t a3,
 		local_irq_save(flags);
 		hard_irq_disable(); /* XXX r13 */
 		msr &= ~MSR_EE;
-		mtmsr(msr & ~(MSR_IR|MSR_DR));
+		if (!opal_mm_enabled)
+			mtmsr(msr & ~(MSR_IR|MSR_DR));
+
+		if (opal_mm_enabled && old_mm != opal_mm) {
+			current->active_mm = opal_mm;
+			switch_mm_irqs_off(NULL, opal_mm, current);
+		}
 
 		ret = fn(opcode, a0, a1, a2, a3, a4, a5, a6);
 
-		mtmsr(msr);
+		if (opal_mm_enabled && old_mm != opal_mm) {
+			current->active_mm = old_mm;
+			switch_mm_irqs_off(NULL, old_mm, current);
+		}
+
+		if (!opal_mm_enabled)
+			mtmsr(msr);
 		local_irq_restore(flags);
 
 		return ret;

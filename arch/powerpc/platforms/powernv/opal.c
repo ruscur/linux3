@@ -45,6 +45,10 @@ struct opal_msg_node {
 static DEFINE_SPINLOCK(msg_list_lock);
 static LIST_HEAD(msg_list);
 
+struct mm_struct *opal_mm __read_mostly;
+bool opal_v4_present __read_mostly;
+bool opal_mm_enabled __read_mostly;
+
 /* /sys/firmware/opal */
 struct kobject *opal_kobj __read_mostly;
 
@@ -172,7 +176,12 @@ int __init early_init_dt_scan_opal(unsigned long node,
 
 	if (of_flat_dt_is_compatible(node, "ibm,opal-v3")) {
 		powerpc_firmware_features |= FW_FEATURE_OPAL;
-		pr_debug("OPAL detected !\n");
+		if (of_flat_dt_is_compatible(node, "ibm,opal-v4")) {
+			opal_v4_present = true;
+			pr_debug("OPAL v4 runtime firmware\n");
+		} else {
+			pr_debug("OPAL detected !\n");
+		}
 	} else {
 		panic("OPAL v3 compatible firmware not detected, can not continue.\n");
 	}
@@ -187,6 +196,9 @@ int __init early_init_dt_scan_opal(unsigned long node,
 
 		pr_debug("OPAL v4 Entry = 0x%llx (v4_le_entryp=%p v4_le_entrysz=%d)\n",
 			 opal.v4_le_entry, v4_le_entryp, v4_le_entrysz);
+	} else {
+		/* Can't use v4 entry */
+		opal_v4_present = false;
 	}
 
 	return 1;
@@ -1032,6 +1044,111 @@ static void opal_init_heartbeat(void)
 	if (opal_heartbeat)
 		kopald_tsk = kthread_run(kopald, NULL, "kopald");
 }
+
+static pgprot_t opal_vm_flags_to_prot(uint64_t flags)
+{
+	pgprot_t prot;
+
+	BUG_ON(!flags);
+	if (flags & OS_VM_FLAG_EXECUTE) {
+		if (flags & OS_VM_FLAG_CI)
+			BUG();
+		if (flags & OS_VM_FLAG_WRITE)
+			prot = PAGE_KERNEL_X;
+		else
+			prot = PAGE_KERNEL_X /* XXX!? PAGE_KERNEL_ROX */;
+	} else {
+		if (flags & OS_VM_FLAG_WRITE)
+			prot = PAGE_KERNEL;
+		else if (flags & OS_VM_FLAG_READ)
+			prot = PAGE_KERNEL_RO;
+		else
+			BUG();
+		if (flags & OS_VM_FLAG_CI)
+			prot = pgprot_noncached(prot);
+	}
+	return prot;
+}
+
+static int __init opal_init_mm(void)
+{
+	struct mm_struct *mm;
+	unsigned long addr;
+	struct opal_vm_area vm_area;
+
+	mm = copy_init_mm();
+	if (!mm)
+		return -ENOMEM;
+
+	/* Set up initial mappings for OPAL. */
+	addr = 0;
+	while (opal_find_vm_area(addr, &vm_area) == OPAL_SUCCESS) {
+		unsigned long length;
+		unsigned long pa;
+		unsigned long flags;
+		unsigned long end;
+		pgprot_t prot;
+
+		addr = be64_to_cpu(vm_area.address);
+		length = be64_to_cpu(vm_area.length);
+		pa = be64_to_cpu(vm_area.pa);
+		flags = be64_to_cpu(vm_area.vm_flags);
+
+		if (flags == 0) {
+			/* flags == 0 is a special case */
+			BUG_ON(pa != 0);
+		} else {
+			/* Don't support non-linear (yet?) */
+			BUG_ON(addr != pa);
+			prot = opal_vm_flags_to_prot(flags);
+		}
+
+		/* Align to PAGE_SIZE */
+		end = (addr + length + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+		addr &= ~(PAGE_SIZE - 1);
+
+		while (addr < end) {
+			spinlock_t *ptl;
+			pte_t pte, *ptep;
+
+			ptep = get_locked_pte(mm, addr, &ptl);
+			if (flags) {
+				pte = pfn_pte(addr >> PAGE_SHIFT, prot);
+				set_pte_at(mm, addr, ptep, pte);
+			} else {
+				pte_clear(mm, addr, ptep);
+			}
+			pte_unmap_unlock(ptep, ptl);
+
+			addr += PAGE_SIZE;
+		}
+	}
+
+	printk("OPAL Virtual Memory Runtime Enabled, using PID=0x%04x\n", (unsigned int)mm->context.id);
+
+	opal_mm = mm;
+	opal_mm_enabled = true;
+
+	return 0;
+}
+
+static int __init opal_init_early(void)
+{
+	int rc;
+
+	if (opal_v4_present) {
+		if (radix_enabled()) {
+			/* Hash can't resolve SLB faults to the switched mm */
+			rc = opal_init_mm();
+			if (rc) {
+				pr_warn("OPAL virtual memory init failed, firmware will run in real-mode.\n");
+			}
+		}
+	}
+
+	return 0;
+}
+machine_early_initcall(powernv, opal_init_early);
 
 static int __init opal_init(void)
 {
