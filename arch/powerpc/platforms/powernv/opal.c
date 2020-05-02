@@ -47,6 +47,7 @@ static LIST_HEAD(msg_list);
 
 struct mm_struct *opal_mm __read_mostly;
 bool opal_v4_present __read_mostly;
+bool opal_v4_enabled __read_mostly;
 bool opal_mm_enabled __read_mostly;
 
 /* /sys/firmware/opal */
@@ -151,6 +152,8 @@ unsigned long arch_symbol_lookup_name(const char *name)
 
 	return be64_to_cpu(addr);
 }
+
+static void os_printf(int32_t level, const char *str);
 
 int __init early_init_dt_scan_opal(unsigned long node,
 				   const char *uname, int depth, void *data)
@@ -1045,6 +1048,28 @@ static void opal_init_heartbeat(void)
 		kopald_tsk = kthread_run(kopald, NULL, "kopald");
 }
 
+static void os_printf(int32_t level, const char *str)
+{
+	const char *l;
+
+	/* Assuming printk does not work in real mode */
+	if (WARN_ON_ONCE(!(mfmsr() & (MSR_IR|MSR_DR))))
+		return;
+
+	switch (level) {
+	case 0: l = KERN_EMERG; break;
+	case 1: l = KERN_ALERT; break;
+	case 2: l = KERN_CRIT; break;
+	case 3: l = KERN_ERR; break;
+	case 4: l = KERN_WARNING; break;
+	case 5: l = KERN_NOTICE; break;
+	case 6: l = KERN_INFO; break;
+	case 7: l = KERN_DEBUG; break;
+	default: l = KERN_ERR;
+	}
+	printk("%s[OPAL] %s", l, str);
+}
+
 static pgprot_t opal_vm_flags_to_prot(uint64_t flags)
 {
 	pgprot_t prot;
@@ -1137,12 +1162,23 @@ static int __init opal_init_early(void)
 	int rc;
 
 	if (opal_v4_present) {
+		struct opal_os_ops opal_os_ops;
+
 		if (radix_enabled()) {
 			/* Hash can't resolve SLB faults to the switched mm */
 			rc = opal_init_mm();
 			if (rc) {
 				pr_warn("OPAL virtual memory init failed, firmware will run in real-mode.\n");
 			}
+		}
+
+		memset(&opal_os_ops, 0, sizeof(opal_os_ops));
+		opal_os_ops.os_printf = cpu_to_be64(&os_printf);
+		if (opal_register_os_ops(&opal_os_ops, sizeof(opal_os_ops))) {
+			pr_warn("OPAL register OS ops failed, firmware will run in v3 mode.\n");
+		} else {
+			opal_v4_enabled = true;
+			pr_warn("OPAL running in v4 mode!\n");
 		}
 	}
 
