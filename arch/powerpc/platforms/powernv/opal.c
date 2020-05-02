@@ -467,13 +467,10 @@ static int __init opal_message_init(struct device_node *opal_node)
 int opal_get_chars(uint32_t vtermno, char *buf, int count)
 {
 	s64 rc;
-	__be64 evt, len;
+	__be64 len;
 
 	if (!opal.entry)
 		return -ENODEV;
-	opal_poll_events(&evt);
-	if ((be64_to_cpu(evt) & OPAL_EVENT_CONSOLE_INPUT) == 0)
-		return 0;
 	len = cpu_to_be64(count);
 	rc = opal_console_read(vtermno, &len, buf);
 	if (rc == OPAL_SUCCESS)
