@@ -116,13 +116,18 @@ void ima_add_kexec_buffer(struct kimage *image)
 	kbuf.buffer = kexec_buffer;
 	kbuf.bufsz = kexec_buffer_size;
 	kbuf.memsz = kexec_segment_size;
-	ret = kexec_add_buffer(&kbuf);
-	if (ret) {
-		pr_err("Error passing over kexec measurement buffer.\n");
-		return;
+
+	if (!is_ima_memory_reserved()) {
+
+		ret = kexec_add_buffer(&kbuf);
+		if (ret) {
+			pr_err("Error passing over kexec measurement buffer.\n");
+			return;
+		}
 	}
 
-	ret = arch_ima_add_kexec_buffer(image, kbuf.mem, kexec_segment_size);
+	ret = arch_ima_add_kexec_buffer(image, kbuf.mem, kexec_buffer,
+					kexec_segment_size);
 	if (ret) {
 		pr_err("Error passing over kexec measurement buffer.\n");
 		return;

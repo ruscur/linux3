@@ -47,6 +47,18 @@ static int do_get_kexec_buffer(const void *prop, int len, unsigned long *addr,
 }
 
 /**
+ * is_ima_memory_reserved - check if memory is reserved via device
+ *			    tree.
+ *	Return: negative or zero when memory is not reserved.
+ *	positive number on success.
+ *
+ */
+int is_ima_memory_reserved(void)
+{
+	return -EOPNOTSUPP;
+}
+
+/**
  * ima_get_kexec_buffer - get IMA buffer from the previous kernel
  * @addr:	On successful return, set to point to the buffer contents.
  * @size:	On successful return, set to the buffer size.
@@ -137,7 +149,7 @@ void remove_ima_buffer(void *fdt, int chosen_node)
  * Return: 0 on success, negative errno on error.
  */
 int arch_ima_add_kexec_buffer(struct kimage *image, unsigned long load_addr,
-			      size_t size)
+			      void *buffer, size_t size)
 {
 	image->arch.ima_buffer_addr = load_addr;
 	image->arch.ima_buffer_size = size;
