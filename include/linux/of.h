@@ -1485,4 +1485,38 @@ static inline int of_overlay_notifier_unregister(struct notifier_block *nb)
 
 #endif
 
+#ifdef CONFIG_OF_IMA
+int of_is_ima_memory_reserved(void);
+int of_remove_ima_buffer(void);
+int of_get_ima_buffer(void **addr, size_t *size);
+size_t of_ima_get_size_allocated(void);
+int of_ima_write_buffer(void *ima_buffer,
+		size_t ima_buffer_size);
+#else
+static inline int of_is_ima_memory_reserved(void)
+{
+	return -ENOTSUPP;
+};
+static inline int of_remove_ima_buffer(void)
+{
+	return -ENOTSUPP;
+};
+
+static inline int of_get_ima_buffer(void **addr, size_t *size)
+{
+	return -ENOTSUPP;
+};
+
+static inline size_t of_ima_get_size_allocated(void)
+{
+	return 0;
+};
+
+static inline int of_ima_write_buffer(void *ima_buffer,
+				      size_t ima_buffer_size)
+{
+	return -ENOTSUPP;
+};
+#endif
+
 #endif /* _LINUX_OF_H */
