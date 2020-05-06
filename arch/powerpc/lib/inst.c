@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ *  Copyright 2020, IBM Corporation.
+ */
+
+#include <linux/uaccess.h>
+#include <asm/inst.h>
+
+int probe_user_read_inst(struct ppc_inst *inst,
+			 struct ppc_inst *nip)
+{
+	unsigned int val;
+	int err;
+
+	err = probe_user_read(&val, nip, sizeof(val));
+	*inst = ppc_inst(val);
+	return err;
+}
