@@ -482,6 +482,7 @@ static inline void rtas_initialize(void) { };
 #endif
 
 extern int call_rtas(const char *, int, int, unsigned long *, ...);
+extern void read_sys_info_pseries(void);
 
 #endif /* __KERNEL__ */
 #endif /* _POWERPC_RTAS_H */

@@ -20,6 +20,7 @@
 #include <asm/io.h>
 #include <linux/byteorder/generic.h>
 
+#include <asm/rtas.h>
 #include "hv-24x7.h"
 #include "hv-24x7-catalog.h"
 #include "hv-common.h"
@@ -54,6 +55,75 @@ static bool is_physical_domain(unsigned domain)
 #undef DOMAIN
 	default:
 		return false;
+	}
+}
+
+/*
+ * The Processor Module Information system parameter allows transferring
+ * of certain processor module information from the platform to the OS.
+ * Refer PAPR+ document to get parameter token value as '43'.
+ */
+
+#define PROCESSOR_MODULE_INFO   43
+#define PROCESSOR_MAX_LENGTH	(8 * 1024)
+
+DEFINE_SPINLOCK(rtas_local_data_buf_lock);
+EXPORT_SYMBOL(rtas_local_data_buf_lock);
+
+static u32 phys_sockets;	/* Physical sockets */
+static u32 phys_chipspersocket;	/* Physical chips per socket*/
+static u32 phys_coresperchip; /* Physical cores per chip */
+
+/*
+ * Function read_sys_info_pseries() make a rtas_call which require
+ * data buffer of size 8K. As standard 'rtas_data_buf' is of size
+ * 4K, we are adding new local buffer 'rtas_local_data_buf'.
+ */
+static __be16 rtas_local_data_buf[PROCESSOR_MAX_LENGTH] __cacheline_aligned;
+
+/*
+ * read_sys_info_pseries()
+ * Retrieve the number of sockets and chips per socket and cores per
+ * chip details through the get-system-parameter rtas call.
+ */
+void read_sys_info_pseries(void)
+{
+	int call_status, len, ntypes;
+
+	/*
+	 * Making system parameter: chips and sockets and cores per chip
+	 * default to 1.
+	 */
+	phys_sockets = 1;
+	phys_chipspersocket = 1;
+	phys_coresperchip = 1;
+	memset(rtas_local_data_buf, 0, PROCESSOR_MAX_LENGTH * sizeof(__be16));
+	spin_lock(&rtas_local_data_buf_lock);
+
+	call_status = rtas_call(rtas_token("ibm,get-system-parameter"), 3, 1,
+				NULL,
+				PROCESSOR_MODULE_INFO,
+				__pa(rtas_local_data_buf),
+				PROCESSOR_MAX_LENGTH);
+
+	spin_unlock(&rtas_local_data_buf_lock);
+
+	if (call_status != 0) {
+		pr_info("Error calling get-system-parameter (0x%x)\n",
+			call_status);
+	} else {
+		rtas_local_data_buf[PROCESSOR_MAX_LENGTH - 1] = '\0';
+		len = be16_to_cpup((__be16 *)&rtas_local_data_buf[0]);
+		if (len < 4)
+			return;
+
+		ntypes = be16_to_cpup(&rtas_local_data_buf[1]);
+
+		if (!ntypes)
+			return;
+		phys_sockets = be16_to_cpup(&rtas_local_data_buf[2]);
+		phys_chipspersocket = be16_to_cpup(&rtas_local_data_buf[3]);
+		phys_coresperchip = be16_to_cpup(&rtas_local_data_buf[4]);
 	}
 }
 
@@ -1604,6 +1674,8 @@ static int hv_24x7_init(void)
 	r = perf_pmu_register(&h_24x7_pmu, h_24x7_pmu.name, -1);
 	if (r)
 		return r;
+
+	read_sys_info_pseries();
 
 	return 0;
 }
