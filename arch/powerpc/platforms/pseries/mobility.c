@@ -42,6 +42,12 @@ struct update_props_workarea {
 #define MIGRATION_SCOPE	(1)
 #define PRRN_SCOPE -2
 
+#ifdef CONFIG_HV_PERF_CTRS
+void read_sys_info_pseries(void);
+#else
+static inline void read_sys_info_pseries(void) { }
+#endif
+
 static int mobility_rtas_call(int token, char *buf, s32 scope)
 {
 	int rc;
@@ -370,6 +376,16 @@ void post_mobility_fixup(void)
 
 	/* Possibly switch to a new RFI flush type */
 	pseries_setup_rfi_flush();
+
+	/*
+	 * In case an Lpar migrates from one system to another, system
+	 * parameter details like chips per sockets, cores per chip and
+	 * number of sockets details might change.
+	 * So, they needs to be re-initialized otherwise the
+	 * values will correspond to the previous system.
+	 * Call read_sys_info_pseries() to reinitialise the values.
+	 */
+	read_sys_info_pseries();
 
 	return;
 }
