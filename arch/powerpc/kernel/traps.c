@@ -1485,12 +1485,10 @@ void program_check_exception(struct pt_regs *regs)
 				== NOTIFY_STOP)
 			goto bail;
 
-		bugaddr = regs->nip;
 		/*
 		 * Fixup bugaddr for BUG_ON() in real mode
 		 */
-		if (!is_kernel_addr(bugaddr) && !(regs->msr & MSR_IR))
-			bugaddr += PAGE_OFFSET;
+		bugaddr = fixup_real_addr(regs, regs->nip);
 
 		if (!(regs->msr & MSR_PR) &&  /* not user-mode */
 		    report_bug(bugaddr, regs) == BUG_TRAP_TYPE_WARN) {
