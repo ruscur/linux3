@@ -442,6 +442,15 @@ extern void cvt_fd(float *from, double *to);
 extern void cvt_df(double *from, float *to);
 extern void _nmask_and_or_msr(unsigned long nmask, unsigned long or_val);
 
+static inline unsigned long fixup_real_addr(struct pt_regs *regs,
+					    unsigned long addr)
+{
+	if (!(regs->msr & MSR_IR))
+		return (unsigned long)___va(addr);
+
+	return addr;
+}
+
 #ifdef CONFIG_PPC64
 /*
  * We handle most unaligned accesses in hardware. On the other hand 
