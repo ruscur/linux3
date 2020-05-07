@@ -60,7 +60,7 @@ static void __init *early_alloc_pgtable(unsigned long size)
 
 	if (!ptr)
 		panic("%s: Failed to allocate %lu bytes align=0x%lx max_addr=%lx\n",
-		      __func__, size, size, __pa(MAX_DMA_ADDRESS));
+		      __func__, size, size, (unsigned long)__pa(MAX_DMA_ADDRESS));
 
 	return ptr;
 }
