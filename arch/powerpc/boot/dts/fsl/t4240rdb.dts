@@ -144,7 +144,11 @@
 			rtc@68 {
 				compatible = "dallas,ds1374";
 				reg = <0x68>;
-				interrupts = <0x1 0x1 0 0>;
+				// The ds1374's INT pin isn't
+				// connected to cpu's INT pin,
+				// so the rtc cannot synchronize
+				// clock tick per second.
+				uie_unsupported;
 			};
 		};
 
