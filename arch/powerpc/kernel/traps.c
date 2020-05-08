@@ -873,13 +873,13 @@ void machine_check_exception(struct pt_regs *regs)
 
 	die("Machine check", regs, SIGBUS);
 
+	return;
+
+bail:
 	/* Must die if the interrupt is not recoverable */
 	if (!(regs->msr & MSR_RI))
 		die("Unrecoverable Machine check", regs, SIGBUS);
 
-	return;
-
-bail:
 	if (!nested)
 		nmi_exit();
 }
