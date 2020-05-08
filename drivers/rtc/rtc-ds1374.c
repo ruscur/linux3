@@ -651,6 +651,10 @@ static int ds1374_probe(struct i2c_client *client,
 	if (ret)
 		return ret;
 
+	if (of_property_read_bool(client->dev.of_node,
+						 "uie_unsupported"))
+		ds1374->rtc->uie_unsupported = true;
+
 #ifdef CONFIG_RTC_DRV_DS1374_WDT
 	save_client = client;
 	ret = misc_register(&ds1374_miscdev);
