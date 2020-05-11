@@ -41,6 +41,11 @@ static const struct flag_info flag_array[] = {
 		.set	= "i",
 		.clear	= " ",
 	}, {
+		.mask	= _PAGE_COHERENT,
+		.val	= _PAGE_COHERENT,
+		.set	= "m",
+		.clear	= " ",
+	}, {
 		.mask	= _PAGE_GUARDED,
 		.val	= _PAGE_GUARDED,
 		.set	= "g",
