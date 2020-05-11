@@ -857,6 +857,20 @@ static void __init hash_init_partition_table(phys_addr_t hash_table,
 	pr_info("Partition table %p\n", partition_tb);
 }
 
+__ro_after_init DEFINE_STATIC_KEY_FALSE(stress_hpt_key);
+
+static bool stress_hpt_enabled __initdata;
+
+/* per-CPU array allocated if we enable stress_hpt. */
+static unsigned long *stress_hpt_last_group __ro_after_init;
+
+static int __init parse_stress_hpt(char *p)
+{
+	stress_hpt_enabled = true;
+	return 0;
+}
+early_param("stress_hpt", parse_stress_hpt);
+
 static void __init htab_initialize(void)
 {
 	unsigned long table;
@@ -875,6 +889,15 @@ static void __init htab_initialize(void)
 
 	if (stress_slb_enabled)
 		static_branch_enable(&stress_slb_key);
+
+	if (stress_hpt_enabled) {
+		unsigned long *tmp;
+		static_branch_enable(&stress_hpt_key);
+		tmp = memblock_alloc(sizeof(unsigned long) * NR_CPUS,
+				     sizeof(unsigned long));
+		memset(tmp, 0xff, sizeof(unsigned long) * NR_CPUS);
+		stress_hpt_last_group = tmp;
+	}
 
 	/*
 	 * Calculate the required size of the htab.  We want the number of
@@ -1893,6 +1916,37 @@ repeat:
 
 	return slot;
 }
+
+void hpt_do_stress(unsigned long ea, unsigned long access,
+		   unsigned long rflags, unsigned long hpte_group)
+{
+	unsigned long last_group;
+	int cpu = raw_smp_processor_id();
+
+	last_group = stress_hpt_last_group[cpu];
+	if (last_group != -1UL) {
+		while (mmu_hash_ops.hpte_remove(last_group) != -1)
+			;
+		stress_hpt_last_group[cpu] = -1UL;
+	}
+
+	if (ea >= PAGE_OFFSET) {
+		/*
+		 * We would really like to prefetch here to get the TLB loaded,
+		 * then remove the PTE before returning to userspace, to
+		 * increase the hash fault rate.
+		 *
+		 * Unfortunately QEMU TCG does not model the TLB in a way that
+		 * makes this possible, and systemsim (mambo) emulator does not
+		 * bring in TLBs with prefetches (although loads/stores do
+		 * work for non-CI PTEs).
+		 *
+		 * So remember this PTE and clear it on the next hash fault.
+		 */
+		stress_hpt_last_group[cpu] = hpte_group;
+	}
+}
+
 
 #ifdef CONFIG_DEBUG_PAGEALLOC
 static void kernel_map_linear_page(unsigned long vaddr, unsigned long lmi)

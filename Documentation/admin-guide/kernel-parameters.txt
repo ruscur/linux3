@@ -876,6 +876,15 @@
 			them frequently to increase the rate of SLB faults
 			on kernel addresses.
 
+	stress_hpt	[PPC]
+			Limits the number of kernel HPT entries in the hash
+			page table to increase the rate of hash page table
+			faults on kernel addresses.
+
+			This may hang when run on processors / emulators which
+			do not have a TLB, or flush it more often than
+			required, QEMU seems to have problems.
+
 	disable=	[IPV6]
 			See Documentation/networking/ipv6.txt.
 
