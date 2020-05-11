@@ -8,6 +8,7 @@
  *   PPC64 rework.
  */
 
+#include <linux/jump_label.h>
 #include <asm/page.h>
 #include <asm/bug.h>
 #include <asm/asm-const.h>
@@ -323,6 +324,16 @@ static inline bool torture_slb(void)
 {
 	return static_branch_unlikely(&torture_slb_key);
 }
+
+extern bool torture_hpt_enabled;
+DECLARE_STATIC_KEY_FALSE(torture_hpt_key);
+static inline bool torture_hpt(void)
+{
+	return static_branch_unlikely(&torture_hpt_key);
+}
+
+void hpt_do_torture(unsigned long ea, unsigned long access,
+		    unsigned long rflags, unsigned long hpte_group);
 
 /*
  * This computes the AVPN and B fields of the first dword of a HPTE,

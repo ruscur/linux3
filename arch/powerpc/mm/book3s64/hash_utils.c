@@ -353,8 +353,12 @@ int htab_remove_mapping(unsigned long vstart, unsigned long vend,
 	return ret;
 }
 
-static bool disable_1tb_segments = false;
+static bool disable_1tb_segments __read_mostly = false;
 bool torture_slb_enabled __read_mostly = false;
+bool torture_hpt_enabled __read_mostly = false;
+
+/* per-CPU array allocated if we enable torture_hpt. */
+static unsigned long *torture_hpt_last_group;
 
 static int __init parse_disable_1tb_segments(char *p)
 {
@@ -369,6 +373,13 @@ static int __init parse_torture_slb(char *p)
 	return 0;
 }
 early_param("torture_slb", parse_torture_slb);
+
+static int __init parse_torture_hpt(char *p)
+{
+	torture_hpt_enabled = true;
+	return 0;
+}
+early_param("torture_hpt", parse_torture_hpt);
 
 static int __init htab_dt_scan_seg_sizes(unsigned long node,
 					 const char *uname, int depth,
@@ -863,6 +874,7 @@ static void __init hash_init_partition_table(phys_addr_t hash_table,
 }
 
 DEFINE_STATIC_KEY_FALSE(torture_slb_key);
+DEFINE_STATIC_KEY_FALSE(torture_hpt_key);
 
 static void __init htab_initialize(void)
 {
@@ -882,6 +894,15 @@ static void __init htab_initialize(void)
 
 	if (torture_slb_enabled)
 		static_branch_enable(&torture_slb_key);
+	if (torture_hpt_enabled) {
+		unsigned long tmp;
+		static_branch_enable(&torture_hpt_key);
+		tmp = memblock_phys_alloc_range(sizeof(unsigned long) * NR_CPUS,
+						  0,
+						  0, MEMBLOCK_ALLOC_ANYWHERE);
+		memset((void *)tmp, 0xff, sizeof(unsigned long) * NR_CPUS);
+		torture_hpt_last_group = __va(tmp);
+	}
 
 	/*
 	 * Calculate the required size of the htab.  We want the number of
@@ -1900,6 +1921,37 @@ repeat:
 
 	return slot;
 }
+
+void hpt_do_torture(unsigned long ea, unsigned long access,
+		    unsigned long rflags, unsigned long hpte_group)
+{
+	unsigned long last_group;
+	int cpu = raw_smp_processor_id();
+
+	last_group = torture_hpt_last_group[cpu];
+	if (last_group != -1UL) {
+		while (mmu_hash_ops.hpte_remove(last_group) != -1)
+			;
+		torture_hpt_last_group[cpu] = -1UL;
+	}
+
+	if (ea >= PAGE_OFFSET) {
+		/*
+		 * We would really like to prefetch here to get the TLB loaded,
+		 * then remove the PTE before returning to userspace, to
+		 * increase the hash fault rate.
+		 *
+		 * Unfortunately QEMU TCG does not model the TLB in a way that
+		 * makes this possible, and systemsim (mambo) emulator does not
+		 * bring in TLBs with prefetches (although loads/stores do
+		 * work for non-CI PTEs).
+		 *
+		 * So remember this PTE and clear it on the next hash fault.
+		 */
+		torture_hpt_last_group[cpu] = hpte_group;
+	}
+}
+
 
 #ifdef CONFIG_DEBUG_PAGEALLOC
 static void kernel_map_linear_page(unsigned long vaddr, unsigned long lmi)
