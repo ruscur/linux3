@@ -317,6 +317,13 @@ extern unsigned long tce_alloc_start, tce_alloc_end;
  */
 extern int mmu_ci_restrictions;
 
+extern bool torture_slb_enabled;
+DECLARE_STATIC_KEY_FALSE(torture_slb_key);
+static inline bool torture_slb(void)
+{
+	return static_branch_unlikely(&torture_slb_key);
+}
+
 /*
  * This computes the AVPN and B fields of the first dword of a HPTE,
  * for use when we want to match an existing PTE.  The bottom 7 bits
