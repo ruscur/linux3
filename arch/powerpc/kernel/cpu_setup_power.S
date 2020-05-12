@@ -91,6 +91,7 @@ _GLOBAL(__restore_cpu_power8)
 	mtlr	r11
 	blr
 
+_GLOBAL(__setup_cpu_power10)
 _GLOBAL(__setup_cpu_power9)
 	mflr	r11
 	bl	__init_FSCR
@@ -116,6 +117,7 @@ _GLOBAL(__setup_cpu_power9)
 	mtlr	r11
 	blr
 
+_GLOBAL(__restore_cpu_power10)
 _GLOBAL(__restore_cpu_power9)
 	mflr	r11
 	bl	__init_FSCR
