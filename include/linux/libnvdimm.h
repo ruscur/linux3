@@ -286,4 +286,8 @@ static inline void arch_invalidate_pmem(void *addr, size_t size)
 }
 #endif
 
+#ifndef arch_pmem_flush_barrier
+#define arch_pmem_flush_barrier() wmb()
+#endif
+
 #endif /* __LIBNVDIMM_H__ */
