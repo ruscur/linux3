@@ -9,6 +9,30 @@
 
 #include <asm/cacheflush.h>
 
+static inline void __clean_pmem_range(unsigned long start, unsigned long stop)
+{
+	unsigned long shift = l1_dcache_shift();
+	unsigned long bytes = l1_dcache_bytes();
+	void *addr = (void *)(start & ~(bytes - 1));
+	unsigned long size = stop - (unsigned long)addr + (bytes - 1);
+	unsigned long i;
+
+	for (i = 0; i < size >> shift; i++, addr += bytes)
+		dcbf(addr);
+}
+
+static inline void __flush_pmem_range(unsigned long start, unsigned long stop)
+{
+	unsigned long shift = l1_dcache_shift();
+	unsigned long bytes = l1_dcache_bytes();
+	void *addr = (void *)(start & ~(bytes - 1));
+	unsigned long size = stop - (unsigned long)addr + (bytes - 1);
+	unsigned long i;
+
+	for (i = 0; i < size >> shift; i++, addr += bytes)
+		dcbf(addr);
+}
+
 static inline void clean_pmem_range_isa310(unsigned long start, unsigned long stop)
 {
 	unsigned long shift = l1_dcache_shift();
@@ -19,9 +43,6 @@ static inline void clean_pmem_range_isa310(unsigned long start, unsigned long st
 
 	for (i = 0; i < size >> shift; i++, addr += bytes)
 		asm volatile(PPC_DCBSTPS(%0, %1): :"i"(0), "r"(addr): "memory");
-
-
-	asm volatile(PPC_PHWSYNC ::: "memory");
 }
 
 static inline void flush_pmem_range_isa310(unsigned long start, unsigned long stop)
@@ -34,23 +55,20 @@ static inline void flush_pmem_range_isa310(unsigned long start, unsigned long st
 
 	for (i = 0; i < size >> shift; i++, addr += bytes)
 		asm volatile(PPC_DCBFPS(%0, %1): :"i"(0), "r"(addr): "memory");
-
-
-	asm volatile(PPC_PHWSYNC ::: "memory");
 }
 
 static inline void clean_pmem_range(unsigned long start, unsigned long stop)
 {
 	if (cpu_has_feature(CPU_FTR_ARCH_31))
 		return clean_pmem_range_isa310(start, stop);
-	return flush_dcache_range(start, stop);
+	return __clean_pmem_range(start, stop);
 }
 
 static inline void flush_pmem_range(unsigned long start, unsigned long stop)
 {
 	if (cpu_has_feature(CPU_FTR_ARCH_31))
 		return flush_pmem_range_isa310(start, stop);
-	return flush_dcache_range(start, stop);
+	return __flush_pmem_range(start, stop);
 }
 
 /*
