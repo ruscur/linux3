@@ -119,6 +119,16 @@ static inline void invalidate_dcache_range(unsigned long start,
 #define copy_from_user_page(vma, page, vaddr, dst, src, len) \
 	memcpy(dst, src, len)
 
+
+#define arch_pmem_flush_barrier arch_pmem_flush_barrier
+static inline void  arch_pmem_flush_barrier(void)
+{
+	if (cpu_has_feature(CPU_FTR_ARCH_31))
+		asm volatile(PPC_PHWSYNC ::: "memory");
+	else
+		asm volatile("hwsync" ::: "memory");
+}
+
 #endif /* __KERNEL__ */
 
 #endif /* _ASM_POWERPC_CACHEFLUSH_H */
