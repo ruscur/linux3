@@ -16,6 +16,7 @@
 #include <linux/delay.h>
 #include <linux/irq.h>
 #include <linux/types.h>
+#include <linux/hardirq.h>
 
 #include <asm/processor.h>
 #include <asm/machdep.h>
@@ -310,6 +311,13 @@ void default_machine_crash_shutdown(struct pt_regs *regs)
 {
 	unsigned int i;
 	int (*old_handler)(struct pt_regs *regs);
+
+	/*
+	 * Avoid hardlocking with irresponsive CPU holding logbuf_lock,
+	 * by using printk nmi_context
+	 */
+	if (!in_nmi())
+		nmi_enter();
 
 	/*
 	 * This function is only called after the system
