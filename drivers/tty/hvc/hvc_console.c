@@ -350,6 +350,9 @@ static int hvc_open(struct tty_struct *tty, struct file * filp)
 	unsigned long flags;
 	int rc = 0;
 
+	if (!hp)
+		return -ENODEV;
+
 	spin_lock_irqsave(&hp->port.lock, flags);
 	/* Check and then increment for fast path open. */
 	if (hp->port.count++ > 0) {
