@@ -170,6 +170,7 @@ static int __init feat_try_enable_unknown(struct dt_cpu_feature *f)
 		u64 fscr = mfspr(SPRN_FSCR);
 		fscr |= 1UL << f->fscr_bit_nr;
 		mtspr(SPRN_FSCR, fscr);
+		current->thread.fscr |= 1UL << f->fscr_bit_nr;
 	} else {
 		/* Does not have a known recipe */
 		return 0;
@@ -205,6 +206,7 @@ static int __init feat_enable(struct dt_cpu_feature *f)
 			u64 fscr = mfspr(SPRN_FSCR);
 			fscr |= 1UL << f->fscr_bit_nr;
 			mtspr(SPRN_FSCR, fscr);
+			current->thread.fscr |= 1UL << f->fscr_bit_nr;
 		}
 	}
 
