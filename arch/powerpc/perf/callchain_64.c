@@ -32,7 +32,7 @@ int read_user_stack_slow(void __user *ptr, void *buf, int nb)
 	int nrpages;
 	void *kaddr;
 
-	nrpages = __get_user_pages_fast(addr, 1, 1, &page);
+	nrpages = get_user_pages_fast_only(addr, 1, FOLL_WRITE, &page);
 	if (nrpages == 1) {
 		kaddr = page_address(page);
 
