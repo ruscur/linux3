@@ -1262,12 +1262,9 @@ static void show_instructions(struct pt_regs *regs)
 	/* If executing with the IMMU off, adjust pc rather
 	 * than print XXXXXXXX.
 	 */
-	if (!(regs->msr & MSR_IR)) {
-		pc = (unsigned long)phys_to_virt(pc);
-		nip = (unsigned long)phys_to_virt(regs->nip);
-	}
+	pc = fixup_real_addr(regs, pc);
+	nip = fixup_real_addr(regs, nip);
 #endif
-
 	for (i = 0; i < NR_INSN_TO_PRINT; i++) {
 		int instr;
 
