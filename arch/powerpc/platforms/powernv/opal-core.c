@@ -192,10 +192,10 @@ static ssize_t read_opalcore(struct file *file, struct kobject *kobj,
 			break;
 
 		if (tpos < m->offset + m->size) {
-			void *addr;
+			phys_addr_t addr;
 
 			tsz = min_t(size_t, m->offset + m->size - tpos, count);
-			addr = (void *)(m->paddr + tpos - m->offset);
+			addr = m->paddr + tpos - m->offset;
 			memcpy(to, __va(addr), tsz);
 			to += tsz;
 			tpos += tsz;

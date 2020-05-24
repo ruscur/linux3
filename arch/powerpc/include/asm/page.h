@@ -9,6 +9,7 @@
 #ifndef __ASSEMBLY__
 #include <linux/types.h>
 #include <linux/kernel.h>
+#include <linux/mmdebug.h>
 #else
 #include <asm/types.h>
 #endif
@@ -208,30 +209,41 @@ static inline bool pfn_valid(unsigned long pfn)
  * the other definitions for __va & __pa.
  */
 #if defined(CONFIG_PPC32) && defined(CONFIG_BOOKE)
-#define __va(x) ((void *)(unsigned long)((phys_addr_t)(x) + VIRT_PHYS_OFFSET))
+#define ___va(x) ((void *)(unsigned long)((phys_addr_t)(x) + VIRT_PHYS_OFFSET))
 #define __pa(x) ((phys_addr_t)(unsigned long)(x) - VIRT_PHYS_OFFSET)
+#define __va(x) ___va(x)
 #else
 #ifdef CONFIG_PPC64
+
+#ifndef __ASSEMBLY__
 /*
  * gcc miscompiles (unsigned long)(&static_var) - PAGE_OFFSET
  * with -mcmodel=medium, so we use & and | instead of - and + on 64-bit.
  * This also results in better code generation.
  */
-#define __va(x)								\
-({									\
-	VIRTUAL_BUG_ON((unsigned long)(x) >= PAGE_OFFSET);		\
-	(void *)(unsigned long)((phys_addr_t)(x) | PAGE_OFFSET);	\
-})
+static inline void *___va(phys_addr_t addr)
+{
+	return (void *)(addr | PAGE_OFFSET);
+}
 
-#define __pa(x)								\
-({									\
-	VIRTUAL_BUG_ON((unsigned long)(x) < PAGE_OFFSET);		\
-	(unsigned long)(x) & 0x0fffffffffffffffUL;			\
-})
+static inline void *__va(phys_addr_t addr)
+{
+	VIRTUAL_BUG_ON((unsigned long)(addr) >= PAGE_OFFSET);
+	return ___va(addr);
+}
+
+static inline phys_addr_t ___pa(void *addr)
+{
+	VIRTUAL_BUG_ON((unsigned long)(addr) < PAGE_OFFSET);
+	return (phys_addr_t)((unsigned long)addr & 0x0fffffffffffffffUL);
+}
+#define __pa(x) ___pa((void *)(x))
+#endif /*  __ASSEMBLY__ */
 
 #else /* 32-bit, non book E */
-#define __va(x) ((void *)(unsigned long)((phys_addr_t)(x) + PAGE_OFFSET - MEMORY_START))
+#define ___va(x) ((void *)(unsigned long)((phys_addr_t)(x) + PAGE_OFFSET - MEMORY_START))
 #define __pa(x) ((unsigned long)(x) - PAGE_OFFSET + MEMORY_START)
+#define __va(x) ___va(x)
 #endif
 #endif
 
