@@ -81,6 +81,7 @@ _GLOBAL(exec_instr)
 
 	/* Placeholder for the test instruction */
 1:	nop
+	nop
 	patch_site 1b patch__exec_instr
 
 	/*
