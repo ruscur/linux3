@@ -100,6 +100,15 @@ static inline int ppc_inst_len(struct ppc_inst x)
 	return ppc_inst_prefixed(x) ? 8 : 4;
 }
 
+static inline u64 ppc_inst_as_u64(struct ppc_inst x)
+{
+#ifdef CONFIG_CPU_LITTLE_ENDIAN
+	return (u64)ppc_inst_suffix(x) << 32 | ppc_inst_val(x);
+#else
+	return (u64)ppc_inst_val(x) << 32 | ppc_inst_suffix(x);
+#endif
+}
+
 int probe_user_read_inst(struct ppc_inst *inst,
 			 struct ppc_inst __user *nip);
 
