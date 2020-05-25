@@ -371,9 +371,13 @@
 #define PPC_INST_LBZCIX			0x7c0006aa
 #define PPC_INST_STBCIX			0x7c0007aa
 #define PPC_INST_LWZX			0x7c00002e
+#define PPC_INST_LFS			0xc0000000
 #define PPC_INST_LFSX			0x7c00042e
+#define PPC_INST_STFS			0xd0000000
 #define PPC_INST_STFSX			0x7c00052e
+#define PPC_INST_LFD			0xc8000000
 #define PPC_INST_LFDX			0x7c0004ae
+#define PPC_INST_STFD			0xd8000000
 #define PPC_INST_STFDX			0x7c0005ae
 #define PPC_INST_LVX			0x7c0000ce
 #define PPC_INST_STVX			0x7c0001ce
