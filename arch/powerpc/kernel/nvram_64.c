@@ -892,7 +892,7 @@ loff_t __init nvram_create_partition(const char *name, int sig,
 	/* Create our OS partition */
 	new_part = kzalloc(sizeof(*new_part), GFP_KERNEL);
 	if (!new_part) {
-		pr_err("%s: kmalloc failed\n", __func__);
+		pr_err("%s: kzalloc failed\n", __func__);
 		return -ENOMEM;
 	}
 
