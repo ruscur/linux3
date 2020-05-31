@@ -99,14 +99,56 @@ static unsigned long *kvmppc_uvmem_bitmap;
 static DEFINE_SPINLOCK(kvmppc_uvmem_bitmap_lock);
 
 #define KVMPPC_UVMEM_PFN	(1UL << 63)
+#define KVMPPC_UVMEM_SHARED	(1UL << 62)
+#define KVMPPC_UVMEM_FLAG_MASK	(KVMPPC_UVMEM_PFN | KVMPPC_UVMEM_SHARED)
+#define KVMPPC_UVMEM_PFN_MASK	(~KVMPPC_UVMEM_FLAG_MASK)
 
 struct kvmppc_uvmem_slot {
 	struct list_head list;
 	unsigned long nr_pfns;
 	unsigned long base_pfn;
+	/*
+	 * pfns array has an entry for each GFN of the memory slot.
+	 *
+	 * The GFN can be in one of the following states.
+	 *
+	 * (a) Secure - The GFN is secure. Only Ultravisor can access it.
+	 * (b) Shared - The GFN is shared. Both Hypervisor and Ultravisor
+	 *		can access it.
+	 * (c) Normal - The GFN is a normal.  Only Hypervisor can access it.
+	 *
+	 * Secure GFN is associated with a devicePFN. Its pfn[] has
+	 * KVMPPC_UVMEM_PFN flag set, and has the value of the device PFN
+	 * KVMPPC_UVMEM_SHARED flag unset, and has the value of the device PFN
+	 *
+	 * Shared GFN is associated with a memoryPFN. Its pfn[] has
+	 * KVMPPC_UVMEM_SHARED flag set. But its KVMPPC_UVMEM_PFN is not set,
+	 * and there is no PFN value stored.
+	 *
+	 * Normal GFN is not associated with memoryPFN. Its pfn[] has
+	 * KVMPPC_UVMEM_SHARED and KVMPPC_UVMEM_PFN flag unset, and no PFN
+	 * value is stored.
+	 *
+	 * Any other combination of values in pfn[] leads to undefined
+	 * behavior.
+	 *
+	 * Life cycle of a GFN --
+	 *
+	 * ---------------------------------------------------------
+	 * |        |     Share	 |  Unshare | SVM	|slot      |
+	 * |	    |		 |	    | abort/	|flush	   |
+	 * |	    |		 |	    | terminate	|	   |
+	 * ---------------------------------------------------------
+	 * |        |            |          |           |          |
+	 * | Secure |     Shared | Secure   |Normal	|Secure    |
+	 * |        |            |          |           |          |
+	 * | Shared |     Shared | Secure   |Normal     |Shared    |
+	 * |        |            |          |           |          |
+	 * | Normal |     Shared | Secure   |Normal     |Normal    |
+	 * ---------------------------------------------------------
+	 */
 	unsigned long *pfns;
 };
-
 struct kvmppc_uvmem_page_pvt {
 	struct kvm *kvm;
 	unsigned long gpa;
@@ -184,7 +226,12 @@ static void kvmppc_uvmem_pfn_remove(unsigned long gfn, struct kvm *kvm)
 
 	list_for_each_entry(p, &kvm->arch.uvmem_pfns, list) {
 		if (gfn >= p->base_pfn && gfn < p->base_pfn + p->nr_pfns) {
-			p->pfns[gfn - p->base_pfn] = 0;
+			/*
+			 * Reset everything, but keep the KVMPPC_UVMEM_SHARED
+			 * flag intact.  A gfn continues to be shared or
+			 * unshared, with or without an associated device pfn.
+			 */
+			p->pfns[gfn - p->base_pfn] &= KVMPPC_UVMEM_SHARED;
 			return;
 		}
 	}
@@ -202,10 +249,42 @@ static bool kvmppc_gfn_is_uvmem_pfn(unsigned long gfn, struct kvm *kvm,
 			if (p->pfns[index] & KVMPPC_UVMEM_PFN) {
 				if (uvmem_pfn)
 					*uvmem_pfn = p->pfns[index] &
-						     ~KVMPPC_UVMEM_PFN;
+						     KVMPPC_UVMEM_PFN_MASK;
 				return true;
 			} else
 				return false;
+		}
+	}
+	return false;
+}
+
+static void kvmppc_gfn_uvmem_shared(unsigned long gfn, struct kvm *kvm,
+		bool set)
+{
+	struct kvmppc_uvmem_slot *p;
+
+	list_for_each_entry(p, &kvm->arch.uvmem_pfns, list) {
+		if (gfn >= p->base_pfn && gfn < p->base_pfn + p->nr_pfns) {
+			unsigned long index = gfn - p->base_pfn;
+
+			if (set)
+				p->pfns[index] |= KVMPPC_UVMEM_SHARED;
+			else
+				p->pfns[index] &= ~KVMPPC_UVMEM_SHARED;
+			return;
+		}
+	}
+}
+
+bool kvmppc_gfn_is_uvmem_shared(unsigned long gfn, struct kvm *kvm)
+{
+	struct kvmppc_uvmem_slot *p;
+
+	list_for_each_entry(p, &kvm->arch.uvmem_pfns, list) {
+		if (gfn >= p->base_pfn && gfn < p->base_pfn + p->nr_pfns) {
+			unsigned long index = gfn - p->base_pfn;
+
+			return (p->pfns[index] & KVMPPC_UVMEM_SHARED);
 		}
 	}
 	return false;
@@ -270,9 +349,13 @@ unsigned long kvmppc_h_svm_init_done(struct kvm *kvm)
  * is HV side fault on these pages. Next we *get* these pages, forcing
  * fault on them, do fault time migration to replace the device PTEs in
  * QEMU page table with normal PTEs from newly allocated pages.
+ *
+ * if @purge_gfn is set, cleanup any information related to each of
+ * the GFNs associated with this memory slot.
  */
 void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
-			     struct kvm *kvm, bool skip_page_out)
+			     struct kvm *kvm, bool skip_page_out,
+			     bool purge_gfn)
 {
 	int i;
 	struct kvmppc_uvmem_page_pvt *pvt;
@@ -283,11 +366,22 @@ void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
 		struct page *uvmem_page;
 
 		mutex_lock(&kvm->arch.uvmem_lock);
+
+		if (purge_gfn) {
+			/*
+			 * cleanup the shared status of the GFN here.
+			 * Any device PFN associated with the GFN shall
+			 * be cleaned up later, in kvmppc_uvmem_page_free()
+			 * when the device PFN is actually disassociated
+			 * from the GFN.
+			 */
+			kvmppc_gfn_uvmem_shared(gfn, kvm, false);
+		}
+
 		if (!kvmppc_gfn_is_uvmem_pfn(gfn, kvm, &uvmem_pfn)) {
 			mutex_unlock(&kvm->arch.uvmem_lock);
 			continue;
 		}
-
 		uvmem_page = pfn_to_page(uvmem_pfn);
 		pvt = uvmem_page->zone_device_data;
 		pvt->skip_page_out = skip_page_out;
@@ -318,7 +412,7 @@ unsigned long kvmppc_h_svm_init_abort(struct kvm *kvm)
 	srcu_idx = srcu_read_lock(&kvm->srcu);
 
 	kvm_for_each_memslot(memslot, kvm_memslots(kvm))
-		kvmppc_uvmem_drop_pages(memslot, kvm, false);
+		kvmppc_uvmem_drop_pages(memslot, kvm, false, true);
 
 	srcu_read_unlock(&kvm->srcu, srcu_idx);
 
@@ -484,8 +578,11 @@ retry:
 		goto retry;
 	}
 
-	if (!uv_page_in(kvm->arch.lpid, pfn << page_shift, gpa, 0, page_shift))
+	if (!uv_page_in(kvm->arch.lpid, pfn << page_shift, gpa, 0,
+				page_shift)) {
+		kvmppc_gfn_uvmem_shared(gfn, kvm, true);
 		ret = H_SUCCESS;
+	}
 	kvm_release_pfn_clean(pfn);
 	mutex_unlock(&kvm->arch.uvmem_lock);
 out:
@@ -541,8 +638,10 @@ unsigned long kvmppc_h_svm_page_in(struct kvm *kvm, unsigned long gpa,
 		goto out_unlock;
 
 	if (!kvmppc_svm_page_in(vma, start, end, gpa, kvm, page_shift,
-				&downgrade))
+				&downgrade)) {
+		kvmppc_gfn_uvmem_shared(gfn, kvm, false);
 		ret = H_SUCCESS;
+	}
 out_unlock:
 	mutex_unlock(&kvm->arch.uvmem_lock);
 out:
