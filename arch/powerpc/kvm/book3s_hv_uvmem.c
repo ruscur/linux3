@@ -391,8 +391,7 @@ out_finalize:
 	return ret;
 }
 
-static int uv_migrate_mem_slot(struct kvm *kvm,
-		const struct kvm_memory_slot *memslot)
+int uv_migrate_mem_slot(struct kvm *kvm, const struct kvm_memory_slot *memslot)
 {
 	unsigned long gfn = memslot->base_gfn;
 	unsigned long end;
