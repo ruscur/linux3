@@ -332,14 +332,149 @@ out:
 	return ret;
 }
 
+static struct page *kvmppc_uvmem_get_page(unsigned long gpa, struct kvm *kvm);
+
+/*
+ * Alloc a PFN from private device memory pool. If @pagein is true,
+ * copy page from normal memory to secure memory using UV_PAGE_IN uvcall.
+ */
+static int kvmppc_svm_migrate_page(struct vm_area_struct *vma,
+		unsigned long start,
+		unsigned long end, unsigned long gpa, struct kvm *kvm,
+		unsigned long page_shift,
+		bool pagein)
+{
+	unsigned long src_pfn, dst_pfn = 0;
+	struct migrate_vma mig;
+	struct page *dpage;
+	struct page *spage;
+	unsigned long pfn;
+	int ret = 0;
+
+	memset(&mig, 0, sizeof(mig));
+	mig.vma = vma;
+	mig.start = start;
+	mig.end = end;
+	mig.src = &src_pfn;
+	mig.dst = &dst_pfn;
+
+	ret = migrate_vma_setup(&mig);
+	if (ret)
+		return ret;
+
+	if (!(*mig.src & MIGRATE_PFN_MIGRATE)) {
+		ret = -1;
+		goto out_finalize;
+	}
+
+	dpage = kvmppc_uvmem_get_page(gpa, kvm);
+	if (!dpage) {
+		ret = -1;
+		goto out_finalize;
+	}
+
+	if (pagein) {
+		pfn = *mig.src >> MIGRATE_PFN_SHIFT;
+		spage = migrate_pfn_to_page(*mig.src);
+		if (spage) {
+			ret = uv_page_in(kvm->arch.lpid, pfn << page_shift,
+					gpa, 0, page_shift);
+			if (ret)
+				goto out_finalize;
+		}
+	}
+
+	*mig.dst = migrate_pfn(page_to_pfn(dpage)) | MIGRATE_PFN_LOCKED;
+	migrate_vma_pages(&mig);
+out_finalize:
+	migrate_vma_finalize(&mig);
+	return ret;
+}
+
+static int uv_migrate_mem_slot(struct kvm *kvm,
+		const struct kvm_memory_slot *memslot)
+{
+	unsigned long gfn = memslot->base_gfn;
+	unsigned long end;
+	bool downgrade = false;
+	struct vm_area_struct *vma;
+	int i, ret = 0;
+	unsigned long start = gfn_to_hva(kvm, gfn);
+
+	if (kvm_is_error_hva(start))
+		return H_STATE;
+
+	end = start + (memslot->npages << PAGE_SHIFT);
+
+	down_write(&kvm->mm->mmap_sem);
+
+	mutex_lock(&kvm->arch.uvmem_lock);
+	vma = find_vma_intersection(kvm->mm, start, end);
+	if (!vma || vma->vm_start > start || vma->vm_end < end) {
+		ret = H_STATE;
+		goto out_unlock;
+	}
+
+	ret = ksm_madvise(vma, vma->vm_start, vma->vm_end,
+			  MADV_UNMERGEABLE, &vma->vm_flags);
+	downgrade_write(&kvm->mm->mmap_sem);
+	downgrade = true;
+	if (ret) {
+		ret = H_STATE;
+		goto out_unlock;
+	}
+
+	for (i = 0; i < memslot->npages; i++, ++gfn) {
+		/* skip paged-in pages and shared pages */
+		if (kvmppc_gfn_is_uvmem_pfn(gfn, kvm, NULL) ||
+			kvmppc_gfn_is_uvmem_shared(gfn, kvm))
+			continue;
+
+		start = gfn_to_hva(kvm, gfn);
+		end = start + (1UL << PAGE_SHIFT);
+		ret = kvmppc_svm_migrate_page(vma, start, end,
+			(gfn << PAGE_SHIFT), kvm, PAGE_SHIFT, false);
+
+		if (ret)
+			goto out_unlock;
+	}
+
+out_unlock:
+	mutex_unlock(&kvm->arch.uvmem_lock);
+	if (downgrade)
+		up_read(&kvm->mm->mmap_sem);
+	else
+		up_write(&kvm->mm->mmap_sem);
+	return ret;
+}
+
 unsigned long kvmppc_h_svm_init_done(struct kvm *kvm)
 {
+	struct kvm_memslots *slots;
+	struct kvm_memory_slot *memslot;
+	int srcu_idx;
+	long ret = H_SUCCESS;
+
 	if (!(kvm->arch.secure_guest & KVMPPC_SECURE_INIT_START))
 		return H_UNSUPPORTED;
 
+	/* migrate any unmoved normal pfn to device pfns*/
+	srcu_idx = srcu_read_lock(&kvm->srcu);
+	slots = kvm_memslots(kvm);
+	kvm_for_each_memslot(memslot, slots) {
+		ret = uv_migrate_mem_slot(kvm, memslot);
+		if (ret) {
+			ret = H_STATE;
+			goto out;
+		}
+	}
+
 	kvm->arch.secure_guest |= KVMPPC_SECURE_INIT_DONE;
 	pr_info("LPID %d went secure\n", kvm->arch.lpid);
-	return H_SUCCESS;
+
+out:
+	srcu_read_unlock(&kvm->srcu, srcu_idx);
+	return ret;
 }
 
 /*
@@ -473,68 +608,6 @@ out:
 }
 
 /*
- * Alloc a PFN from private device memory pool and copy page from normal
- * memory to secure memory using UV_PAGE_IN uvcall.
- */
-static int kvmppc_svm_page_in(struct vm_area_struct *vma, unsigned long start,
-		   unsigned long end, unsigned long gpa, struct kvm *kvm,
-		   unsigned long page_shift, bool *downgrade)
-{
-	unsigned long src_pfn, dst_pfn = 0;
-	struct migrate_vma mig;
-	struct page *spage;
-	unsigned long pfn;
-	struct page *dpage;
-	int ret = 0;
-
-	memset(&mig, 0, sizeof(mig));
-	mig.vma = vma;
-	mig.start = start;
-	mig.end = end;
-	mig.src = &src_pfn;
-	mig.dst = &dst_pfn;
-
-	/*
-	 * We come here with mmap_sem write lock held just for
-	 * ksm_madvise(), otherwise we only need read mmap_sem.
-	 * Hence downgrade to read lock once ksm_madvise() is done.
-	 */
-	ret = ksm_madvise(vma, vma->vm_start, vma->vm_end,
-			  MADV_UNMERGEABLE, &vma->vm_flags);
-	downgrade_write(&kvm->mm->mmap_sem);
-	*downgrade = true;
-	if (ret)
-		return ret;
-
-	ret = migrate_vma_setup(&mig);
-	if (ret)
-		return ret;
-
-	if (!(*mig.src & MIGRATE_PFN_MIGRATE)) {
-		ret = -1;
-		goto out_finalize;
-	}
-
-	dpage = kvmppc_uvmem_get_page(gpa, kvm);
-	if (!dpage) {
-		ret = -1;
-		goto out_finalize;
-	}
-
-	pfn = *mig.src >> MIGRATE_PFN_SHIFT;
-	spage = migrate_pfn_to_page(*mig.src);
-	if (spage)
-		uv_page_in(kvm->arch.lpid, pfn << page_shift, gpa, 0,
-			   page_shift);
-
-	*mig.dst = migrate_pfn(page_to_pfn(dpage)) | MIGRATE_PFN_LOCKED;
-	migrate_vma_pages(&mig);
-out_finalize:
-	migrate_vma_finalize(&mig);
-	return ret;
-}
-
-/*
  * Shares the page with HV, thus making it a normal page.
  *
  * - If the page is already secure, then provision a new page and share
@@ -637,11 +710,23 @@ unsigned long kvmppc_h_svm_page_in(struct kvm *kvm, unsigned long gpa,
 	if (!vma || vma->vm_start > start || vma->vm_end < end)
 		goto out_unlock;
 
-	if (!kvmppc_svm_page_in(vma, start, end, gpa, kvm, page_shift,
-				&downgrade)) {
-		kvmppc_gfn_uvmem_shared(gfn, kvm, false);
-		ret = H_SUCCESS;
+	ret = ksm_madvise(vma, vma->vm_start, vma->vm_end,
+			  MADV_UNMERGEABLE, &vma->vm_flags);
+	downgrade_write(&kvm->mm->mmap_sem);
+	downgrade = true;
+	if (ret) {
+		ret = H_PARAMETER;
+		goto out_unlock;
 	}
+
+	ret = H_PARAMETER;
+	if (kvmppc_svm_migrate_page(vma, start, end, gpa, kvm, page_shift,
+				true))
+		goto out_unlock;
+
+	kvmppc_gfn_uvmem_shared(gfn, kvm, false);
+	ret = H_SUCCESS;
+
 out_unlock:
 	mutex_unlock(&kvm->arch.uvmem_lock);
 out:
