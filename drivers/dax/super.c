@@ -260,10 +260,11 @@ static ssize_t write_cache_store(struct device *dev,
 }
 static DEVICE_ATTR_RW(write_cache);
 
-static bool dax_synchronous_enabled(struct dax_device *dax_dev)
+bool __dax_synchronous_enabled(struct dax_device *dax_dev)
 {
 	return test_bit(DAXDEV_SYNC_ENABLED, &dax_dev->flags);
 }
+EXPORT_SYMBOL_GPL(__dax_synchronous_enabled);
 
 static void set_dax_synchronous_enable(struct dax_device *dax_dev, bool enable)
 {
@@ -280,6 +281,7 @@ static void set_dax_synchronous_enable(struct dax_device *dax_dev, bool enable)
 static ssize_t sync_fault_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
+	int enabled;
 	struct dax_device *dax_dev = dax_get_by_host(dev_name(dev));
 	ssize_t rc;
 
@@ -287,7 +289,8 @@ static ssize_t sync_fault_show(struct device *dev,
 	if (!dax_dev)
 		return -ENXIO;
 
-	rc = sprintf(buf, "%d\n", !!__dax_synchronous(dax_dev));
+	enabled = (dax_synchronous(dax_dev) && dax_synchronous_enabled(dax_dev));
+	rc = sprintf(buf, "%d\n", enabled);
 	put_dax(dax_dev);
 	return rc;
 }
@@ -461,17 +464,13 @@ EXPORT_SYMBOL_GPL(dax_write_cache_enabled);
 
 bool __dax_synchronous(struct dax_device *dax_dev)
 {
-	return test_bit(DAXDEV_SYNC, &dax_dev->flags) &&
-		test_bit(DAXDEV_SYNC_ENABLED, &dax_dev->flags);
+	return test_bit(DAXDEV_SYNC, &dax_dev->flags);
 }
 EXPORT_SYMBOL_GPL(__dax_synchronous);
 
 void __set_dax_synchronous(struct dax_device *dax_dev)
 {
 	set_bit(DAXDEV_SYNC, &dax_dev->flags);
-#ifndef CONFIG_ARCH_MAP_SYNC_DISABLE
-	set_bit(DAXDEV_SYNC_ENABLED, &dax_dev->flags);
-#endif
 }
 EXPORT_SYMBOL_GPL(__set_dax_synchronous);
 
@@ -664,6 +663,9 @@ struct dax_device *alloc_dax(void *private, const char *__host,
 	dax_dev->private = private;
 	if (flags & DAXDEV_F_SYNC)
 		set_dax_synchronous(dax_dev);
+
+	if (flags & DAXDEV_F_SYNC_ENABLED)
+		set_dax_synchronous_enable(dax_dev, true);
 
 	return dax_dev;
 

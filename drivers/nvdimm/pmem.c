@@ -485,6 +485,10 @@ static int pmem_attach_disk(struct device *dev,
 
 	if (is_nvdimm_sync(nd_region))
 		flags = DAXDEV_F_SYNC;
+
+	if (is_nvdimm_sync_enabled(nd_region))
+		flags |= DAXDEV_F_SYNC_ENABLED;
+
 	dax_dev = alloc_dax(pmem, disk->disk_name, &pmem_dax_ops, flags);
 	if (IS_ERR(dax_dev)) {
 		put_disk(disk);
