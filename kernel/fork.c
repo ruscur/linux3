@@ -963,6 +963,12 @@ __cacheline_aligned_in_smp DEFINE_SPINLOCK(mmlist_lock);
 
 static unsigned long default_dump_filter = MMF_DUMP_FILTER_DEFAULT;
 
+#ifndef CONFIG_ARCH_MAP_SYNC_DISABLE
+unsigned long default_map_sync_mask = MMF_ENABLE_MAP_SYNC_MASK;
+#else
+unsigned long default_map_sync_mask = 0;
+#endif
+
 static int __init coredump_filter_setup(char *s)
 {
 	default_dump_filter =
@@ -1039,7 +1045,7 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 		mm->flags = current->mm->flags & MMF_INIT_MASK;
 		mm->def_flags = current->mm->def_flags & VM_INIT_DEF_MASK;
 	} else {
-		mm->flags = default_dump_filter;
+		mm->flags = default_dump_filter | default_map_sync_mask;
 		mm->def_flags = 0;
 	}
 

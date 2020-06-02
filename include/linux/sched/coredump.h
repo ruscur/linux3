@@ -72,9 +72,16 @@ static inline int get_dumpable(struct mm_struct *mm)
 #define MMF_DISABLE_THP		24	/* disable THP for all VMAs */
 #define MMF_OOM_VICTIM		25	/* mm is the oom victim */
 #define MMF_OOM_REAP_QUEUED	26	/* mm was queued for oom_reaper */
-#define MMF_DISABLE_THP_MASK	(1 << MMF_DISABLE_THP)
+#define MMF_ENABLE_MAP_SYNC	27	/* disable THP for all VMAs */
+#define MMF_DISABLE_THP_MASK		(1 << MMF_DISABLE_THP)
+#define MMF_ENABLE_MAP_SYNC_MASK	(1 << MMF_ENABLE_MAP_SYNC)
 
-#define MMF_INIT_MASK		(MMF_DUMPABLE_MASK | MMF_DUMP_FILTER_MASK |\
-				 MMF_DISABLE_THP_MASK)
+#define MMF_INIT_MASK		(MMF_DUMPABLE_MASK | MMF_DUMP_FILTER_MASK | \
+			MMF_DISABLE_THP_MASK | MMF_ENABLE_MAP_SYNC_MASK)
+
+static inline bool map_sync_enabled(struct mm_struct *mm)
+{
+	return !!(mm->flags & MMF_ENABLE_MAP_SYNC_MASK);
+}
 
 #endif /* _LINUX_SCHED_COREDUMP_H */

@@ -2450,6 +2450,24 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			clear_bit(MMF_DISABLE_THP, &me->mm->flags);
 		up_write(&me->mm->mmap_sem);
 		break;
+
+	case PR_GET_MAP_SYNC_ENABLE:
+		if (arg2 || arg3 || arg4 || arg5)
+			return -EINVAL;
+		error = !!test_bit(MMF_ENABLE_MAP_SYNC, &me->mm->flags);
+		break;
+	case PR_SET_MAP_SYNC_ENABLE:
+		if (arg3 || arg4 || arg5)
+			return -EINVAL;
+		if (down_write_killable(&me->mm->mmap_sem))
+			return -EINTR;
+		if (arg2)
+			set_bit(MMF_ENABLE_MAP_SYNC, &me->mm->flags);
+		else
+			clear_bit(MMF_ENABLE_MAP_SYNC, &me->mm->flags);
+		up_write(&me->mm->mmap_sem);
+		break;
+
 	case PR_MPX_ENABLE_MANAGEMENT:
 	case PR_MPX_DISABLE_MANAGEMENT:
 		/* No longer implemented: */

@@ -80,9 +80,10 @@ static inline bool daxdev_mapping_supported(struct vm_area_struct *vma,
 	if (!IS_DAX(file_inode(vma->vm_file)))
 		return false;
 	/*
-	 * check MAP_SYNC is disabled by platform for this device.
+	 * MAP_SYNC is disabled by platform for this device.
+	 * check for prctl.
 	 */
-	if (!dax_synchronous_enabled(dax_dev))
+	if (!dax_synchronous_enabled(dax_dev) && !map_sync_enabled(vma->vm_mm))
 		return false;
 
 	return dax_synchronous(dax_dev);
