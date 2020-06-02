@@ -59,12 +59,19 @@ static int of_pmem_region_probe(struct platform_device *pdev)
 		ndr_desc.res = &pdev->resource[i];
 		ndr_desc.of_node = np;
 		set_bit(ND_REGION_PAGEMAP, &ndr_desc.flags);
+		set_bit(ND_REGION_SYNC_ENABLED, &ndr_desc.flags);
 
 		if (is_volatile)
 			region = nvdimm_volatile_region_create(bus, &ndr_desc);
 		else {
 			set_bit(ND_REGION_PERSIST_MEMCTRL, &ndr_desc.flags);
+			/*
+			 * for a persistent region, check for newer device
+			 */
+			if (of_device_is_compatible(np, "pmem-region-v2"))
+				clear_bit(ND_REGION_SYNC_ENABLED, &ndr_desc.flags);
 			region = nvdimm_pmem_region_create(bus, &ndr_desc);
+
 		}
 
 		if (!region)

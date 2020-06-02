@@ -30,6 +30,7 @@ struct papr_scm_priv {
 	uint64_t block_size;
 	int metadata_size;
 	bool is_volatile;
+	bool disable_map_sync;
 
 	uint64_t bound_addr;
 
@@ -340,11 +341,18 @@ static int papr_scm_nvdimm_init(struct papr_scm_priv *p)
 	ndr_desc.mapping = &mapping;
 	ndr_desc.num_mappings = 1;
 	ndr_desc.nd_set = &p->nd_set;
+	set_bit(ND_REGION_SYNC_ENABLED, &ndr_desc.flags);
 
 	if (p->is_volatile)
 		p->region = nvdimm_volatile_region_create(p->bus, &ndr_desc);
 	else {
 		set_bit(ND_REGION_PERSIST_MEMCTRL, &ndr_desc.flags);
+		/*
+		 * for a persistent region, check if the platform needs to
+		 * force MAP_SYNC disable.
+		 */
+		if (p->disable_map_sync)
+			clear_bit(ND_REGION_SYNC_ENABLED, &ndr_desc.flags);
 		p->region = nvdimm_pmem_region_create(p->bus, &ndr_desc);
 	}
 	if (!p->region) {
@@ -365,13 +373,17 @@ err:	nvdimm_bus_unregister(p->bus);
 
 static int papr_scm_probe(struct platform_device *pdev)
 {
-	struct device_node *dn = pdev->dev.of_node;
+	struct device_node *dn;
 	u32 drc_index, metadata_size;
 	u64 blocks, block_size;
 	struct papr_scm_priv *p;
 	const char *uuid_str;
 	u64 uuid[2];
 	int rc;
+
+	dn = dev_of_node(&pdev->dev);
+	if (!dn)
+		return -ENXIO;
 
 	/* check we have all the required DT properties */
 	if (of_property_read_u32(dn, "ibm,my-drc-index", &drc_index)) {
@@ -401,6 +413,9 @@ static int papr_scm_probe(struct platform_device *pdev)
 
 	/* optional DT properties */
 	of_property_read_u32(dn, "ibm,metadata-size", &metadata_size);
+
+	if (of_device_is_compatible(dn, "ibm,pmemory-v2"))
+		p->disable_map_sync = true;
 
 	p->dn = dn;
 	p->drc_index = drc_index;
