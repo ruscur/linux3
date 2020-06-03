@@ -9,6 +9,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mman.h>
 #include <linux/uaccess.h>
+#include <linux/kthread.h>
 #include <asm/cacheflush.h>
 
 /* Whether or not to fill the target memory area with do_nothing(). */
@@ -212,6 +213,106 @@ void lkdtm_ACCESS_NULL(void)
 	pr_info("attempting bad write at %px\n", ptr);
 	*ptr = tmp;
 }
+
+#if defined(CONFIG_PPC) && defined(CONFIG_STRICT_KERNEL_RWX)
+#include <include/asm/code-patching.h>
+
+extern unsigned long read_cpu_patching_addr(unsigned int cpu);
+
+static struct ppc_inst * const patch_site = (struct ppc_inst *)&do_nothing;
+
+static int lkdtm_patching_cpu(void *data)
+{
+	int err = 0;
+	struct ppc_inst insn = ppc_inst(0xdeadbeef);
+
+	pr_info("starting patching_cpu=%d\n", smp_processor_id());
+	do {
+		err = patch_instruction(patch_site, insn);
+	} while (ppc_inst_equal(ppc_inst_read(READ_ONCE(patch_site)), insn) &&
+			!err && !kthread_should_stop());
+
+	if (err)
+		pr_warn("patch_instruction returned error: %d\n", err);
+
+	set_current_state(TASK_INTERRUPTIBLE);
+	while (!kthread_should_stop()) {
+		schedule();
+		set_current_state(TASK_INTERRUPTIBLE);
+	}
+
+	return err;
+}
+
+void lkdtm_HIJACK_PATCH(void)
+{
+	struct task_struct *patching_kthrd;
+	struct ppc_inst original_insn;
+	int patching_cpu, hijacker_cpu, attempts;
+	unsigned long addr;
+	bool hijacked;
+
+	if (num_online_cpus() < 2) {
+		pr_warn("need at least two cpus\n");
+		return;
+	}
+
+	original_insn = ppc_inst_read(READ_ONCE(patch_site));
+
+	hijacker_cpu = smp_processor_id();
+	patching_cpu = cpumask_any_but(cpu_online_mask, hijacker_cpu);
+
+	patching_kthrd = kthread_create_on_node(&lkdtm_patching_cpu, NULL,
+						cpu_to_node(patching_cpu),
+						"lkdtm_patching_cpu");
+	kthread_bind(patching_kthrd, patching_cpu);
+	wake_up_process(patching_kthrd);
+
+	addr = offset_in_page(patch_site) | read_cpu_patching_addr(patching_cpu);
+
+	pr_info("starting hijacker_cpu=%d\n", hijacker_cpu);
+	for (attempts = 0; attempts < 100000; ++attempts) {
+		/* Use __put_user to catch faults without an Oops */
+		hijacked = !__put_user(0xbad00bad, (unsigned int *)addr);
+
+		if (hijacked) {
+			if (kthread_stop(patching_kthrd))
+				goto out;
+			break;
+		}
+	}
+	pr_info("hijack attempts: %d\n", attempts);
+
+	if (hijacked) {
+		if (*(unsigned int *)READ_ONCE(patch_site) == 0xbad00bad)
+			pr_err("overwrote kernel text\n");
+		/*
+		 * There are window conditions where the hijacker cpu manages to
+		 * write to the patch site but the site gets overwritten again by
+		 * the patching cpu. We still consider that a "successful" hijack
+		 * since the hijacker cpu did not fault on the write.
+		 */
+		pr_err("FAIL: wrote to another cpu's patching area\n");
+	} else {
+		kthread_stop(patching_kthrd);
+	}
+
+out:
+	/* Restore the original insn for any future lkdtm tests */
+	patch_instruction(patch_site, original_insn);
+}
+
+#else
+
+void lkdtm_HIJACK_PATCH(void)
+{
+	if (!IS_ENABLED(CONFIG_PPC))
+		pr_err("XFAIL: this test is powerpc-only\n");
+	if (!IS_ENABLED(CONFIG_STRICT_KERNEL_RWX))
+		pr_err("XFAIL: this test requires CONFIG_STRICT_KERNEL_RWX\n");
+}
+
+#endif /* CONFIG_PPC && CONFIG_STRICT_KERNEL_RWX */
 
 void __init lkdtm_perms_init(void)
 {
