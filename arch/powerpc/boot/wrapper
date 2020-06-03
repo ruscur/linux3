@@ -525,9 +525,22 @@ coff)
     $objbin/hack-coff "$ofile"
     ;;
 cuboot*)
-    gzip -n -f -9 "$ofile"
-    ${MKIMAGE} -A ppc -O linux -T kernel -C gzip -a "$base" -e "$entry" \
-            $uboot_version -d "$ofile".gz "$ofile"
+    case $compression in
+    .xz)
+        xz --check=crc32 -f -6 "$ofile"
+        ;;
+    .gz)
+        gzip -n -f -9 "$ofile"
+        ;;
+    .lzma)
+        xz --format=lzma -f -6 "$ofile"
+	;;
+    .lzo)
+        lzop -f -9 "$ofile"
+	;;
+    esac
+    ${MKIMAGE} -A ppc -O linux -T kernel -C $uboot_comp -a "$base" -e "$entry" \
+            $uboot_version -d "$ofile$compression" "$ofile"
     ;;
 treeboot*)
     mv "$ofile" "$ofile.elf"

@@ -35,7 +35,9 @@
 #include <linux/decompress/unlzma.h>
 #endif /* STATIC */
 
+#ifdef __KERNEL__
 #include <linux/decompress/mm.h>
+#endif
 
 #define	MIN(a, b) (((a) < (b)) ? (a) : (b))
 
@@ -60,7 +62,9 @@ static long long INIT read_int(unsigned char *ptr, int size)
  *Copyright (c) 1999-2005  Igor Pavlov
  */
 
+#ifdef __KERNEL__
 #include <linux/compiler.h>
+#endif
 
 #define LZMA_IOBUF_SIZE	0x10000
 

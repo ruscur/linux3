@@ -23,9 +23,11 @@
 #include <linux/decompress/unlzo.h>
 #endif
 
-#include <linux/types.h>
 #include <linux/lzo.h>
+#ifdef __KERNEL__
+#include <linux/types.h>
 #include <linux/decompress/mm.h>
+#endif
 
 #include <linux/compiler.h>
 #include <asm/unaligned.h>

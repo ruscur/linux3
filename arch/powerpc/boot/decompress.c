@@ -33,6 +33,17 @@
 #	include "decompress_inflate.c"
 #endif
 
+#ifdef CONFIG_KERNEL_LZMA
+#define large_malloc malloc
+#define large_free free
+#	include "../../../lib/decompress_unlzma.c"
+#endif
+
+#ifdef CONFIG_KERNEL_LZO
+#	include "lzo_config.h"
+#	include "../../../lib/decompress_unlzo.c"
+#endif
+
 #ifdef CONFIG_KERNEL_XZ
 #	include "xz_config.h"
 #	include "../../../lib/decompress_unxz.c"
