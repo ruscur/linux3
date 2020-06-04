@@ -574,6 +574,12 @@ static int __init feat_enable_mma(struct dt_cpu_feature *f)
 	return 1;
 }
 
+static int __init feat_enable_dawr1(struct dt_cpu_feature *f)
+{
+	cur_cpu_spec->cpu_features |= CPU_FTR_DAWR1;
+	return 1;
+}
+
 struct dt_cpu_feature_match {
 	const char *name;
 	int (*enable)(struct dt_cpu_feature *f);
@@ -649,6 +655,7 @@ static struct dt_cpu_feature_match __initdata
 	{"wait-v3", feat_enable, 0},
 	{"prefix-instructions", feat_enable, 0},
 	{"matrix-multiply-assist", feat_enable_mma, 0},
+	{"dawr1", feat_enable_dawr1, 0},
 };
 
 static bool __initdata using_dt_cpu_ftrs;
