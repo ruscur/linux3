@@ -17,6 +17,11 @@
 	((unlikely(pgd_none(*(p4d))) && __pud_alloc(mm, p4d, address)) ? \
 		NULL : pud_offset(p4d, address))
 
+#define pud_alloc_track(mm, p4d, address, mask)					\
+	((unlikely(pgd_none(*(p4d))) &&						\
+	  (__pud_alloc(mm, p4d, address) || ({*(mask)|=PGTBL_P4D_MODIFIED;0;})))?	\
+	  NULL : pud_offset(p4d, address))
+
 #define p4d_alloc(mm, pgd, address)		(pgd)
 #define p4d_alloc_track(mm, pgd, address, mask)	(pgd)
 #define p4d_offset(pgd, start)			(pgd)
