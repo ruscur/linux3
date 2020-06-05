@@ -1068,6 +1068,9 @@
 #define MMCR0_PMC2_LOADMISSTIME	0x5
 #endif
 
+/* BHRB disable bit for PowerISA v3.10 */
+#define MMCRA_BHRB_DISABLE	0x0000002000000000
+
 /*
  * SPRG usage:
  *
