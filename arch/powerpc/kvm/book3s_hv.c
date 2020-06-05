@@ -1693,7 +1693,8 @@ static int kvmppc_get_one_reg_hv(struct kvm_vcpu *vcpu, u64 id,
 		*val = get_reg_val(id, vcpu->arch.sdar);
 		break;
 	case KVM_REG_PPC_SIER:
-		*val = get_reg_val(id, vcpu->arch.sier);
+		i = id - KVM_REG_PPC_SIER;
+		*val = get_reg_val(id, vcpu->arch.sier[i]);
 		break;
 	case KVM_REG_PPC_IAMR:
 		*val = get_reg_val(id, vcpu->arch.iamr);
@@ -1914,7 +1915,8 @@ static int kvmppc_set_one_reg_hv(struct kvm_vcpu *vcpu, u64 id,
 		vcpu->arch.sdar = set_reg_val(id, *val);
 		break;
 	case KVM_REG_PPC_SIER:
-		vcpu->arch.sier = set_reg_val(id, *val);
+		i = id - KVM_REG_PPC_SIER;
+		vcpu->arch.sier[i] = set_reg_val(id, *val);
 		break;
 	case KVM_REG_PPC_IAMR:
 		vcpu->arch.iamr = set_reg_val(id, *val);
