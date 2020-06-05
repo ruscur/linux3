@@ -2023,6 +2023,20 @@ static void dump_300_sprs(void)
 #endif
 }
 
+static void dump_310_sprs(void)
+{
+#ifdef CONFIG_PPC64
+	if (!cpu_has_feature(CPU_FTR_ARCH_31))
+		return;
+
+	printf("mmcr3  = %.16lx\n",
+		mfspr(SPRN_MMCR3));
+
+	printf("sier2  = %.16lx  sier3  = %.16lx\n",
+		mfspr(SPRN_SIER2), mfspr(SPRN_SIER3));
+#endif
+}
+
 static void dump_one_spr(int spr, bool show_unimplemented)
 {
 	unsigned long val;
@@ -2077,6 +2091,7 @@ static void super_regs(void)
 		dump_206_sprs();
 		dump_207_sprs();
 		dump_300_sprs();
+		dump_310_sprs();
 
 		return;
 	}
