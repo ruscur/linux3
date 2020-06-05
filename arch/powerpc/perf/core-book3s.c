@@ -39,10 +39,10 @@ struct cpu_hw_events {
 	unsigned int flags[MAX_HWEVENTS];
 	/*
 	 * The order of the MMCR array is:
-	 *  - 64-bit, MMCR0, MMCR1, MMCRA, MMCR2
+	 *  - 64-bit, MMCR0, MMCR1, MMCRA, MMCR2, MMCR3
 	 *  - 32-bit, MMCR0, MMCR1, MMCR2
 	 */
-	unsigned long mmcr[4];
+	unsigned long mmcr[5];
 	struct perf_event *limited_counter[MAX_LIMITED_HWCOUNTERS];
 	u8  limited_hwidx[MAX_LIMITED_HWCOUNTERS];
 	u64 alternatives[MAX_HWEVENTS][MAX_EVENT_ALTERNATIVES];
@@ -584,6 +584,11 @@ static void ebb_switch_out(unsigned long mmcr0)
 	current->thread.sdar  = mfspr(SPRN_SDAR);
 	current->thread.mmcr0 = mmcr0 & MMCR0_USER_MASK;
 	current->thread.mmcr2 = mfspr(SPRN_MMCR2) & MMCR2_USER_MASK;
+	if (ppmu->flags & PPMU_ARCH_310S) {
+		current->thread.mmcr3 = mfspr(SPRN_MMCR3);
+		current->thread.sier2 = mfspr(SPRN_SIER2);
+		current->thread.sier3 = mfspr(SPRN_SIER3);
+	}
 }
 
 static unsigned long ebb_switch_in(bool ebb, struct cpu_hw_events *cpuhw)
@@ -623,6 +628,12 @@ static unsigned long ebb_switch_in(bool ebb, struct cpu_hw_events *cpuhw)
 	 * instead manage the MMCR2 entirely by itself.
 	 */
 	mtspr(SPRN_MMCR2, cpuhw->mmcr[3] | current->thread.mmcr2);
+
+	if (ppmu->flags & PPMU_ARCH_310S) {
+		mtspr(SPRN_MMCR3, current->thread.mmcr3);
+		mtspr(SPRN_SIER2, current->thread.sier2);
+		mtspr(SPRN_SIER3, current->thread.sier3);
+	}
 out:
 	return mmcr0;
 }
@@ -842,6 +853,11 @@ void perf_event_print_debug(void)
 			mfspr(SPRN_MMCR2), mfspr(SPRN_EBBHR));
 		pr_info("EBBRR: %016lx BESCR: %016lx\n",
 			mfspr(SPRN_EBBRR), mfspr(SPRN_BESCR));
+	}
+
+	if (ppmu->flags & PPMU_ARCH_310S) {
+		pr_info("MMCR3: %016lx SIER2: %016lx SIER3: %016lx\n",
+		mfspr(SPRN_MMCR3), mfspr(SPRN_SIER2), mfspr(SPRN_SIER3));
 	}
 #endif
 	pr_info("SIAR:  %016lx SDAR:  %016lx SIER:  %016lx\n",
@@ -1308,6 +1324,10 @@ static void power_pmu_enable(struct pmu *pmu)
 	if (!cpuhw->n_added) {
 		mtspr(SPRN_MMCRA, cpuhw->mmcr[2] & ~MMCRA_SAMPLE_ENABLE);
 		mtspr(SPRN_MMCR1, cpuhw->mmcr[1]);
+#ifdef CONFIG_PPC64
+		if (ppmu->flags & PPMU_ARCH_310S)
+			mtspr(SPRN_MMCR3, cpuhw->mmcr[4]);
+#endif /* CONFIG_PPC64 */
 		goto out_enable;
 	}
 
@@ -1350,6 +1370,11 @@ static void power_pmu_enable(struct pmu *pmu)
 				| MMCR0_FC);
 	if (ppmu->flags & PPMU_ARCH_207S)
 		mtspr(SPRN_MMCR2, cpuhw->mmcr[3]);
+
+#ifdef CONFIG_PPC64
+	if (ppmu->flags & PPMU_ARCH_310S)
+		mtspr(SPRN_MMCR3, cpuhw->mmcr[4]);
+#endif /* CONFIG_PPC64 */
 
 	/*
 	 * Read off any pre-existing events that need to move
