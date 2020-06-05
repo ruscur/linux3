@@ -611,6 +611,7 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 	unsigned long srr1;
 	unsigned long pls;
 	unsigned long mmcr0 = 0;
+	unsigned long mmcra_bhrb = 0;
 	struct p9_sprs sprs = {}; /* avoid false used-uninitialised */
 	bool sprs_saved = false;
 
@@ -657,6 +658,15 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 		  */
 		mmcr0		= mfspr(SPRN_MMCR0);
 	}
+
+	if (cpu_has_feature(CPU_FTR_ARCH_31)) {
+		/* POWER10 uses MMCRA[:26] as BHRB disable bit
+		 * to disable BHRB logic when not used. Hence Save and
+		 * restore MMCRA after a state-loss idle.
+		 */
+		mmcra_bhrb		= mfspr(SPRN_MMCRA);
+	}
+
 	if ((psscr & PSSCR_RL_MASK) >= pnv_first_spr_loss_level) {
 		sprs.lpcr	= mfspr(SPRN_LPCR);
 		sprs.hfscr	= mfspr(SPRN_HFSCR);
@@ -720,6 +730,10 @@ static unsigned long power9_idle_stop(unsigned long psscr, bool mmu_on)
 			asm volatile(PPC_ISA_3_0_INVALIDATE_ERAT);
 			mtspr(SPRN_MMCR0, mmcr0);
 		}
+
+		/* Reload MMCRA to restore BHRB disable bit for POWER10 */
+		if (cpu_has_feature(CPU_FTR_ARCH_31))
+			mtspr(SPRN_MMCRA, mmcra_bhrb);
 
 		/*
 		 * DD2.2 and earlier need to set then clear bit 60 in MMCRA

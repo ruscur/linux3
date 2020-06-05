@@ -464,9 +464,13 @@ static void power_pmu_bhrb_read(struct perf_event *event, struct cpu_hw_events *
 			 * addresses at this point. Check the privileges before
 			 * exporting it to userspace (avoid exposure of regions
 			 * where we could have speculative execution)
+			 * Incase of ISA 310, BHRB will capture only user-space
+			 * address,hence include a check before filtering code
 			 */
-			if (is_kernel_addr(addr) && perf_allow_kernel(&event->attr) != 0)
-				continue;
+			if (!(ppmu->flags & PPMU_ARCH_310S))
+				if (is_kernel_addr(addr) &&
+				perf_allow_kernel(&event->attr) != 0)
+					continue;
 
 			/* Branches are read most recent first (ie. mfbhrb 0 is
 			 * the most recent branch).
@@ -1210,7 +1214,7 @@ static void write_mmcr0(struct cpu_hw_events *cpuhw, unsigned long mmcr0)
 static void power_pmu_disable(struct pmu *pmu)
 {
 	struct cpu_hw_events *cpuhw;
-	unsigned long flags, mmcr0, val;
+	unsigned long flags, mmcr0, val, mmcra = 0;
 
 	if (!ppmu)
 		return;
@@ -1243,12 +1247,23 @@ static void power_pmu_disable(struct pmu *pmu)
 		mb();
 		isync();
 
+		val = mmcra = cpuhw->mmcr[2];
+
 		/*
 		 * Disable instruction sampling if it was enabled
 		 */
-		if (cpuhw->mmcr[2] & MMCRA_SAMPLE_ENABLE) {
-			mtspr(SPRN_MMCRA,
-			      cpuhw->mmcr[2] & ~MMCRA_SAMPLE_ENABLE);
+		if (cpuhw->mmcr[2] & MMCRA_SAMPLE_ENABLE)
+			mmcra = cpuhw->mmcr[2] & ~MMCRA_SAMPLE_ENABLE;
+
+		/* Disable BHRB via mmcra [:26] for p10 if needed */
+		if (!(cpuhw->mmcr[2] & MMCRA_BHRB_DISABLE))
+			mmcra |= MMCRA_BHRB_DISABLE;
+
+		/* Write SPRN_MMCRA if mmcra has either disabled
+		 * instruction sampling or BHRB
+		 */
+		if (val != mmcra) {
+			mtspr(SPRN_MMCRA, mmcra);
 			mb();
 			isync();
 		}
