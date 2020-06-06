@@ -118,6 +118,8 @@ extern void _exception_pkey(struct pt_regs *, unsigned long, int);
 extern void die(const char *, struct pt_regs *, long);
 extern bool die_will_crash(void);
 extern void panic_flush_kmsg_start(void);
+extern void panic_flush_kmsg_dump(void);
+extern void panic_flush_kmsg_console(void);
 extern void panic_flush_kmsg_end(void);
 #endif /* !__ASSEMBLY__ */
 

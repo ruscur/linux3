@@ -695,6 +695,7 @@ static int ppc_panic_event(struct notifier_block *this,
 	 * want interrupts to be hard disabled.
 	 */
 	hard_irq_disable();
+	panic_flush_kmsg_dump();
 
 	/*
 	 * If firmware-assisted dump has been registered then trigger

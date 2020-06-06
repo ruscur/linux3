@@ -169,13 +169,23 @@ extern void panic_flush_kmsg_start(void)
 	bust_spinlocks(1);
 }
 
-extern void panic_flush_kmsg_end(void)
+extern void panic_flush_kmsg_dump(void)
 {
 	printk_safe_flush_on_panic();
 	kmsg_dump(KMSG_DUMP_PANIC);
+}
+
+extern void panic_flush_kmsg_console(void)
+{
 	bust_spinlocks(0);
 	debug_locks_off();
 	console_flush_on_panic(CONSOLE_FLUSH_PENDING);
+}
+
+extern void panic_flush_kmsg_end(void)
+{
+	panic_flush_kmsg_dump();
+	panic_flush_kmsg_console();
 }
 
 static unsigned long oops_begin(struct pt_regs *regs)
