@@ -1217,7 +1217,7 @@ static int cpm_uart_init_port(struct device_node *np,
 
 		gpiod = devm_gpiod_get_index(dev, NULL, i, GPIOD_ASIS);
 
-		if (gpiod) {
+		if (!IS_ERR_OR_NULL(gpiod)) {
 			if (i == GPIO_RTS || i == GPIO_DTR)
 				ret = gpiod_direction_output(gpiod, 0);
 			else
