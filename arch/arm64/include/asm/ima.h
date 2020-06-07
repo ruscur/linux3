@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef _ASM_POWERPC_IMA_H
-#define _ASM_POWERPC_IMA_H
+#ifndef _ASM_ARCH_IMA_H
+#define _ASM_ARCH_IMA_H
 
 struct kimage;
 
@@ -10,12 +10,15 @@ int arch_ima_add_kexec_buffer(struct kimage *image, unsigned long load_addr,
 
 int setup_ima_buffer(const struct kimage *image, void *fdt, int chosen_node);
 #else
+static inline int arch_ima_add_kexec_buffer(struct kimage *image,
+			unsigned long load_addr, size_t size)
+{
+	return 0;
+}
 static inline int setup_ima_buffer(const struct kimage *image, void *fdt,
 				   int chosen_node)
 {
-	remove_ima_buffer(fdt, chosen_node);
 	return 0;
 }
 #endif /* CONFIG_IMA_KEXEC */
-
-#endif /* _ASM_POWERPC_IMA_H */
+#endif /* _ASM_ARCH_IMA_H */
