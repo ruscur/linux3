@@ -400,7 +400,8 @@ static inline bool hpte_cache_flags_ok(unsigned long hptel, bool is_ci)
 
 	/* Handle SAO */
 	if (wimg == (HPTE_R_W | HPTE_R_I | HPTE_R_M) &&
-	    cpu_has_feature(CPU_FTR_ARCH_206))
+	    cpu_has_feature(CPU_FTR_ARCH_206) &&
+	    !cpu_has_feature(CPU_FTR_ARCH_31))
 		wimg = HPTE_R_M;
 
 	if (!is_ci)
