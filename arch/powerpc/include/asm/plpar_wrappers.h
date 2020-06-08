@@ -334,6 +334,13 @@ static inline long plpar_get_cpu_characteristics(struct h_cpu_char_result *p)
 	return rc;
 }
 
+static inline long pseries_rpt_invalidate(u32 pid, u64 target, u64 what,
+					  u64 pages, u64 start, u64 end)
+{
+	return plpar_hcall_norets(H_RPT_INVALIDATE, pid, target, what,
+				  pages, start, end);
+}
+
 #else /* !CONFIG_PPC_PSERIES */
 
 static inline long plpar_set_ciabr(unsigned long ciabr)
@@ -346,6 +353,13 @@ static inline long plpar_pte_read_4(unsigned long flags, unsigned long ptex,
 {
 	return 0;
 }
+
+static inline long pseries_rpt_invalidate(u32 pid, u64 target, u64 what,
+					  u64 pages, u64 start, u64 end)
+{
+	return 0;
+}
+
 #endif /* CONFIG_PPC_PSERIES */
 
 #endif /* _ASM_POWERPC_PLPAR_WRAPPERS_H */

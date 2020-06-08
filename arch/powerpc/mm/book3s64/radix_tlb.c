@@ -16,10 +16,38 @@
 #include <asm/tlbflush.h>
 #include <asm/trace.h>
 #include <asm/cputhreads.h>
+#include <asm/plpar_wrappers.h>
 
 #define RIC_FLUSH_TLB 0
 #define RIC_FLUSH_PWC 1
 #define RIC_FLUSH_ALL 2
+
+#define H_TLBI_TLB	0x0001
+#define H_TLBI_PWC	0x0002
+#define H_TLBI_PRS	0x0004
+
+#define H_TLBI_TARGET_CMMU	0x01
+#define H_TLBI_TARGET_CMMU_LOCAL 0x02
+#define H_TLBI_TARGET_NMMU	0x04
+
+#define H_TLBI_PAGE_ALL (-1UL)
+#define H_TLBI_PAGE_4K	0x01
+#define H_TLBI_PAGE_64K	0x02
+#define H_TLBI_PAGE_2M	0x04
+#define H_TLBI_PAGE_1G	0x08
+
+static inline u64 psize_to_h_tlbi(unsigned long psize)
+{
+	if (psize == MMU_PAGE_4K)
+		return H_TLBI_PAGE_4K;
+	if (psize == MMU_PAGE_64K)
+		return H_TLBI_PAGE_64K;
+	if (psize == MMU_PAGE_2M)
+		return H_TLBI_PAGE_2M;
+	if (psize == MMU_PAGE_1G)
+		return H_TLBI_PAGE_1G;
+	return H_TLBI_PAGE_ALL;
+}
 
 /*
  * tlbiel instruction for radix, set invalidation
@@ -694,7 +722,14 @@ void radix__flush_tlb_mm(struct mm_struct *mm)
 			goto local;
 		}
 
-		if (cputlb_use_tlbie()) {
+		if (!mmu_has_feature(MMU_FTR_GTSE)) {
+			unsigned long targ = H_TLBI_TARGET_CMMU;
+
+			if (atomic_read(&mm->context.copros) > 0)
+				targ |= H_TLBI_TARGET_NMMU;
+			pseries_rpt_invalidate(pid, targ, H_TLBI_TLB,
+					       H_TLBI_PAGE_ALL, 0, -1UL);
+		} else if (cputlb_use_tlbie()) {
 			if (mm_needs_flush_escalation(mm))
 				_tlbie_pid(pid, RIC_FLUSH_ALL);
 			else
@@ -727,7 +762,16 @@ static void __flush_all_mm(struct mm_struct *mm, bool fullmm)
 				goto local;
 			}
 		}
-		if (cputlb_use_tlbie())
+		if (!mmu_has_feature(MMU_FTR_GTSE)) {
+			unsigned long targ = H_TLBI_TARGET_CMMU;
+			unsigned long what = H_TLBI_TLB | H_TLBI_PWC |
+					     H_TLBI_PRS;
+
+			if (atomic_read(&mm->context.copros) > 0)
+				targ |= H_TLBI_TARGET_NMMU;
+			pseries_rpt_invalidate(pid, targ, what,
+					       H_TLBI_PAGE_ALL, 0, -1UL);
+		} else if (cputlb_use_tlbie())
 			_tlbie_pid(pid, RIC_FLUSH_ALL);
 		else
 			_tlbiel_pid_multicast(mm, pid, RIC_FLUSH_ALL);
@@ -760,7 +804,17 @@ void radix__flush_tlb_page_psize(struct mm_struct *mm, unsigned long vmaddr,
 			exit_flush_lazy_tlbs(mm);
 			goto local;
 		}
-		if (cputlb_use_tlbie())
+		if (!mmu_has_feature(MMU_FTR_GTSE)) {
+			unsigned long targ = H_TLBI_TARGET_CMMU;
+			unsigned long pages = psize_to_h_tlbi(psize);
+			unsigned long page_size =
+					1UL << mmu_psize_to_shift(psize);
+
+			if (atomic_read(&mm->context.copros) > 0)
+				targ |= H_TLBI_TARGET_NMMU;
+			pseries_rpt_invalidate(pid, targ, H_TLBI_TLB, pages,
+					       vmaddr, vmaddr + page_size);
+		} else if (cputlb_use_tlbie())
 			_tlbie_va(vmaddr, pid, psize, RIC_FLUSH_TLB);
 		else
 			_tlbiel_va_multicast(mm, vmaddr, pid, psize, RIC_FLUSH_TLB);
@@ -810,7 +864,13 @@ static inline void _tlbiel_kernel_broadcast(void)
  */
 void radix__flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
-	if (cputlb_use_tlbie())
+	if (!mmu_has_feature(MMU_FTR_GTSE)) {
+		unsigned long targ = H_TLBI_TARGET_CMMU | H_TLBI_TARGET_NMMU;
+		unsigned long what = H_TLBI_TLB | H_TLBI_PWC | H_TLBI_PRS;
+
+		pseries_rpt_invalidate(0, targ, what, H_TLBI_PAGE_ALL,
+				       start, end);
+	} else if (cputlb_use_tlbie())
 		_tlbie_pid(0, RIC_FLUSH_ALL);
 	else
 		_tlbiel_kernel_broadcast();
@@ -864,7 +924,17 @@ is_local:
 				nr_pages > tlb_local_single_page_flush_ceiling);
 	}
 
-	if (full) {
+	if (!mmu_has_feature(MMU_FTR_GTSE) && !local) {
+		unsigned long targ = H_TLBI_TARGET_CMMU;
+		unsigned long pages = psize_to_h_tlbi(mmu_virtual_psize);
+
+		if (IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE))
+			pages |= psize_to_h_tlbi(MMU_PAGE_2M);
+		if (atomic_read(&mm->context.copros) > 0)
+			targ |= H_TLBI_TARGET_NMMU;
+		pseries_rpt_invalidate(pid, targ, H_TLBI_TLB, pages,
+				       start, end);
+	} else if (full) {
 		if (local) {
 			_tlbiel_pid(pid, RIC_FLUSH_TLB);
 		} else {
@@ -1046,7 +1116,17 @@ is_local:
 				nr_pages > tlb_local_single_page_flush_ceiling);
 	}
 
-	if (full) {
+	if (!mmu_has_feature(MMU_FTR_GTSE) && !local) {
+		unsigned long targ = H_TLBI_TARGET_CMMU;
+		unsigned long what = H_TLBI_TLB;
+		unsigned long pages = psize_to_h_tlbi(psize);
+
+		if (also_pwc)
+			what |= H_TLBI_PWC;
+		if (atomic_read(&mm->context.copros) > 0)
+			targ |= H_TLBI_TARGET_NMMU;
+		pseries_rpt_invalidate(pid, targ, what, pages, start, end);
+	} else if (full) {
 		if (local) {
 			_tlbiel_pid(pid, also_pwc ? RIC_FLUSH_ALL : RIC_FLUSH_TLB);
 		} else {
@@ -1111,7 +1191,18 @@ void radix__flush_tlb_collapsed_pmd(struct mm_struct *mm, unsigned long addr)
 			exit_flush_lazy_tlbs(mm);
 			goto local;
 		}
-		if (cputlb_use_tlbie())
+		if (!mmu_has_feature(MMU_FTR_GTSE)) {
+			unsigned long targ = H_TLBI_TARGET_CMMU;
+			unsigned long what = H_TLBI_TLB | H_TLBI_PWC |
+					     H_TLBI_PRS;
+			unsigned long pages =
+					psize_to_h_tlbi(mmu_virtual_psize);
+
+			if (atomic_read(&mm->context.copros) > 0)
+				targ |= H_TLBI_TARGET_NMMU;
+			pseries_rpt_invalidate(pid, targ, what, pages,
+					       addr, end);
+		} else if (cputlb_use_tlbie())
 			_tlbie_va_range(addr, end, pid, PAGE_SIZE, mmu_virtual_psize, true);
 		else
 			_tlbiel_va_range_multicast(mm,

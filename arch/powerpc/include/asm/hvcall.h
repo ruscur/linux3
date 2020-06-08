@@ -335,6 +335,7 @@
 #define H_GET_24X7_CATALOG_PAGE	0xF078
 #define H_GET_24X7_DATA		0xF07C
 #define H_GET_PERF_COUNTER_INFO	0xF080
+#define H_RPT_INVALIDATE	0xF084
 
 /* Platform-specific hcalls used for nested HV KVM */
 #define H_SET_PARTITION_TABLE	0xF800
