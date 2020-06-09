@@ -78,6 +78,9 @@ static void init_fw_feat_flags(struct device_node *np)
 	if (fw_feature_is("enabled", "fw-count-cache-flush-bcctr2,0,0", np))
 		security_ftr_set(SEC_FTR_BCCTR_FLUSH_ASSIST);
 
+	if (fw_feature_is("enabled", "fw-link-stack-flush-bcctr2,0,0", np))
+		security_ftr_set(SEC_FTR_BCCTR_LINK_FLUSH_ASSIST);
+
 	if (fw_feature_is("enabled", "needs-count-cache-flush-on-context-switch", np))
 		security_ftr_set(SEC_FTR_FLUSH_COUNT_CACHE);
 
