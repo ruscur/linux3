@@ -10,7 +10,8 @@
 #include <asm/mmu.h>
 #include <asm/setup.h>
 #include <linux/pkeys.h>
-#include <linux/of_device.h>
+#include <linux/of_fdt.h>
+
 
 DEFINE_STATIC_KEY_FALSE(pkey_disabled);
 DEFINE_STATIC_KEY_FALSE(execute_pkey_disabled);
@@ -38,38 +39,45 @@ static int execute_only_key = 2;
 #define PKEY_REG_BITS (sizeof(u64) * 8)
 #define pkeyshift(pkey) (PKEY_REG_BITS - ((pkey+1) * AMR_BITS_PER_PKEY))
 
+static int __init dt_scan_storage_keys(unsigned long node,
+				       const char *uname, int depth,
+				       void *data)
+{
+	const char *type = of_get_flat_dt_prop(node, "device_type", NULL);
+	const __be32 *prop;
+	int pkeys_total;
+
+	/* We are scanning "cpu" nodes only */
+	if (type == NULL || strcmp(type, "cpu") != 0)
+		return 0;
+
+	prop = of_get_flat_dt_prop(node, "ibm,processor-storage-keys", NULL);
+	if (!prop)
+		return 0;
+	pkeys_total = be32_to_cpu(prop[0]);
+	return pkeys_total;
+}
+
 static int scan_pkey_feature(void)
 {
-	u32 vals[2];
-	int pkeys_total = 0;
-	struct device_node *cpu;
+	int pkeys_total;
 
 	/*
 	 * Pkey is not supported with Radix translation.
 	 */
-	if (radix_enabled())
+	if (early_radix_enabled())
 		return 0;
 
-	cpu = of_find_node_by_type(NULL, "cpu");
-	if (!cpu)
-		return 0;
+	pkeys_total = of_scan_flat_dt(dt_scan_storage_keys, NULL);
+	if (pkeys_total == 0) {
 
-	if (of_property_read_u32_array(cpu,
-				       "ibm,processor-storage-keys", vals, 2) == 0) {
-		/*
-		 * Since any pkey can be used for data or execute, we will
-		 * just treat all keys as equal and track them as one entity.
-		 */
-		pkeys_total = vals[0];
-		/*  Should we check for IAMR support FIXME!! */
-	} else {
 		/*
 		 * Let's assume 32 pkeys on P8 bare metal, if its not defined by device
 		 * tree. We make this exception since skiboot forgot to expose this
 		 * property on power8.
 		 */
 		if (!firmware_has_feature(FW_FEATURE_LPAR) &&
-		    cpu_has_feature(CPU_FTRS_POWER8))
+		    early_cpu_has_feature(CPU_FTRS_POWER8))
 			pkeys_total = 32;
 	}
 
@@ -82,7 +90,7 @@ static int scan_pkey_feature(void)
 	return pkeys_total;
 }
 
-static int pkey_initialize(void)
+void __init pkey_early_init_devtree(void)
 {
 	int pkeys_total, i;
 
@@ -107,8 +115,10 @@ static int pkey_initialize(void)
 	if (!pkeys_total) {
 		/* No support for pkey. Mark it disabled */
 		static_branch_enable(&pkey_disabled);
-		return 0;
+		return;
 	}
+
+	cur_cpu_spec->mmu_features |= MMU_FTR_PKEY;
 
 	/*
 	 * The device tree cannot be relied to indicate support for
@@ -187,10 +197,8 @@ static int pkey_initialize(void)
 	 */
 	initial_allocation_mask |= reserved_allocation_mask;
 
-	return 0;
+	return;
 }
-
-arch_initcall(pkey_initialize);
 
 void pkey_mm_init(struct mm_struct *mm)
 {
