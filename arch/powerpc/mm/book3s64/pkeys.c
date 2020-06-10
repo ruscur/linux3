@@ -264,40 +264,17 @@ void pkey_mm_init(struct mm_struct *mm)
 	mm->context.execute_only_pkey = execute_only_key;
 }
 
-static inline u64 read_amr(void)
+static inline void update_current_thread_amr(u64 value)
 {
-	return mfspr(SPRN_AMR);
+	current->thread.regs->kuap = value;
 }
 
-static inline void write_amr(u64 value)
-{
-	mtspr(SPRN_AMR, value);
-}
-
-static inline u64 read_iamr(void)
-{
-	if (static_branch_unlikely(&execute_pkey_disabled))
-		return 0x0UL;
-
-	return mfspr(SPRN_IAMR);
-}
-
-static inline void write_iamr(u64 value)
+static inline void update_current_thread_iamr(u64 value)
 {
 	if (static_branch_unlikely(&execute_pkey_disabled))
 		return;
 
-	mtspr(SPRN_IAMR, value);
-}
-
-static inline u64 read_uamor(void)
-{
-	return mfspr(SPRN_UAMOR);
-}
-
-static inline void write_uamor(u64 value)
-{
-	mtspr(SPRN_UAMOR, value);
+	current->thread.regs->kuep = value;
 }
 
 static bool is_pkey_enabled(int pkey)
@@ -314,20 +291,21 @@ static bool is_pkey_enabled(int pkey)
 	return !!(uamor_pkey_bits);
 }
 
+/*  FIXME!! what happens to other threads AMR value? */
 static inline void init_amr(int pkey, u8 init_bits)
 {
 	u64 new_amr_bits = (((u64)init_bits & 0x3UL) << pkeyshift(pkey));
-	u64 old_amr = read_amr() & ~((u64)(0x3ul) << pkeyshift(pkey));
+	u64 old_amr = current_thread_amr() & ~((u64)(0x3ul) << pkeyshift(pkey));
 
-	write_amr(old_amr | new_amr_bits);
+	update_current_thread_amr(old_amr | new_amr_bits);
 }
 
 static inline void init_iamr(int pkey, u8 init_bits)
 {
 	u64 new_iamr_bits = (((u64)init_bits & 0x1UL) << pkeyshift(pkey));
-	u64 old_iamr = read_iamr() & ~((u64)(0x1ul) << pkeyshift(pkey));
+	u64 old_iamr = current_thread_iamr() & ~((u64)(0x1ul) << pkeyshift(pkey));
 
-	write_iamr(old_iamr | new_iamr_bits);
+	update_current_thread_iamr(old_iamr | new_iamr_bits);
 }
 
 /*
@@ -358,33 +336,6 @@ int __arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 
 	init_amr(pkey, new_amr_bits);
 	return 0;
-}
-
-void thread_pkey_regs_save(struct thread_struct *thread)
-{
-	if (!mmu_has_feature(MMU_FTR_PKEY))
-		return;
-
-	/*
-	 * TODO: Skip saving registers if @thread hasn't used any keys yet.
-	 */
-	thread->amr = read_amr();
-	thread->iamr = read_iamr();
-	thread->uamor = read_uamor();
-}
-
-void thread_pkey_regs_restore(struct thread_struct *new_thread,
-			      struct thread_struct *old_thread)
-{
-	if (!mmu_has_feature(MMU_FTR_PKEY))
-		return;
-
-	if (old_thread->amr != new_thread->amr)
-		write_amr(new_thread->amr);
-	if (old_thread->iamr != new_thread->iamr)
-		write_iamr(new_thread->iamr);
-	if (old_thread->uamor != new_thread->uamor)
-		write_uamor(new_thread->uamor);
 }
 
 int execute_only_pkey(struct mm_struct *mm)
@@ -440,10 +391,10 @@ static bool pkey_access_permitted(int pkey, bool write, bool execute)
 		return true;
 
 	pkey_shift = pkeyshift(pkey);
-	if (execute && !(read_iamr() & (IAMR_EX_BIT << pkey_shift)))
+	if (execute && !(current_thread_iamr() & (IAMR_EX_BIT << pkey_shift)))
 		return true;
 
-	amr = read_amr(); /* Delay reading amr until absolutely needed */
+	amr = current_thread_amr();
 	return ((!write && !(amr & (AMR_RD_BIT << pkey_shift))) ||
 		(write &&  !(amr & (AMR_WR_BIT << pkey_shift))));
 }
