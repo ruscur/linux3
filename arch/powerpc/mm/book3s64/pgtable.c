@@ -165,6 +165,9 @@ void mmu_cleanup_all(void)
 		radix__mmu_cleanup_all();
 	else if (mmu_hash_ops.hpte_clear_all)
 		mmu_hash_ops.hpte_clear_all();
+
+	reset_kuap();
+	reset_kuep();
 }
 
 #ifdef CONFIG_MEMORY_HOTPLUG

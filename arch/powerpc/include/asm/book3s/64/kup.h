@@ -341,6 +341,26 @@ static inline bool bad_kuap_fault(struct pt_regs *regs, unsigned long address,
 	return !!(error_code & DSISR_KEYFAULT);
 }
 
+#define reset_kuap reset_kuap
+static inline void reset_kuap(void)
+{
+	if (mmu_has_feature(MMU_FTR_KUAP)) {
+		mtspr(SPRN_AMR, 0);
+		/*  Do we need isync()? We are going via a kexec reset */
+		isync();
+	}
+}
+
+#define reset_kuep reset_kuep
+static inline void reset_kuep(void)
+{
+	if (mmu_has_feature(MMU_FTR_KUEP)) {
+		mtspr(SPRN_IAMR, 0);
+		/*  Do we need isync()? We are going via a kexec reset */
+		isync();
+	}
+}
+
 #else /* CONFIG_PPC_MEM_KEYS */
 static inline void kuap_restore_user_amr(struct pt_regs *regs)
 {

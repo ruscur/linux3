@@ -113,6 +113,20 @@ static inline void prevent_current_write_to_user(void)
 	prevent_user_access(NULL, NULL, ~0UL, KUAP_CURRENT_WRITE);
 }
 
+#ifndef reset_kuap
+#define reset_kuap reset_kuap
+static inline void reset_kuap(void)
+{
+}
+#endif
+
+#ifndef reset_kuep
+#define reset_kuep reset_kuep
+static inline void reset_kuep(void)
+{
+}
+#endif
+
 #endif /* !__ASSEMBLY__ */
 
 #endif /* _ASM_POWERPC_KUAP_H_ */
