@@ -1283,6 +1283,22 @@ bool is_nvdimm_sync(struct nd_region *nd_region)
 }
 EXPORT_SYMBOL_GPL(is_nvdimm_sync);
 
+bool is_nvdimm_sync_enabled(struct nd_region *nd_region)
+{
+#ifdef CONFIG_ARCH_MAP_SYNC_DISABLE
+	if (is_nd_volatile(&nd_region->dev))
+		return true;
+
+	return is_nd_pmem(&nd_region->dev) &&
+		test_bit(ND_REGION_SYNC_ENABLED, &nd_region->flags);
+#else
+	return true;
+#endif
+
+}
+EXPORT_SYMBOL_GPL(is_nvdimm_sync_enabled);
+
+
 struct conflict_context {
 	struct nd_region *nd_region;
 	resource_size_t start, size;

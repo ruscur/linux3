@@ -63,6 +63,9 @@ enum {
 	/* Platform provides asynchronous flush mechanism */
 	ND_REGION_ASYNC = 3,
 
+	/* Platform wants to disable synchronous flush mechanism */
+	ND_REGION_SYNC_ENABLED= 4,
+
 	/* mark newly adjusted resources as requiring a label update */
 	DPA_RESOURCE_ADJUSTED = 1 << 0,
 };
@@ -262,6 +265,7 @@ int nvdimm_has_flush(struct nd_region *nd_region);
 int nvdimm_has_cache(struct nd_region *nd_region);
 int nvdimm_in_overwrite(struct nvdimm *nvdimm);
 bool is_nvdimm_sync(struct nd_region *nd_region);
+bool is_nvdimm_sync_enabled(struct nd_region *nd_region);
 
 static inline int nvdimm_ctl(struct nvdimm *nvdimm, unsigned int cmd, void *buf,
 		unsigned int buf_len, int *cmd_rc)

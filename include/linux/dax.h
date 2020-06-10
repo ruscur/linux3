@@ -10,6 +10,9 @@
 /* Flag for synchronous flush */
 #define DAXDEV_F_SYNC (1UL << 0)
 
+/* flag for platform forcing synchronous flush disable */
+#define DAXDEV_F_SYNC_ENABLED (1UL << 1)
+
 typedef unsigned long dax_entry_t;
 
 struct iomap_ops;
@@ -59,6 +62,13 @@ static inline void set_dax_synchronous(struct dax_device *dax_dev)
 {
 	__set_dax_synchronous(dax_dev);
 }
+
+bool __dax_synchronous_enabled(struct dax_device *dax_dev);
+static inline bool dax_synchronous_enabled(struct dax_device *dax_dev)
+{
+	return  __dax_synchronous_enabled(dax_dev);
+}
+
 /*
  * Check if given mapping is supported by the file / underlying device.
  */
@@ -69,6 +79,12 @@ static inline bool daxdev_mapping_supported(struct vm_area_struct *vma,
 		return true;
 	if (!IS_DAX(file_inode(vma->vm_file)))
 		return false;
+	/*
+	 * check MAP_SYNC is disabled by platform for this device.
+	 */
+	if (!dax_synchronous_enabled(dax_dev))
+		return false;
+
 	return dax_synchronous(dax_dev);
 }
 #else

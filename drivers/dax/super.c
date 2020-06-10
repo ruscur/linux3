@@ -198,6 +198,12 @@ enum dax_device_flags {
 	DAXDEV_WRITE_CACHE,
 	/* flag to check if device supports synchronous flush */
 	DAXDEV_SYNC,
+	/*
+	 * flag to indicate whether synchronous flush is enabled.
+	 * Some platform may want to disable synchronous flush support
+	 * even though device supports the same.
+	 */
+	DAXDEV_SYNC_ENABLED,
 };
 
 /**
@@ -254,6 +260,63 @@ static ssize_t write_cache_store(struct device *dev,
 }
 static DEVICE_ATTR_RW(write_cache);
 
+bool __dax_synchronous_enabled(struct dax_device *dax_dev)
+{
+	return test_bit(DAXDEV_SYNC_ENABLED, &dax_dev->flags);
+}
+EXPORT_SYMBOL_GPL(__dax_synchronous_enabled);
+
+static void set_dax_synchronous_enable(struct dax_device *dax_dev, bool enable)
+{
+	if (!test_bit(DAXDEV_SYNC, &dax_dev->flags))
+		return;
+
+	if (enable)
+		set_bit(DAXDEV_SYNC_ENABLED, &dax_dev->flags);
+	else
+		clear_bit(DAXDEV_SYNC_ENABLED, &dax_dev->flags);
+}
+
+
+static ssize_t sync_fault_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int enabled;
+	struct dax_device *dax_dev = dax_get_by_host(dev_name(dev));
+	ssize_t rc;
+
+	WARN_ON_ONCE(!dax_dev);
+	if (!dax_dev)
+		return -ENXIO;
+
+	enabled = (dax_synchronous(dax_dev) && dax_synchronous_enabled(dax_dev));
+	rc = sprintf(buf, "%d\n", enabled);
+	put_dax(dax_dev);
+	return rc;
+}
+
+static ssize_t sync_fault_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t len)
+{
+	bool enable_sync;
+	int rc = strtobool(buf, &enable_sync);
+	struct dax_device *dax_dev = dax_get_by_host(dev_name(dev));
+
+	WARN_ON_ONCE(!dax_dev);
+	if (!dax_dev)
+		return -ENXIO;
+
+	if (rc)
+		len = rc;
+	else
+		set_dax_synchronous_enable(dax_dev, enable_sync);
+
+	put_dax(dax_dev);
+	return len;
+}
+
+static DEVICE_ATTR_RW(sync_fault);
+
 static umode_t dax_visible(struct kobject *kobj, struct attribute *a, int n)
 {
 	struct device *dev = container_of(kobj, typeof(*dev), kobj);
@@ -267,11 +330,18 @@ static umode_t dax_visible(struct kobject *kobj, struct attribute *a, int n)
 	if (a == &dev_attr_write_cache.attr)
 		return 0;
 #endif
+	if (a == &dev_attr_sync_fault.attr) {
+		if (dax_write_cache_enabled(dax_dev))
+			return a->mode;
+		return 0;
+	}
+
 	return a->mode;
 }
 
 static struct attribute *dax_attributes[] = {
 	&dev_attr_write_cache.attr,
+	&dev_attr_sync_fault.attr,
 	NULL,
 };
 
@@ -593,6 +663,9 @@ struct dax_device *alloc_dax(void *private, const char *__host,
 	dax_dev->private = private;
 	if (flags & DAXDEV_F_SYNC)
 		set_dax_synchronous(dax_dev);
+
+	if (flags & DAXDEV_F_SYNC_ENABLED)
+		set_dax_synchronous_enable(dax_dev, true);
 
 	return dax_dev;
 
