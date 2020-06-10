@@ -172,6 +172,7 @@
 extern u64 default_uamor;
 extern u64 default_amr;
 extern u64 default_iamr;
+extern int kup_key;
 
 /*
  * For kernel thread that doesn't have thread.regs return
