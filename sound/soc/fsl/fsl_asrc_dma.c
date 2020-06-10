@@ -133,6 +133,7 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	struct snd_dmaengine_dai_dma_data *dma_params_fe = NULL;
 	struct snd_dmaengine_dai_dma_data *dma_params_be = NULL;
+	struct dma_chan *tmp_chan = NULL, *tmp_chan_new = NULL;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct fsl_asrc_pair *pair = runtime->private_data;
 	struct fsl_asrc *asrc = pair->asrc;
@@ -142,7 +143,6 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 	int stream = substream->stream;
 	struct imx_dma_data *tmp_data;
 	struct snd_soc_dpcm *dpcm;
-	struct dma_chan *tmp_chan;
 	struct device *dev_be;
 	u8 dir = tx ? OUT : IN;
 	dma_cap_mask_t mask;
@@ -152,6 +152,7 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 	for_each_dpcm_be(rtd, stream, dpcm) {
 		struct snd_soc_pcm_runtime *be = dpcm->be;
 		struct snd_pcm_substream *substream_be;
+		struct snd_soc_component *component_be;
 		struct snd_soc_dai *dai = asoc_rtd_to_cpu(be, 0);
 
 		if (dpcm->fe != rtd)
@@ -160,6 +161,9 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 		substream_be = snd_soc_dpcm_get_substream(be, stream);
 		dma_params_be = snd_soc_dai_get_dma_data(dai, substream_be);
 		dev_be = dai->dev;
+		component_be = snd_soc_lookup_component_nolocked(dev_be, SND_DMAENGINE_PCM_DRV_NAME);
+		if (component_be)
+			tmp_chan = soc_component_to_pcm(component_be)->chan[substream->stream];
 		break;
 	}
 
@@ -205,10 +209,14 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 	 */
 	if (!asrc->use_edma) {
 		/* Get DMA request of Back-End */
-		tmp_chan = dma_request_slave_channel(dev_be, tx ? "tx" : "rx");
+		if (!tmp_chan) {
+			tmp_chan_new = dma_request_slave_channel(dev_be, tx ? "tx" : "rx");
+			tmp_chan = tmp_chan_new;
+		}
 		tmp_data = tmp_chan->private;
 		pair->dma_data.dma_request = tmp_data->dma_request;
-		dma_release_channel(tmp_chan);
+		if (tmp_chan_new)
+			dma_release_channel(tmp_chan_new);
 
 		/* Get DMA request of Front-End */
 		tmp_chan = asrc->get_dma_channel(pair, dir);
@@ -220,9 +228,26 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 
 		pair->dma_chan[dir] =
 			dma_request_channel(mask, filter, &pair->dma_data);
+		pair->req_dma_chan_dev_to_dev = true;
 	} else {
-		pair->dma_chan[dir] =
-			asrc->get_dma_channel(pair, dir);
+		/*
+		 * With EDMA, there is two dma channels can be used for p2p,
+		 * one is from ASRC, one is from another peripheral
+		 * (ESAI or SAI). Previously we select the dma channel of ASRC,
+		 * but find an issue for ideal ratio case, there is no control
+		 * for data copy speed, the speed is faster than sample
+		 * frequency.
+		 *
+		 * So we switch to use dma channel of peripheral (ESAI or SAI),
+		 * that copy speed of DMA is controlled by data consumption
+		 * speed in the peripheral FIFO.
+		 */
+		pair->req_dma_chan_dev_to_dev = false;
+		pair->dma_chan[dir] = tmp_chan;
+		if (!pair->dma_chan[dir]) {
+			pair->dma_chan[dir] = dma_request_slave_channel(dev_be, tx ? "tx" : "rx");
+			pair->req_dma_chan_dev_to_dev = true;
+		}
 	}
 
 	if (!pair->dma_chan[dir]) {
@@ -261,7 +286,8 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 	ret = dmaengine_slave_config(pair->dma_chan[dir], &config_be);
 	if (ret) {
 		dev_err(dev, "failed to config DMA channel for Back-End\n");
-		dma_release_channel(pair->dma_chan[dir]);
+		if (pair->req_dma_chan_dev_to_dev)
+			dma_release_channel(pair->dma_chan[dir]);
 		return ret;
 	}
 
@@ -273,19 +299,21 @@ static int fsl_asrc_dma_hw_params(struct snd_soc_component *component,
 static int fsl_asrc_dma_hw_free(struct snd_soc_component *component,
 				struct snd_pcm_substream *substream)
 {
+	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct fsl_asrc_pair *pair = runtime->private_data;
+	u8 dir = tx ? OUT : IN;
 
 	snd_pcm_set_runtime_buffer(substream, NULL);
 
-	if (pair->dma_chan[IN])
-		dma_release_channel(pair->dma_chan[IN]);
+	if (pair->dma_chan[!dir])
+		dma_release_channel(pair->dma_chan[!dir]);
 
-	if (pair->dma_chan[OUT])
-		dma_release_channel(pair->dma_chan[OUT]);
+	if (pair->dma_chan[dir] && pair->req_dma_chan_dev_to_dev)
+		dma_release_channel(pair->dma_chan[dir]);
 
-	pair->dma_chan[IN] = NULL;
-	pair->dma_chan[OUT] = NULL;
+	pair->dma_chan[!dir] = NULL;
+	pair->dma_chan[dir] = NULL;
 
 	return 0;
 }
