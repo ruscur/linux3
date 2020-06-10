@@ -171,6 +171,8 @@
 #include <asm/ptrace.h>
 
 extern u64 default_uamor;
+extern u64 default_amr;
+extern u64 default_iamr;
 
 static inline void kuap_restore_user_amr(struct pt_regs *regs)
 {

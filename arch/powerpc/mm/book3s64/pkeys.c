@@ -20,8 +20,8 @@ int  max_pkey;			/* Maximum key value supported */
  */
 u32  reserved_allocation_mask;
 static u32  initial_allocation_mask;   /* Bits set for the initially allocated keys */
-static u64 default_amr;
-static u64 default_iamr;
+u64 default_amr;
+u64 default_iamr;
 /* Allow all keys to be modified by default */
 u64 default_uamor = ~0x0UL;
 /*
@@ -385,20 +385,6 @@ void thread_pkey_regs_restore(struct thread_struct *new_thread,
 		write_iamr(new_thread->iamr);
 	if (old_thread->uamor != new_thread->uamor)
 		write_uamor(new_thread->uamor);
-}
-
-void thread_pkey_regs_init(struct thread_struct *thread)
-{
-	if (!mmu_has_feature(MMU_FTR_PKEY))
-		return;
-
-	thread->amr   = default_amr;
-	thread->iamr  = default_iamr;
-	thread->uamor = default_uamor;
-
-	write_amr(default_amr);
-	write_iamr(default_iamr);
-	write_uamor(default_uamor);
 }
 
 int execute_only_pkey(struct mm_struct *mm)
