@@ -59,6 +59,7 @@
 #include <asm/asm-prototypes.h>
 #include <asm/cpu_has_feature.h>
 #include <asm/ftrace.h>
+#include <asm/kup.h>
 
 #ifdef DEBUG
 #include <asm/udbg.h>
@@ -1255,6 +1256,10 @@ void start_secondary(void *unused)
 
 	mmgrab(&init_mm);
 	current->active_mm = &init_mm;
+
+#ifdef CONFIG_PPC_MEM_KEYS
+	mtspr(SPRN_UAMOR, default_uamor);
+#endif
 
 	smp_store_cpu_info(cpu);
 	set_dec(tb_ticks_per_jiffy);
