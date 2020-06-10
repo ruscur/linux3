@@ -112,7 +112,7 @@
 /*
  * Supports KUAP (key 0 controlling userspace addresses) on radix
  */
-#define MMU_FTR_RADIX_KUAP		ASM_CONST(0x80000000)
+#define MMU_FTR_KUAP			ASM_CONST(0x80000000)
 
 /* MMU feature bit sets for various CPUs */
 #define MMU_FTRS_DEFAULT_HPTE_ARCH_V2	\
@@ -175,10 +175,10 @@ enum {
 #endif
 #ifdef CONFIG_PPC_RADIX_MMU
 		MMU_FTR_TYPE_RADIX |
-#ifdef CONFIG_PPC_KUAP
-		MMU_FTR_RADIX_KUAP |
-#endif /* CONFIG_PPC_KUAP */
 #endif /* CONFIG_PPC_RADIX_MMU */
+#ifdef CONFIG_PPC_KUAP
+	MMU_FTR_KUAP |
+#endif /* CONFIG_PPC_KUAP */
 #ifdef CONFIG_PPC_MEM_KEYS
 	MMU_FTR_PKEY |
 #endif
