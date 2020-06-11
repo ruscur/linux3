@@ -257,6 +257,7 @@
 #define PPC_INST_MFVSRD			0x7c000066
 #define PPC_INST_MTVSRD			0x7c000166
 #define PPC_INST_SC			0x44000002
+#define PPC_INST_SCV			0x44000001
 #define PPC_INST_SLBFEE			0x7c0007a7
 #define PPC_INST_SLBIA			0x7c0003e4
 
@@ -411,6 +412,7 @@
 #define __PPC_CT(t)	(((t) & 0x0f) << 21)
 #define __PPC_SPR(r)	((((r) & 0x1f) << 16) | ((((r) >> 5) & 0x1f) << 11))
 #define __PPC_RC21	(0x1 << 10)
+#define __PPC_LEV(l)	(((l) & 0x7f) << 5)
 
 /*
  * Both low and high 16 bits are added as SIGNED additions, so if low 16 bits
