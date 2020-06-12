@@ -48,6 +48,8 @@ struct pci_controller_ops {
 
 /*
  * Structure of a PCI controller (host bridge)
+ *
+ * @intx: legacy INTx mappings
  */
 struct pci_controller {
 	struct pci_bus *bus;
@@ -127,6 +129,8 @@ struct pci_controller {
 
 	void *private_data;
 	struct npu *npu;
+
+	unsigned int intx[PCI_NUM_INTX];
 };
 
 /* These are used for config access before all the PCI probing

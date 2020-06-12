@@ -353,6 +353,49 @@ struct pci_controller *pci_find_controller_for_domain(int domain_nr)
 	return NULL;
 }
 
+static void pci_intx_register(struct pci_dev *pdev, int virq)
+{
+	struct pci_controller *phb = pci_bus_to_host(pdev->bus);
+	int i;
+
+	for (i = 0; i < PCI_NUM_INTX; i++) {
+		/*
+		 * Look for an empty or an equivalent slot, as INTx
+		 * interrupts can be shared between adapters
+		 */
+		if (phb->intx[i] == virq || !phb->intx[i]) {
+			phb->intx[i] = virq;
+			break;
+		}
+	}
+
+	if (i == PCI_NUM_INTX)
+		pr_err("PCI:%s INTx all mapped\n", pci_name(pdev));
+}
+
+/*
+ * Clearing the mapped INTx interrupts will also clear the underlying
+ * mappings of the ESB pages of the interrupts when under XIVE. It is
+ * a requirement of PowerVM to clear all memory mappings before
+ * removing a PHB.
+ */
+static void pci_intx_dispose(struct pci_bus *bus)
+{
+	struct pci_controller *phb = pci_bus_to_host(bus);
+	int i;
+
+	pr_debug("PCI: Clearing INTx for PHB %04x:%02x...\n",
+		 pci_domain_nr(bus), bus->number);
+	for (i = 0; i < PCI_NUM_INTX; i++)
+		irq_dispose_mapping(phb->intx[i]);
+}
+
+void pcibios_remove_bus(struct pci_bus *bus)
+{
+	pci_intx_dispose(bus);
+}
+EXPORT_SYMBOL_GPL(pcibios_remove_bus);
+
 /*
  * Reads the interrupt pin to determine if interrupt is use by card.
  * If the interrupt is used, then gets the interrupt line from the
@@ -401,6 +444,8 @@ static int pci_read_irq_line(struct pci_dev *pci_dev)
 
 	pci_dev->irq = virq;
 
+	/* Record all INTx mappings for later removal of a PHB */
+	pci_intx_register(pci_dev, virq);
 	return 0;
 }
 
