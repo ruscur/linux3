@@ -1078,3 +1078,42 @@ void __free_pasid(struct mm_struct *mm)
 	 */
 	ioasid_free(pasid);
 }
+
+/*
+ * Apply some heuristics to see if the #GP fault was caused by a thread
+ * that hasn't had the IA32_PASID MSR initialized.  If it looks like that
+ * is the problem, try initializing the IA32_PASID MSR. If the heuristic
+ * guesses incorrectly, take one more #GP fault.
+ */
+bool __fixup_pasid_exception(void)
+{
+	u64 pasid_msr;
+	unsigned int pasid;
+
+	/*
+	 * This function is called only when this #GP was triggered from user
+	 * space. So the mm cannot be NULL.
+	 */
+	pasid = current->mm->pasid;
+	/* If the mm doesn't have a valid PASID, then can't help. */
+	if (invalid_pasid(pasid))
+		return false;
+
+	/*
+	 * Since IRQ is disabled now, the current task still owns the FPU on
+	 * this CPU and the PASID MSR can be directly accessed.
+	 *
+	 * If the MSR has a valid PASID, the #GP must be for some other reason.
+	 *
+	 * If rdmsr() is really a performance issue, a TIF_ flag may be
+	 * added to check if the thread has a valid PASID instead of rdmsr().
+	 */
+	rdmsrl(MSR_IA32_PASID, pasid_msr);
+	if (pasid_msr & MSR_IA32_PASID_VALID)
+		return false;
+
+	/* Fix up the MSR if the MSR doesn't have a valid PASID. */
+	wrmsrl(MSR_IA32_PASID, pasid | MSR_IA32_PASID_VALID);
+
+	return true;
+}
