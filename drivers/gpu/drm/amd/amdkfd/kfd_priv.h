@@ -714,7 +714,7 @@ struct kfd_process {
 	/* We want to receive a notification when the mm_struct is destroyed */
 	struct mmu_notifier mmu_notifier;
 
-	uint16_t pasid;
+	unsigned int pasid;
 	unsigned int doorbell_index;
 
 	/*

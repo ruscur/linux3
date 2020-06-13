@@ -20,7 +20,7 @@
 struct tbl_walk {
 	u16 bus;
 	u16 devfn;
-	u32 pasid;
+	unsigned int pasid;
 	struct root_entry *rt_entry;
 	struct context_entry *ctx_entry;
 	struct pasid_entry *pasid_tbl_entry;

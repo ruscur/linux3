@@ -1395,8 +1395,8 @@ void qi_flush_dev_iotlb(struct intel_iommu *iommu, u16 sid, u16 pfsid,
 }
 
 /* PASID-based IOTLB invalidation */
-void qi_flush_piotlb(struct intel_iommu *iommu, u16 did, u32 pasid, u64 addr,
-		     unsigned long npages, bool ih)
+void qi_flush_piotlb(struct intel_iommu *iommu, u16 did, unsigned int pasid,
+		     u64 addr, unsigned long npages, bool ih)
 {
 	struct qi_desc desc = {.qw2 = 0, .qw3 = 0};
 
@@ -1437,7 +1437,7 @@ void qi_flush_piotlb(struct intel_iommu *iommu, u16 did, u32 pasid, u64 addr,
 
 /* PASID-based device IOTLB Invalidate */
 void qi_flush_dev_iotlb_pasid(struct intel_iommu *iommu, u16 sid, u16 pfsid,
-			      u32 pasid,  u16 qdep, u64 addr,
+			      unsigned int pasid,  u16 qdep, u64 addr,
 			      unsigned int size_order, u64 granu)
 {
 	unsigned long mask = 1UL << (VTD_PAGE_SHIFT + size_order - 1);
@@ -1465,7 +1465,7 @@ void qi_flush_dev_iotlb_pasid(struct intel_iommu *iommu, u16 sid, u16 pfsid,
 }
 
 void qi_flush_pasid_cache(struct intel_iommu *iommu, u16 did,
-			  u64 granu, int pasid)
+			  u64 granu, unsigned int pasid)
 {
 	struct qi_desc desc = {.qw1 = 0, .qw2 = 0, .qw3 = 0};
 
@@ -1779,7 +1779,7 @@ void dmar_msi_read(int irq, struct msi_msg *msg)
 }
 
 static int dmar_fault_do_one(struct intel_iommu *iommu, int type,
-		u8 fault_reason, int pasid, u16 source_id,
+		u8 fault_reason, unsigned int pasid, u16 source_id,
 		unsigned long long addr)
 {
 	const char *reason;
@@ -1826,10 +1826,11 @@ irqreturn_t dmar_fault(int irq, void *dev_id)
 	while (1) {
 		/* Disable printing, simply clear the fault when ratelimited */
 		bool ratelimited = !__ratelimit(&rs);
+		unsigned int pasid;
 		u8 fault_reason;
 		u16 source_id;
 		u64 guest_addr;
-		int type, pasid;
+		int type;
 		u32 data;
 		bool pasid_present;
 

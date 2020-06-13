@@ -443,11 +443,11 @@ extern struct kmem_cache *amd_iommu_irq_cache;
  * incoming PPR faults around.
  */
 struct amd_iommu_fault {
-	u64 address;    /* IO virtual address of the fault*/
-	u32 pasid;      /* Address space identifier */
-	u16 device_id;  /* Originating PCI device id */
-	u16 tag;        /* PPR tag */
-	u16 flags;      /* Fault flags */
+	u64 address;		/* IO virtual address of the fault*/
+	unsigned int pasid;	/* Address space identifier */
+	u16 device_id;		/* Originating PCI device id */
+	u16 tag;		/* PPR tag */
+	u16 flags;		/* Fault flags */
 
 };
 
@@ -745,7 +745,7 @@ extern unsigned long *amd_iommu_pd_alloc_bitmap;
 extern bool amd_iommu_unmap_flush;
 
 /* Smallest max PASID supported by any IOMMU in the system */
-extern u32 amd_iommu_max_pasid;
+extern unsigned int amd_iommu_max_pasid;
 
 extern bool amd_iommu_v2_present;
 
