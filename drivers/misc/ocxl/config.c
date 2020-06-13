@@ -806,7 +806,8 @@ out:
 }
 EXPORT_SYMBOL_GPL(ocxl_config_set_TL);
 
-int ocxl_config_terminate_pasid(struct pci_dev *dev, int afu_control, int pasid)
+int ocxl_config_terminate_pasid(struct pci_dev *dev, int afu_control,
+				unsigned int pasid)
 {
 	u32 val;
 	unsigned long timeout;

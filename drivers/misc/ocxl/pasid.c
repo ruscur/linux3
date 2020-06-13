@@ -80,7 +80,7 @@ static void range_free(struct list_head *head, u32 start, u32 size,
 
 int ocxl_pasid_afu_alloc(struct ocxl_fn *fn, u32 size)
 {
-	int max_pasid;
+	unsigned int max_pasid;
 
 	if (fn->config.max_pasid_log < 0)
 		return -ENOSPC;

@@ -41,7 +41,7 @@ struct ocxl_afu {
 	struct ocxl_afu_config config;
 	int pasid_base;
 	int pasid_count; /* opened contexts */
-	int pasid_max; /* maximum number of contexts */
+	unsigned int pasid_max; /* maximum number of contexts */
 	int actag_base;
 	int actag_enabled;
 	struct mutex contexts_lock;
@@ -69,7 +69,7 @@ struct ocxl_xsl_error {
 
 struct ocxl_context {
 	struct ocxl_afu *afu;
-	int pasid;
+	unsigned int pasid;
 	struct mutex status_mutex;
 	enum ocxl_context_status status;
 	struct address_space *mapping;
@@ -128,7 +128,7 @@ int ocxl_config_check_afu_index(struct pci_dev *dev,
  * pasid: the PASID for the AFU context
  * tid: the new thread id for the process element
  */
-int ocxl_link_update_pe(void *link_handle, int pasid, __u16 tid);
+int ocxl_link_update_pe(void *link_handle, unsigned int pasid, __u16 tid);
 
 int ocxl_context_mmap(struct ocxl_context *ctx,
 			struct vm_area_struct *vma);
