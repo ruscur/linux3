@@ -45,6 +45,7 @@
 #include <net/tcp_states.h>
 #include <linux/uaccess.h>
 #include <asm/ioctls.h>
+#include <asm/cacheflush.h>
 
 #include <linux/sunrpc/types.h>
 #include <linux/sunrpc/clnt.h>
