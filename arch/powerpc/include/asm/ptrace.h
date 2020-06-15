@@ -53,7 +53,7 @@ struct pt_regs
 #ifdef CONFIG_PPC64
 			unsigned long ppr;
 #endif
-#ifdef CONFIG_PPC_KUAP
+#ifdef CONFIG_PPC_HAVE_KUAP
 			unsigned long kuap;
 #endif
 		};
