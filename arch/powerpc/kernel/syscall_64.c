@@ -37,15 +37,19 @@ notrace long system_call_exception(long r3, long r4, long r5,
 
 #ifdef CONFIG_PPC_MEM_KEYS
 	if (mmu_has_feature(MMU_FTR_PKEY)) {
-		unsigned long amr;
+		unsigned long amr, iamr;
 		/*
-		 * When entering from userspace we mostly have the AMR
+		 * When entering from userspace we mostly have the AMR/IAMR
 		 * different from kernel default values. Hence don't compare.
 		 */
 		amr = mfspr(SPRN_AMR);
+		iamr = mfspr(SPRN_IAMR);
 		regs->kuap = amr;
+		regs->kuep = iamr;
 		if (mmu_has_feature(MMU_FTR_KUAP))
 			mtspr(SPRN_AMR, AMR_KUAP_BLOCKED);
+		if (mmu_has_feature(MMU_FTR_KUEP))
+			mtspr(SPRN_IAMR, AMR_KUEP_BLOCKED);
 		isync();
 	} else
 #endif

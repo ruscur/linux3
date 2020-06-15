@@ -17,15 +17,26 @@
 #if defined(CONFIG_PPC_MEM_KEYS)
 	BEGIN_MMU_FTR_SECTION_NESTED(67)
 	/*
-	 * AMR is going to be different when
+	 * AMR and IAMR are going to be different when
 	 * returning to userspace.
 	 */
 	ld	\gpr1, STACK_REGS_KUAP(r1)
 	isync
 	mtspr	SPRN_AMR, \gpr1
+	/*
+	 * Restore IAMR only when returning to userspace
+	 */
+	ld	\gpr1, STACK_REGS_KUEP(r1)
+	mtspr	SPRN_IAMR, \gpr1
 
 	/* No isync required, see kuap_restore_user_amr() */
 	END_MMU_FTR_SECTION_NESTED_IFSET(MMU_FTR_PKEY , 67)
+
+	/*
+	 * We don't check KUEP feature here, because if FTR_PKEY
+	 * is not enabled we don't need to restore IAMR on
+	 * return to usespace.
+	 */
 #endif
 .endm
 
@@ -53,6 +64,9 @@
 	isync
 	mtspr	SPRN_AMR, \gpr2
 	/* No isync required, see kuap_restore_amr() */
+	/*
+	 * No need to restore IAMR when returning to kernel space.
+	 */
 100:  // skip_restore_amr
 #endif
 .endm
@@ -90,6 +104,12 @@
 	b	100f  // skip_save_amr
 	ALT_MMU_FTR_SECTION_END_NESTED_IFSET(MMU_FTR_KUAP, 68)
 
+	/*
+	 * We don't check KUEP feature here, because if FTR_PKEY
+	 * is not enabled we don't need to save IAMR on
+	 * entry from usespace. That is handled by either
+	 * handle_kuap_save_amr or skip_save_amr
+	 */
 
 99: // handle_kuap_save_amr
 	.ifnb \msr_pr_cr
@@ -120,6 +140,25 @@
 102:
 	END_MMU_FTR_SECTION_NESTED_IFSET(MMU_FTR_KUAP, 69)
 
+	.ifnb \msr_pr_cr
+	beq	\msr_pr_cr, 103f // from kernel space
+	mfspr	\gpr1, SPRN_IAMR
+	std	\gpr1, STACK_REGS_KUEP(r1)
+
+	/*
+	 * update kernel IAMR with AMR_KUEP_BLOCKED only
+	 * if KUEP feature is enabled
+	 */
+	BEGIN_MMU_FTR_SECTION_NESTED(70)
+	LOAD_REG_IMMEDIATE(\gpr2, AMR_KUEP_BLOCKED)
+	cmpd	\use_cr, \gpr1, \gpr2
+	beq	\use_cr, 103f
+	mtspr	SPRN_IAMR, \gpr2
+	isync
+103:
+	END_MMU_FTR_SECTION_NESTED_IFSET(MMU_FTR_KUEP, 70)
+	.endif
+
 100: // skip_save_amr
 #endif
 .endm
@@ -140,13 +179,13 @@ static inline void kuap_restore_user_amr(struct pt_regs *regs)
 
 	isync();
 	mtspr(SPRN_AMR, regs->kuap);
+	mtspr(SPRN_IAMR, regs->kuep);
 	/*
 	 * No isync required here because we are about to rfi
 	 * back to previous context before any user accesses
 	 * would be made, which is a CSI.
 	 */
 }
-
 static inline void kuap_restore_kernel_amr(struct pt_regs *regs,
 					   unsigned long amr)
 {
@@ -162,6 +201,9 @@ static inline void kuap_restore_kernel_amr(struct pt_regs *regs,
 			 */
 		}
 	}
+	/*
+	 * No need to restore IAMR when returning to kernel space.
+	 */
 }
 
 static inline unsigned long kuap_get_and_check_amr(void)

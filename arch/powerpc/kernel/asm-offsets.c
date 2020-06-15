@@ -356,6 +356,10 @@ int main(void)
 #ifdef CONFIG_PPC_HAVE_KUAP
 	STACK_PT_REGS_OFFSET(STACK_REGS_KUAP, kuap);
 #endif
+#ifdef CONFIG_PPC_HAVE_KUEP
+	STACK_PT_REGS_OFFSET(STACK_REGS_KUEP, kuep);
+#endif
+
 
 #if defined(CONFIG_PPC32)
 #if defined(CONFIG_BOOKE) || defined(CONFIG_40x)
