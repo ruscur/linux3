@@ -345,8 +345,11 @@ void thread_pkey_regs_init(struct thread_struct *thread)
 	write_uamor(default_uamor);
 }
 
-int __execute_only_pkey(struct mm_struct *mm)
+int execute_only_pkey(struct mm_struct *mm)
 {
+	if (static_branch_likely(&execute_pkey_disabled))
+		return -1;
+
 	return mm->context.execute_only_pkey;
 }
 
