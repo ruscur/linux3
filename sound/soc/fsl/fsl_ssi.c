@@ -678,7 +678,8 @@ static int fsl_ssi_set_bclk(struct snd_pcm_substream *substream,
 	struct regmap *regs = ssi->regs;
 	u32 pm = 999, div2, psr, stccr, mask, afreq, factor, i;
 	unsigned long clkrate, baudrate, tmprate;
-	unsigned int slots = params_channels(hw_params);
+	unsigned int channels = params_channels(hw_params);
+	unsigned int slots;
 	unsigned int slot_width = 32;
 	u64 sub, savesub = 100000;
 	unsigned int freq;
@@ -688,9 +689,15 @@ static int fsl_ssi_set_bclk(struct snd_pcm_substream *substream,
 	/* Override slots and slot_width if being specifically set... */
 	if (ssi->slots)
 		slots = ssi->slots;
-	/* ...but keep 32 bits if slots is 2 -- I2S Master mode */
-	if (ssi->slot_width && slots != 2)
-		slot_width = ssi->slot_width;
+	else
+		/* Apply two slots for mono channel, because DC = 2 */
+		slots = (channels == 1) ? 2 : channels;
+
+	/* ...but keep 32 bits if I2S Master mode */
+	if ((ssi->i2s_net & SSI_SCR_I2S_MODE_MASK) != SSI_SCR_I2S_MODE_MASTER ||
+	    channels == 1)
+		slot_width = ssi->slot_width ? ssi->slot_width :
+			     params_width(hw_params);
 
 	/* Generate bit clock based on the slot number and slot width */
 	freq = slots * slot_width * params_rate(hw_params);
