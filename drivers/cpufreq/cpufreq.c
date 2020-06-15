@@ -50,6 +50,9 @@ static LIST_HEAD(cpufreq_governor_list);
 #define for_each_governor(__governor)				\
 	list_for_each_entry(__governor, &cpufreq_governor_list, governor_list)
 
+static char cpufreq_param_governor[CPUFREQ_NAME_LEN];
+static struct cpufreq_governor *default_governor;
+
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
  * level driver of CPUFreq support, and its spinlock. This lock
@@ -1055,7 +1058,6 @@ __weak struct cpufreq_governor *cpufreq_default_governor(void)
 
 static int cpufreq_init_policy(struct cpufreq_policy *policy)
 {
-	struct cpufreq_governor *def_gov = cpufreq_default_governor();
 	struct cpufreq_governor *gov = NULL;
 	unsigned int pol = CPUFREQ_POLICY_UNKNOWN;
 
@@ -1065,8 +1067,8 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 		if (gov) {
 			pr_debug("Restoring governor %s for cpu %d\n",
 				 policy->governor->name, policy->cpu);
-		} else if (def_gov) {
-			gov = def_gov;
+		} else if (default_governor) {
+			gov = default_governor;
 		} else {
 			return -ENODATA;
 		}
@@ -1074,8 +1076,8 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 		/* Use the default policy if there is no last_policy. */
 		if (policy->last_policy) {
 			pol = policy->last_policy;
-		} else if (def_gov) {
-			pol = cpufreq_parse_policy(def_gov->name);
+		} else if (default_governor) {
+			pol = cpufreq_parse_policy(default_governor->name);
 			/*
 			 * In case the default governor is neiter "performance"
 			 * nor "powersave", fall back to the initial policy
@@ -2196,6 +2198,24 @@ __weak struct cpufreq_governor *cpufreq_fallback_governor(void)
 	return NULL;
 }
 
+static void cpufreq_get_default_governor(void)
+{
+	default_governor = cpufreq_parse_governor(cpufreq_param_governor);
+	if (!default_governor) {
+		if (*cpufreq_param_governor)
+			pr_warn("Failed to find %s\n", cpufreq_param_governor);
+		default_governor = cpufreq_default_governor();
+	}
+}
+
+static void cpufreq_put_default_governor(void)
+{
+	if (!default_governor)
+		return;
+	module_put(default_governor->owner);
+	default_governor = NULL;
+}
+
 static int cpufreq_init_governor(struct cpufreq_policy *policy)
 {
 	int ret;
@@ -2701,6 +2721,8 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 
 	if (driver_data->setpolicy)
 		driver_data->flags |= CPUFREQ_CONST_LOOPS;
+	else
+		cpufreq_get_default_governor();
 
 	if (cpufreq_boost_supported()) {
 		ret = create_boost_sysfs_file();
@@ -2769,6 +2791,7 @@ int cpufreq_unregister_driver(struct cpufreq_driver *driver)
 	subsys_interface_unregister(&cpufreq_interface);
 	remove_boost_sysfs_file();
 	cpuhp_remove_state_nocalls_cpuslocked(hp_online);
+	cpufreq_put_default_governor();
 
 	write_lock_irqsave(&cpufreq_driver_lock, flags);
 
@@ -2792,4 +2815,5 @@ static int __init cpufreq_core_init(void)
 	return 0;
 }
 module_param(off, int, 0444);
+module_param_string(default_governor, cpufreq_param_governor, CPUFREQ_NAME_LEN, 0444);
 core_initcall(cpufreq_core_init);
