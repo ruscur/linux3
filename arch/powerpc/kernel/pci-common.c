@@ -353,9 +353,56 @@ struct pci_controller *pci_find_controller_for_domain(int domain_nr)
 	return NULL;
 }
 
+/*
+ * Assumption is made on the interrupt parent. All interrupt-map
+ * entries are considered to have the same parent.
+ */
+static int pcibios_irq_map_count(struct pci_controller *phb)
+{
+	const __be32 *imap;
+	int imaplen;
+	struct device_node *parent;
+	u32 intsize, addrsize, parintsize, paraddrsize;
+
+	if (of_property_read_u32(phb->dn, "#interrupt-cells", &intsize))
+		return 0;
+	if (of_property_read_u32(phb->dn, "#address-cells", &addrsize))
+		return 0;
+
+	imap = of_get_property(phb->dn, "interrupt-map", &imaplen);
+	if (!imap) {
+		pr_debug("%pOF : no interrupt-map\n", phb->dn);
+		return 0;
+	}
+	imaplen /= sizeof(u32);
+	pr_debug("%pOF : imaplen=%d\n", phb->dn, imaplen);
+
+	if (imaplen < (addrsize + intsize + 1))
+		return 0;
+
+	imap += intsize + addrsize;
+	parent = of_find_node_by_phandle(be32_to_cpup(imap));
+	if (!parent) {
+		pr_debug("%pOF : no imap parent found !\n", phb->dn);
+		return 0;
+	}
+
+	if (of_property_read_u32(parent, "#interrupt-cells", &parintsize)) {
+		pr_debug("%pOF : parent lacks #interrupt-cells!\n", phb->dn);
+		return 0;
+	}
+
+	if (of_property_read_u32(parent, "#address-cells", &paraddrsize))
+		paraddrsize = 0;
+
+	return imaplen / (addrsize + intsize + 1 + paraddrsize + parintsize);
+}
+
 static void pcibios_irq_map_init(struct pci_controller *phb)
 {
-	phb->irq_count = PCI_NUM_INTX;
+	phb->irq_count = pcibios_irq_map_count(phb);
+	if (phb->irq_count < PCI_NUM_INTX)
+		phb->irq_count = PCI_NUM_INTX;
 
 	pr_debug("%pOF : interrupt map #%d\n", phb->dn, phb->irq_count);
 
