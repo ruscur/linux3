@@ -448,6 +448,12 @@ static ssize_t device_show_string(struct device *dev,
 	return sprintf(buf, "%s\n", (char *)d->var);
 }
 
+static ssize_t cpumask_get_attr(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	return cpumap_print_to_pagebuf(true, buf, &hv_24x7_cpumask);
+}
+
 static ssize_t sockets_show(struct device *dev,
 			    struct device_attribute *attr, char *buf)
 {
@@ -1116,6 +1122,17 @@ static DEVICE_ATTR_RO(sockets);
 static DEVICE_ATTR_RO(chipspersocket);
 static DEVICE_ATTR_RO(coresperchip);
 
+static DEVICE_ATTR(cpumask, S_IRUGO, cpumask_get_attr, NULL);
+
+static struct attribute *cpumask_attrs[] = {
+	&dev_attr_cpumask.attr,
+	NULL,
+};
+
+static struct attribute_group cpumask_attr_group = {
+	.attrs = cpumask_attrs,
+};
+
 static struct bin_attribute *if_bin_attrs[] = {
 	&bin_attr_catalog,
 	NULL,
@@ -1143,6 +1160,11 @@ static const struct attribute_group *attr_groups[] = {
 	&event_desc_group,
 	&event_long_desc_group,
 	&if_group,
+	/*
+	 * This NULL is a placeholder for the cpumask attr which will update
+	 * onlyif cpuhotplug registration is successful
+	 */
+	NULL,
 	NULL,
 };
 
@@ -1727,8 +1749,15 @@ static int hv_24x7_init(void)
 
 	/* init cpuhotplug */
 	r = hv_24x7_cpu_hotplug_init();
-	if (r)
+	if (r) {
 		pr_err("hv_24x7: CPU hotplug init failed\n");
+	} else {
+		/*
+		 * Cpu hotplug init is successful, add the
+		 * cpumask file as part of pmu attr group
+		 */
+		attr_groups[5] = &cpumask_attr_group;
+	}
 
 	r = perf_pmu_register(&h_24x7_pmu, h_24x7_pmu.name, -1);
 	if (r)
