@@ -640,7 +640,7 @@ __SC_COMP(__NR_keyctl, sys_keyctl, compat_sys_keyctl)
 #define __NR_clone 220
 __SYSCALL(__NR_clone, sys_clone)
 #define __NR_execve 221
-__SC_COMP(__NR_execve, sys_execve, compat_sys_execve)
+__SYSCALL(__NR_execve, sys_execve)
 
 #define __NR3264_mmap 222
 __SC_3264(__NR3264_mmap, sys_mmap2, sys_mmap)
@@ -751,7 +751,7 @@ __SYSCALL(__NR_memfd_create, sys_memfd_create)
 #define __NR_bpf 280
 __SYSCALL(__NR_bpf, sys_bpf)
 #define __NR_execveat 281
-__SC_COMP(__NR_execveat, sys_execveat, compat_sys_execveat)
+__SYSCALL(__NR_execveat, sys_execveat)
 #define __NR_userfaultfd 282
 __SYSCALL(__NR_userfaultfd, sys_userfaultfd)
 #define __NR_membarrier 283

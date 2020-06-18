@@ -16,12 +16,12 @@ sys64_execveat:
 sunos_execv:
 	mov	%g0, %o2
 sys32_execve:
-	set	compat_sys_execve, %g1
+	set	sys_execve, %g1
 	jmpl	%g1, %g0
 	 flushw
 
 sys32_execveat:
-	set	compat_sys_execveat, %g1
+	set	sys_execveat, %g1
 	jmpl	%g1, %g0
 	 flushw
 #endif

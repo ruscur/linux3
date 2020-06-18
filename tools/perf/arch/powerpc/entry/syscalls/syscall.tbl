@@ -18,7 +18,7 @@
 8	common	creat				sys_creat
 9	common	link				sys_link
 10	common	unlink				sys_unlink
-11	nospu	execve				sys_execve			compat_sys_execve
+11	nospu	execve				sys_execve			sys_execve
 12	common	chdir				sys_chdir
 13	32	time				sys_time32
 13	64	time				sys_time
@@ -454,7 +454,7 @@
 359	common	getrandom			sys_getrandom
 360	common	memfd_create			sys_memfd_create
 361	common	bpf				sys_bpf
-362	nospu	execveat			sys_execveat			compat_sys_execveat
+362	nospu	execveat			sys_execveat			sys_execveat
 363	32	switch_endian			sys_ni_syscall
 363	64	switch_endian			ppc_switch_endian
 363	spu	switch_endian			sys_ni_syscall

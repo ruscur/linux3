@@ -18,7 +18,7 @@
 8	o32	creat				sys_creat
 9	o32	link				sys_link
 10	o32	unlink				sys_unlink
-11	o32	execve				sys_execve			compat_sys_execve
+11	o32	execve				sys_execve
 12	o32	chdir				sys_chdir
 13	o32	time				sys_time32
 14	o32	mknod				sys_mknod
@@ -367,7 +367,7 @@
 353	o32	getrandom			sys_getrandom
 354	o32	memfd_create			sys_memfd_create
 355	o32	bpf				sys_bpf
-356	o32	execveat			sys_execveat			compat_sys_execveat
+356	o32	execveat			sys_execveat
 357	o32	userfaultfd			sys_userfaultfd
 358	o32	membarrier			sys_membarrier
 359	o32	mlock2				sys_mlock2

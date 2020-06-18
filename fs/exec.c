@@ -386,47 +386,34 @@ err:
 	return err;
 }
 
-struct user_arg_ptr {
-#ifdef CONFIG_COMPAT
-	bool is_compat;
-#endif
-	union {
-		const char __user *const __user *native;
-#ifdef CONFIG_COMPAT
-		const compat_uptr_t __user *compat;
-#endif
-	} ptr;
-};
-
-static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
+static const char __user *
+get_user_arg_ptr(const char __user *const __user *argv, int nr)
 {
-	const char __user *native;
-
-#ifdef CONFIG_COMPAT
-	if (unlikely(argv.is_compat)) {
+	if (in_compat_syscall()) {
+		const compat_uptr_t __user *compat_argv =
+			compat_ptr((unsigned long)argv);
 		compat_uptr_t compat;
 
-		if (get_user(compat, argv.ptr.compat + nr))
+		if (get_user(compat, compat_argv + nr))
 			return ERR_PTR(-EFAULT);
-
 		return compat_ptr(compat);
+	} else {
+		const char __user *native;
+
+		if (get_user(native, argv + nr))
+			return ERR_PTR(-EFAULT);
+		return native;
 	}
-#endif
-
-	if (get_user(native, argv.ptr.native + nr))
-		return ERR_PTR(-EFAULT);
-
-	return native;
 }
 
 /*
  * count() counts the number of strings in array ARGV.
  */
-static int count(struct user_arg_ptr argv, int max)
+static int count(const char __user *const __user *argv, int max)
 {
 	int i = 0;
 
-	if (argv.ptr.native != NULL) {
+	if (argv) {
 		for (;;) {
 			const char __user *p = get_user_arg_ptr(argv, i);
 
@@ -449,7 +436,8 @@ static int count(struct user_arg_ptr argv, int max)
 }
 
 static int prepare_arg_pages(struct linux_binprm *bprm,
-			struct user_arg_ptr argv, struct user_arg_ptr envp)
+		const char __user *const __user *argv,
+		const char __user *const __user *envp)
 {
 	unsigned long limit, ptr_size;
 
@@ -497,7 +485,7 @@ static int prepare_arg_pages(struct linux_binprm *bprm,
  * processes's memory to the new process's stack.  The call to get_user_pages()
  * ensures the destination page is created and not swapped out.
  */
-static int copy_strings(int argc, struct user_arg_ptr argv,
+static int copy_strings(int argc, const char __user *const __user *argv,
 			struct linux_binprm *bprm)
 {
 	struct page *kmapped_page = NULL;
@@ -1815,10 +1803,10 @@ static int exec_binprm(struct linux_binprm *bprm)
 	return 0;
 }
 
-static int __do_execveat(int fd, struct filename *filename,
-			    struct user_arg_ptr argv,
-			    struct user_arg_ptr envp,
-			    int flags, struct file *file)
+int do_execveat(int fd, struct filename *filename,
+		const char __user *const __user *argv,
+		const char __user *const __user *envp,
+		int flags, struct file *file)
 {
 	char *pathbuf = NULL;
 	struct linux_binprm *bprm;
@@ -1969,17 +1957,6 @@ out_ret:
 	return retval;
 }
 
-int do_execveat(int fd, struct filename *filename,
-		const char __user *const __user *__argv,
-		const char __user *const __user *__envp,
-		int flags, struct file *file)
-{
-	struct user_arg_ptr argv = { .ptr.native = __argv };
-	struct user_arg_ptr envp = { .ptr.native = __envp };
-
-	return __do_execveat(fd, filename, argv, envp, flags, file);
-}
-
 void set_binfmt(struct linux_binfmt *new)
 {
 	struct mm_struct *mm = current->mm;
@@ -2023,41 +2000,3 @@ SYSCALL_DEFINE5(execveat,
 
 	return do_execveat(fd, name, argv, envp, flags, NULL);
 }
-
-#ifdef CONFIG_COMPAT
-static int do_compat_execve(int fd, struct filename *filename,
-		const compat_uptr_t __user *__argv,
-		const compat_uptr_t __user *__envp,
-		int flags)
-{
-	struct user_arg_ptr argv = {
-		.is_compat = true,
-		.ptr.compat = __argv,
-	};
-	struct user_arg_ptr envp = {
-		.is_compat = true,
-		.ptr.compat = __envp,
-	};
-
-	return __do_execveat(fd, filename, argv, envp, flags, NULL);
-}
-
-COMPAT_SYSCALL_DEFINE3(execve, const char __user *, filename,
-	const compat_uptr_t __user *, argv,
-	const compat_uptr_t __user *, envp)
-{
-	return do_compat_execve(AT_FDCWD, getname(filename), argv, envp, 0);
-}
-
-COMPAT_SYSCALL_DEFINE5(execveat, int, fd,
-		       const char __user *, filename,
-		       const compat_uptr_t __user *, argv,
-		       const compat_uptr_t __user *, envp,
-		       int,  flags)
-{
-	int lookup_flags = (flags & AT_EMPTY_PATH) ? LOOKUP_EMPTY : 0;
-	struct filename *name = getname_flags(filename, lookup_flags, NULL);
-
-	return do_compat_execve(fd, name, argv, envp, flags);
-}
-#endif

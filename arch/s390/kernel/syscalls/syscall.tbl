@@ -18,7 +18,7 @@
 8    common	creat			sys_creat			sys_creat
 9    common	link			sys_link			sys_link
 10   common	unlink			sys_unlink			sys_unlink
-11   common	execve			sys_execve			compat_sys_execve
+11   common	execve			sys_execve			sys_execve
 12   common	chdir			sys_chdir			sys_chdir
 13   32		time			-				sys_time32
 14   common	mknod			sys_mknod			sys_mknod
@@ -361,7 +361,7 @@
 351  common	bpf			sys_bpf				sys_bpf
 352  common	s390_pci_mmio_write	sys_s390_pci_mmio_write		sys_s390_pci_mmio_write
 353  common	s390_pci_mmio_read	sys_s390_pci_mmio_read		sys_s390_pci_mmio_read
-354  common	execveat		sys_execveat			compat_sys_execveat
+354  common	execveat		sys_execveat			sys_execveat
 355  common	userfaultfd		sys_userfaultfd			sys_userfaultfd
 356  common	membarrier		sys_membarrier			sys_membarrier
 357  common	recvmmsg		sys_recvmmsg			compat_sys_recvmmsg_time32

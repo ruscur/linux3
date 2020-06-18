@@ -33,7 +33,7 @@ __SYSCALL(__NR_link, sys_link)
 #define __NR_unlink 10
 __SYSCALL(__NR_unlink, sys_unlink)
 #define __NR_execve 11
-__SYSCALL(__NR_execve, compat_sys_execve)
+__SYSCALL(__NR_execve, sys_execve)
 #define __NR_chdir 12
 __SYSCALL(__NR_chdir, sys_chdir)
 			/* 13 was sys_time */
@@ -785,7 +785,7 @@ __SYSCALL(__NR_memfd_create, sys_memfd_create)
 #define __NR_bpf 386
 __SYSCALL(__NR_bpf, sys_bpf)
 #define __NR_execveat 387
-__SYSCALL(__NR_execveat, compat_sys_execveat)
+__SYSCALL(__NR_execveat, sys_execveat)
 #define __NR_userfaultfd 388
 __SYSCALL(__NR_userfaultfd, sys_userfaultfd)
 #define __NR_membarrier 389

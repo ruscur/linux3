@@ -18,7 +18,7 @@
 8	common	creat			sys_creat
 9	common	link			sys_link
 10	common	unlink			sys_unlink
-11	common	execve			sys_execve			compat_sys_execve
+11	common	execve			sys_execve
 12	common	chdir			sys_chdir
 13	32	time			sys_time32
 13	64	time			sys_time
@@ -385,7 +385,7 @@
 339	common	getrandom		sys_getrandom
 340	common	memfd_create		sys_memfd_create
 341	common	bpf			sys_bpf
-342	common	execveat		sys_execveat			compat_sys_execveat
+342	common	execveat		sys_execveat
 343	common	membarrier		sys_membarrier
 344	common	userfaultfd		sys_userfaultfd
 345	common	mlock2			sys_mlock2

@@ -8,6 +8,13 @@
 #include <asm/unistd.h>
 #include <asm/syscall.h>
 
+/*
+ * Reuse the 64-bit entry points for the x32 versions that occupy different
+ * slots in the syscall table.
+ */
+#define __x32_sys_execve	__x64_sys_execve
+#define __x32_sys_execveat	__x64_sys_execveat
+
 #define __SYSCALL_64(nr, sym)
 
 #define __SYSCALL_X32(nr, sym) extern long __x32_##sym(const struct pt_regs *);

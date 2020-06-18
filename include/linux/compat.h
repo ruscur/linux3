@@ -752,10 +752,6 @@ asmlinkage long compat_sys_recvmsg(int fd, struct compat_msghdr __user *msg,
 asmlinkage long compat_sys_keyctl(u32 option,
 			      u32 arg2, u32 arg3, u32 arg4, u32 arg5);
 
-/* arch/example/kernel/sys_example.c */
-asmlinkage long compat_sys_execve(const char __user *filename, const compat_uptr_t __user *argv,
-		     const compat_uptr_t __user *envp);
-
 /* mm/fadvise.c: No generic prototype for fadvise64_64 */
 
 /* mm/, CONFIG_MMU only */
@@ -806,9 +802,6 @@ asmlinkage ssize_t compat_sys_process_vm_writev(compat_pid_t pid,
 		const struct compat_iovec __user *lvec,
 		compat_ulong_t liovcnt, const struct compat_iovec __user *rvec,
 		compat_ulong_t riovcnt, compat_ulong_t flags);
-asmlinkage long compat_sys_execveat(int dfd, const char __user *filename,
-		     const compat_uptr_t __user *argv,
-		     const compat_uptr_t __user *envp, int flags);
 asmlinkage ssize_t compat_sys_preadv2(compat_ulong_t fd,
 		const struct compat_iovec __user *vec,
 		compat_ulong_t vlen, u32 pos_low, u32 pos_high, rwf_t flags);
