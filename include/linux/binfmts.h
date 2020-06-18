@@ -134,9 +134,7 @@ int copy_string_kernel(const char *arg, struct linux_binprm *bprm);
 extern void set_binfmt(struct linux_binfmt *new);
 extern ssize_t read_code(struct file *, unsigned long, loff_t, size_t);
 
-int do_execveat(int fd, struct filename *filename,
-		const char __user *const __user *__argv,
-		const char __user *const __user *__envp,
-		int flags, struct file *file);
+int kernel_execveat(int fd, const char *filename, const char *const *argv,
+		const char *const *envp, int flags, struct file *file);
 
 #endif /* _LINUX_BINFMTS_H */

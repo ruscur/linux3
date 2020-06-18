@@ -103,11 +103,9 @@ static int call_usermodehelper_exec_async(void *data)
 	commit_creds(new);
 
 	sub_info->pid = task_pid_nr(current);
-	retval = do_execveat(AT_FDCWD,
-			sub_info->path ? getname_kernel(sub_info->path) : NULL,
-			(const char __user *const __user *)sub_info->argv,
-			(const char __user *const __user *)sub_info->envp,
-			0, sub_info->file);
+	retval = kernel_execveat(AT_FDCWD, sub_info->path,
+			(const char *const *)sub_info->argv,
+			(const char *const *)sub_info->envp, 0, sub_info->file);
 	if (sub_info->file && !retval)
 		current->flags |= PF_UMH;
 out:

@@ -435,6 +435,21 @@ static int count_strings(const char __user *const __user *argv)
 	return i;
 }
 
+static int count_kernel_strings(const char *const *argv)
+{
+	int i;
+
+	if (!argv)
+		return 0;
+
+	for (i = 0; argv[i]; i++) {
+		if (i >= MAX_ARG_STRINGS)
+			return -E2BIG;
+	}
+
+	return i;
+}
+
 static int check_arg_limit(struct linux_binprm *bprm)
 {
 	unsigned long limit, ptr_size;
@@ -610,6 +625,19 @@ int copy_string_kernel(const char *arg, struct linux_binprm *bprm)
 	return 0;
 }
 EXPORT_SYMBOL(copy_string_kernel);
+
+static int copy_strings_kernel(int argc, const char *const *argv,
+		struct linux_binprm *bprm)
+{
+	int ret;
+
+	while (argc-- > 0) {
+		ret = copy_string_kernel(argv[argc], bprm);
+		if (ret)
+			break;
+	}
+	return ret;
+}
 
 #ifdef CONFIG_MMU
 
@@ -1793,9 +1821,11 @@ static int exec_binprm(struct linux_binprm *bprm)
 	return 0;
 }
 
-int do_execveat(int fd, struct filename *filename,
+static int __do_execveat(int fd, struct filename *filename,
 		const char __user *const __user *argv,
 		const char __user *const __user *envp,
+		const char *const *kernel_argv,
+		const char *const *kernel_envp,
 		int flags, struct file *file)
 {
 	char *pathbuf = NULL;
@@ -1876,16 +1906,30 @@ int do_execveat(int fd, struct filename *filename,
 	if (retval)
 		goto out_unmark;
 
-	bprm->argc = count_strings(argv);
-	if (bprm->argc < 0) {
-		retval = bprm->argc;
-		goto out;
-	}
+	if (unlikely(kernel_argv)) {
+		bprm->argc = count_kernel_strings(kernel_argv);
+		if (bprm->argc < 0) {
+			retval = bprm->argc;
+			goto out;
+		}
 
-	bprm->envc = count_strings(envp);
-	if (bprm->envc < 0) {
-		retval = bprm->envc;
-		goto out;
+		bprm->envc = count_kernel_strings(kernel_envp);
+		if (bprm->envc < 0) {
+			retval = bprm->envc;
+			goto out;
+		}
+	} else {
+		bprm->argc = count_strings(argv);
+		if (bprm->argc < 0) {
+			retval = bprm->argc;
+			goto out;
+		}
+
+		bprm->envc = count_strings(envp);
+		if (bprm->envc < 0) {
+			retval = bprm->envc;
+			goto out;
+		}
 	}
 
 	retval = check_arg_limit(bprm);
@@ -1902,13 +1946,22 @@ int do_execveat(int fd, struct filename *filename,
 		goto out;
 
 	bprm->exec = bprm->p;
-	retval = copy_strings(bprm->envc, envp, bprm);
-	if (retval < 0)
-		goto out;
 
-	retval = copy_strings(bprm->argc, argv, bprm);
-	if (retval < 0)
-		goto out;
+	if (unlikely(kernel_argv)) {
+		retval = copy_strings_kernel(bprm->envc, kernel_envp, bprm);
+		if (retval < 0)
+			goto out;
+		retval = copy_strings_kernel(bprm->argc, kernel_argv, bprm);
+		if (retval < 0)
+			goto out;
+	} else {
+		retval = copy_strings(bprm->envc, envp, bprm);
+		if (retval < 0)
+			goto out;
+		retval = copy_strings(bprm->argc, argv, bprm);
+		if (retval < 0)
+			goto out;
+	}
 
 	retval = exec_binprm(bprm);
 	if (retval < 0)
@@ -1959,6 +2012,23 @@ out_ret:
 	return retval;
 }
 
+static int do_execveat(int fd, const char *filename,
+		       const char __user *const __user *argv,
+		       const char __user *const __user *envp, int flags)
+{
+	int lookup_flags = (flags & AT_EMPTY_PATH) ? LOOKUP_EMPTY : 0;
+	struct filename *name = getname_flags(filename, lookup_flags, NULL);
+
+	return __do_execveat(fd, name, argv, envp, NULL, NULL, flags, NULL);
+}
+
+int kernel_execveat(int fd, const char *filename, const char *const *argv,
+		const char *const *envp, int flags, struct file *file)
+{
+	return __do_execveat(fd, getname_kernel(filename), NULL, NULL, argv,
+			     envp, flags, file);
+}
+
 void set_binfmt(struct linux_binfmt *new)
 {
 	struct mm_struct *mm = current->mm;
@@ -1988,7 +2058,7 @@ SYSCALL_DEFINE3(execve,
 		const char __user *const __user *, argv,
 		const char __user *const __user *, envp)
 {
-	return do_execveat(AT_FDCWD, getname(filename), argv, envp, 0, NULL);
+	return do_execveat(AT_FDCWD, filename, argv, envp, 0);
 }
 
 SYSCALL_DEFINE5(execveat,
@@ -1997,8 +2067,5 @@ SYSCALL_DEFINE5(execveat,
 		const char __user *const __user *, envp,
 		int, flags)
 {
-	int lookup_flags = (flags & AT_EMPTY_PATH) ? LOOKUP_EMPTY : 0;
-	struct filename *name = getname_flags(filename, lookup_flags, NULL);
-
-	return do_execveat(fd, name, argv, envp, flags, NULL);
+	return do_execveat(fd, filename, argv, envp, flags);
 }
