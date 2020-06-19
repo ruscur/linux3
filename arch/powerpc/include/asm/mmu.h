@@ -24,6 +24,7 @@
 /* Radix page table supported and enabled */
 #define MMU_FTR_TYPE_RADIX		ASM_CONST(0x00000040)
 #define MMU_FTR_PKEY			ASM_CONST(0x00000080)
+#define MMU_FTR_KUEP			ASM_CONST(0x00000100)
 
 /*
  * Individual features below.
@@ -181,6 +182,10 @@ enum {
 #ifdef CONFIG_PPC_MEM_KEYS
 	MMU_FTR_PKEY |
 #endif
+#ifdef CONFIG_PPC_KUEP
+	MMU_FTR_KUEP |
+#endif /* CONFIG_PPC_KUAP */
+
 		0,
 };
 
