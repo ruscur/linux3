@@ -351,7 +351,7 @@ static void populate_markers(void)
 {
 	int i = 0;
 
-	address_markers[i++].start_address = PAGE_OFFSET;
+	address_markers[i++].start_address = TASK_SIZE;
 	address_markers[i++].start_address = VMALLOC_START;
 	address_markers[i++].start_address = VMALLOC_END;
 #ifdef CONFIG_PPC64
@@ -388,7 +388,7 @@ static int ptdump_show(struct seq_file *m, void *v)
 	struct pg_state st = {
 		.seq = m,
 		.marker = address_markers,
-		.start_address = PAGE_OFFSET,
+		.start_address = TASK_SIZE,
 	};
 
 #ifdef CONFIG_PPC64
@@ -432,7 +432,7 @@ void ptdump_check_wx(void)
 		.seq = NULL,
 		.marker = address_markers,
 		.check_wx = true,
-		.start_address = PAGE_OFFSET,
+		.start_address = TASK_SIZE,
 	};
 
 #ifdef CONFIG_PPC64
