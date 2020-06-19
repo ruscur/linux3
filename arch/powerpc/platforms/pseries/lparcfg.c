@@ -136,6 +136,57 @@ static unsigned int h_get_ppp(struct hvcall_ppp_data *ppp_data)
 	return rc;
 }
 
+/*
+ * Based on H_GetPerformanceCounterInfo v1.10.
+ */
+static void show_gpci_data(struct seq_file *m)
+{
+	struct perf_counter_info_params {
+		__be32 counter_request;
+		__be32 starting_index;
+		__be16 secondary_index;
+		__be16 returned_values;
+		__be32 detail_rc;
+		__be16 counter_value_element_size;
+		u8     counter_info_version_in;
+		u8     counter_info_version_out;
+		u8     reserved[0xC];
+	} __packed;
+	struct hv_gpci_request_buffer {
+		struct perf_counter_info_params params;
+		u8 output[4096 - sizeof(struct perf_counter_info_params)];
+	} __packed;
+	struct hv_gpci_request_buffer *buf;
+	long ret;
+	unsigned int affinity_score;
+
+	buf = kmalloc(sizeof(*buf), GFP_KERNEL);
+	if (buf == NULL)
+		return;
+
+	/*
+	 * Show the local LPAR's affinity score.
+	 *
+	 * 0xB1 selects the Affinity_Domain_Info_By_Partition subcall.
+	 * The score is at byte 0xB in the output buffer.
+	 */
+	memset(&buf->params, 0, sizeof(buf->params));
+	buf->params.counter_request = cpu_to_be32(0xB1);
+	buf->params.starting_index = cpu_to_be32(-1);	/* local LPAR */
+	buf->params.counter_info_version_in = 0x5;	/* v5+ for score */
+	ret = plpar_hcall_norets(H_GET_PERF_COUNTER_INFO, virt_to_phys(buf),
+				 sizeof(*buf));
+	if (ret != H_SUCCESS) {
+		pr_debug("hcall failed: H_GET_PERF_COUNTER_INFO: %ld, %x\n",
+			 ret, be32_to_cpu(buf->params.detail_rc));
+		goto out;
+	}
+	affinity_score = buf->output[0xB];
+	seq_printf(m, "partition_affinity_score=%u\n", affinity_score);
+out:
+	kfree(buf);
+}
+
 static unsigned h_pic(unsigned long *pool_idle_time,
 		      unsigned long *num_procs)
 {
@@ -486,6 +537,8 @@ static int pseries_lparcfg_data(struct seq_file *m, void *v)
 		seq_printf(m, "partition_entitled_capacity=%d\n",
 			   partition_active_processors * 100);
 	}
+
+	show_gpci_data(m);
 
 	seq_printf(m, "partition_active_processors=%d\n",
 		   partition_active_processors);
