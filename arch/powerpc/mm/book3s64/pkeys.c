@@ -195,6 +195,7 @@ void __init pkey_early_init_devtree(void)
 	 */
 	initial_allocation_mask |= reserved_allocation_mask;
 
+	pr_info("Enabling Memory keys with max key count %d", max_pkey);
 	return;
 }
 
