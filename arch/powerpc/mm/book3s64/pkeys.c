@@ -12,6 +12,7 @@
 #include <linux/pkeys.h>
 #include <linux/of_fdt.h>
 
+#include <asm/smp.h>
 
 DEFINE_STATIC_KEY_FALSE(execute_pkey_disabled);
 int  max_pkey;			/* Maximum key value supported */
@@ -198,6 +199,24 @@ void __init pkey_early_init_devtree(void)
 	pr_info("Enabling Memory keys with max key count %d", max_pkey);
 	return;
 }
+
+#ifdef CONFIG_PPC_KUAP
+void __init setup_kuap(bool disabled)
+{
+	if (disabled || !early_radix_enabled())
+		return;
+
+	if (smp_processor_id() == boot_cpuid) {
+		pr_info("Activating Kernel Userspace Access Prevention\n");
+		cur_cpu_spec->mmu_features |= MMU_FTR_RADIX_KUAP;
+	}
+
+	/* Make sure userspace can't change the AMR */
+	mtspr(SPRN_UAMOR, 0);
+	mtspr(SPRN_AMR, AMR_KUAP_BLOCKED);
+	isync();
+}
+#endif
 
 void pkey_mm_init(struct mm_struct *mm)
 {
