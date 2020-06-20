@@ -361,8 +361,7 @@ static const struct mce_derror_table mce_p9_derror_table[] = {
   MCE_INITIATOR_CPU,   MCE_SEV_SEVERE, true },
 { 0, false, 0, 0, 0, 0, 0 } };
 
-static int mce_find_instr_ea_and_phys(struct pt_regs *regs, uint64_t *addr,
-					uint64_t *phys_addr)
+static int mce_find_instr_ea(struct pt_regs *regs, uint64_t *addr)
 {
 	/*
 	 * Carefully look at the NIP to determine
@@ -380,9 +379,7 @@ static int mce_find_instr_ea_and_phys(struct pt_regs *regs, uint64_t *addr,
 		instr_addr = (pfn << PAGE_SHIFT) + (regs->nip & ~PAGE_MASK);
 		instr = ppc_inst_read((struct ppc_inst *)instr_addr);
 		if (!analyse_instr(&op, &tmp, instr)) {
-			pfn = addr_to_pfn(regs, op.ea);
 			*addr = op.ea;
-			*phys_addr = (pfn << PAGE_SHIFT);
 			return 0;
 		}
 		/*
@@ -398,8 +395,7 @@ static int mce_find_instr_ea_and_phys(struct pt_regs *regs, uint64_t *addr,
 
 static int mce_handle_ierror(struct pt_regs *regs,
 		const struct mce_ierror_table table[],
-		struct mce_error_info *mce_err, uint64_t *addr,
-		uint64_t *phys_addr)
+		struct mce_error_info *mce_err, uint64_t *addr)
 {
 	uint64_t srr1 = regs->msr;
 	int handled = 0;
@@ -455,21 +451,8 @@ static int mce_handle_ierror(struct pt_regs *regs,
 		mce_err->sync_error = table[i].sync_error;
 		mce_err->severity = table[i].severity;
 		mce_err->initiator = table[i].initiator;
-		if (table[i].nip_valid) {
+		if (table[i].nip_valid)
 			*addr = regs->nip;
-			if (mce_err->sync_error &&
-				table[i].error_type == MCE_ERROR_TYPE_UE) {
-				unsigned long pfn;
-
-				if (get_paca()->in_mce < MAX_MCE_DEPTH) {
-					pfn = addr_to_pfn(regs, regs->nip);
-					if (pfn != ULONG_MAX) {
-						*phys_addr =
-							(pfn << PAGE_SHIFT);
-					}
-				}
-			}
-		}
 		return handled;
 	}
 
@@ -484,8 +467,7 @@ static int mce_handle_ierror(struct pt_regs *regs,
 
 static int mce_handle_derror(struct pt_regs *regs,
 		const struct mce_derror_table table[],
-		struct mce_error_info *mce_err, uint64_t *addr,
-		uint64_t *phys_addr)
+		struct mce_error_info *mce_err, uint64_t *addr)
 {
 	uint64_t dsisr = regs->dsisr;
 	int handled = 0;
@@ -562,8 +544,7 @@ static int mce_handle_derror(struct pt_regs *regs,
 			 * kernel/exception-64s.h
 			 */
 			if (get_paca()->in_mce < MAX_MCE_DEPTH)
-				mce_find_instr_ea_and_phys(regs, addr,
-							   phys_addr);
+				mce_find_instr_ea(regs, addr);
 		}
 		found = 1;
 	}
@@ -608,21 +589,19 @@ static long mce_handle_error(struct pt_regs *regs,
 		const struct mce_ierror_table itable[])
 {
 	struct mce_error_info mce_err = { 0 };
-	uint64_t addr, phys_addr = ULONG_MAX;
+	uint64_t addr;
 	uint64_t srr1 = regs->msr;
 	long handled;
 
 	if (SRR1_MC_LOADSTORE(srr1))
-		handled = mce_handle_derror(regs, dtable, &mce_err, &addr,
-				&phys_addr);
+		handled = mce_handle_derror(regs, dtable, &mce_err, &addr);
 	else
-		handled = mce_handle_ierror(regs, itable, &mce_err, &addr,
-				&phys_addr);
+		handled = mce_handle_ierror(regs, itable, &mce_err, &addr);
 
 	if (!handled && mce_err.error_type == MCE_ERROR_TYPE_UE)
 		handled = mce_handle_ue_error(regs, &mce_err);
 
-	save_mce_event(regs, handled, &mce_err, regs->nip, addr, phys_addr);
+	save_mce_event(regs, handled, &mce_err, regs->nip, addr, ULONG_MAX);
 
 	return handled;
 }

@@ -526,7 +526,7 @@ int pSeries_system_reset_exception(struct pt_regs *regs)
 static int mce_handle_error(struct pt_regs *regs, struct rtas_error_log *errp)
 {
 	struct mce_error_info mce_err = { 0 };
-	unsigned long eaddr = 0, paddr = 0;
+	unsigned long eaddr = 0, paddr = ULONG_MAX;
 	struct pseries_errorlog *pseries_log;
 	struct pseries_mc_errorlog *mce_log;
 	int disposition = rtas_error_disposition(errp);
@@ -610,16 +610,8 @@ static int mce_handle_error(struct pt_regs *regs, struct rtas_error_log *errp)
 		if (mce_log->sub_err_type & UE_EFFECTIVE_ADDR_PROVIDED)
 			eaddr = be64_to_cpu(mce_log->effective_address);
 
-		if (mce_log->sub_err_type & UE_LOGICAL_ADDR_PROVIDED) {
+		if (mce_log->sub_err_type & UE_LOGICAL_ADDR_PROVIDED)
 			paddr = be64_to_cpu(mce_log->logical_address);
-		} else if (mce_log->sub_err_type & UE_EFFECTIVE_ADDR_PROVIDED) {
-			unsigned long pfn;
-
-			pfn = addr_to_pfn(regs, eaddr);
-			if (pfn != ULONG_MAX)
-				paddr = pfn << PAGE_SHIFT;
-		}
-
 		break;
 	case MC_ERROR_TYPE_SLB:
 		mce_err.error_type = MCE_ERROR_TYPE_SLB;
