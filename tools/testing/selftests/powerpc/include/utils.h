@@ -101,6 +101,11 @@ do {								\
 #define PPC_FEATURE2_ARCH_3_00 0x00800000
 #endif
 
+/* POWER10 features */
+#ifndef PPC_FEATURE2_MMA
+#define PPC_FEATURE2_MMA 0x00020000
+#endif
+
 #if defined(__powerpc64__)
 #define UCONTEXT_NIA(UC)	(UC)->uc_mcontext.gp_regs[PT_NIP]
 #define UCONTEXT_MSR(UC)	(UC)->uc_mcontext.gp_regs[PT_MSR]
