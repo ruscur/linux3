@@ -1747,7 +1747,10 @@ static int kvmppc_get_one_reg_hv(struct kvm_vcpu *vcpu, u64 id,
 		*val = get_reg_val(id, vcpu->arch.wort);
 		break;
 	case KVM_REG_PPC_TIDR:
-		*val = get_reg_val(id, vcpu->arch.tid);
+		if (cpu_has_feature(CPU_FTR_P9_TIDR))
+			*val = get_reg_val(id, vcpu->arch.tid);
+		else
+			r = -ENXIO;
 		break;
 	case KVM_REG_PPC_PSSCR:
 		*val = get_reg_val(id, vcpu->arch.psscr);
@@ -1964,7 +1967,10 @@ static int kvmppc_set_one_reg_hv(struct kvm_vcpu *vcpu, u64 id,
 		vcpu->arch.wort = set_reg_val(id, *val);
 		break;
 	case KVM_REG_PPC_TIDR:
-		vcpu->arch.tid = set_reg_val(id, *val);
+		if (cpu_has_feature(CPU_FTR_P9_TIDR))
+			vcpu->arch.tid = set_reg_val(id, *val);
+		else
+			r = -ENXIO;
 		break;
 	case KVM_REG_PPC_PSSCR:
 		vcpu->arch.psscr = set_reg_val(id, *val) & PSSCR_GUEST_VIS;
@@ -3518,13 +3524,15 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 {
 	struct kvmppc_vcore *vc = vcpu->arch.vcore;
 	unsigned long host_dscr = mfspr(SPRN_DSCR);
-	unsigned long host_tidr = mfspr(SPRN_TIDR);
+	unsigned long host_tidr;
 	unsigned long host_iamr = mfspr(SPRN_IAMR);
 	unsigned long host_amr = mfspr(SPRN_AMR);
 	s64 dec;
 	u64 tb;
 	int trap, save_pmu;
 
+	if (cpu_has_feature(CPU_FTR_P9_TIDR))
+		host_tidr = mfspr(SPRN_TIDR);
 	dec = mfspr(SPRN_DEC);
 	tb = mftb();
 	if (dec < 512)
@@ -3571,7 +3579,8 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 	mtspr(SPRN_EBBRR, vcpu->arch.ebbrr);
 	mtspr(SPRN_BESCR, vcpu->arch.bescr);
 	mtspr(SPRN_WORT, vcpu->arch.wort);
-	mtspr(SPRN_TIDR, vcpu->arch.tid);
+	if (cpu_has_feature(CPU_FTR_P9_TIDR))
+		mtspr(SPRN_TIDR, vcpu->arch.tid);
 	mtspr(SPRN_DAR, vcpu->arch.shregs.dar);
 	mtspr(SPRN_DSISR, vcpu->arch.shregs.dsisr);
 	mtspr(SPRN_AMR, vcpu->arch.amr);
@@ -3645,7 +3654,8 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 	vcpu->arch.ebbrr = mfspr(SPRN_EBBRR);
 	vcpu->arch.bescr = mfspr(SPRN_BESCR);
 	vcpu->arch.wort = mfspr(SPRN_WORT);
-	vcpu->arch.tid = mfspr(SPRN_TIDR);
+	if (cpu_has_feature(CPU_FTR_P9_TIDR))
+		vcpu->arch.tid = mfspr(SPRN_TIDR);
 	vcpu->arch.amr = mfspr(SPRN_AMR);
 	vcpu->arch.uamor = mfspr(SPRN_UAMOR);
 	vcpu->arch.dscr = mfspr(SPRN_DSCR);
@@ -3654,7 +3664,8 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 	mtspr(SPRN_WORT, 0);
 	mtspr(SPRN_UAMOR, 0);
 	mtspr(SPRN_DSCR, host_dscr);
-	mtspr(SPRN_TIDR, host_tidr);
+	if (cpu_has_feature(CPU_FTR_P9_TIDR))
+		mtspr(SPRN_TIDR, host_tidr);
 	mtspr(SPRN_IAMR, host_iamr);
 	mtspr(SPRN_PSPB, 0);
 
