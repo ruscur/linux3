@@ -188,13 +188,14 @@ static int pseries_smp_prepare_cpu(int cpu)
 	return 0;
 }
 
+static void  (*cause_ipi_offcore)(int cpu) __ro_after_init;
+
 static void smp_pseries_cause_ipi(int cpu)
 {
-	/* POWER9 should not use this handler */
 	if (doorbell_try_core_ipi(cpu))
 		return;
 
-	icp_ops->cause_ipi(cpu);
+	cause_ipi_offcore(cpu);
 }
 
 static int pseries_cause_nmi_ipi(int cpu)
@@ -222,10 +223,7 @@ static __init void pSeries_smp_probe_xics(void)
 {
 	xics_smp_probe();
 
-	if (cpu_has_feature(CPU_FTR_DBELL) && !is_secure_guest())
-		smp_ops->cause_ipi = smp_pseries_cause_ipi;
-	else
-		smp_ops->cause_ipi = icp_ops->cause_ipi;
+	smp_ops->cause_ipi = icp_ops->cause_ipi;
 }
 
 static __init void pSeries_smp_probe(void)
@@ -238,6 +236,18 @@ static __init void pSeries_smp_probe(void)
 		xive_smp_probe();
 	else
 		pSeries_smp_probe_xics();
+
+	/*
+	 * KVM emulates doorbells by reading the instruction, which
+	 * can't be done if the guest is secure. If a secure guest
+	 * runs under PowerVM, it could use msgsndp but would need a
+	 * way to distinguish.
+	 */
+	if (cpu_has_feature(CPU_FTR_DBELL) &&
+	    cpu_has_feature(CPU_FTR_SMT) && !is_secure_guest()) {
+		cause_ipi_offcore = smp_ops->cause_ipi;
+		smp_ops->cause_ipi = smp_pseries_cause_ipi;
+	}
 }
 
 static struct smp_ops_t pseries_smp_ops = {
