@@ -51,6 +51,8 @@ master:
 	bl	0f		/* Work out where we're running */
 0:	mflr	%r18
 
+	ld	%r2,(my_toc - 0b)(%r18)		/* setup toc */
+
 	/* load device-tree address */
 	ld	%r3, (dt_offset - 0b)(%r18)
 	mr	%r16,%r3	/* save dt address in reg16 */
@@ -102,6 +104,12 @@ dt_offset:
 	.8byte  0x0
 	.size dt_offset, . - dt_offset
 
+
+	.balign 8
+	.globl my_toc
+my_toc:
+	.8byte  0x0
+	.size my_toc, . - my_toc
 
 	.data
 	.balign 8

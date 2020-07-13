@@ -20,6 +20,7 @@
 #include <linux/of_device.h>
 #include <linux/memblock.h>
 #include <linux/slab.h>
+#include <asm/types.h>
 #include <asm/drmem.h>
 #include <asm/kexec_ranges.h>
 #include <asm/crashdump-ppc64.h>
@@ -621,6 +622,244 @@ out:
 }
 
 /**
+ * get_toc_section - Look for ".toc" symbol and return the corresponding section
+ *                   in the purgatory.
+ * @pi:              Purgatory Info.
+ *
+ * Returns TOC section on success, NULL otherwise.
+ */
+static const Elf_Shdr *get_toc_section(const struct purgatory_info *pi)
+{
+	const Elf_Shdr *sechdrs;
+	const char *secstrings;
+	int i;
+
+	if (!pi->ehdr) {
+		pr_err("Purgatory elf load info missing?\n");
+		return NULL;
+	}
+
+	sechdrs = (void *)pi->ehdr + pi->ehdr->e_shoff;
+	secstrings = (void *)pi->ehdr + sechdrs[pi->ehdr->e_shstrndx].sh_offset;
+
+	for (i = 0; i < pi->ehdr->e_shnum; i++) {
+		if ((sechdrs[i].sh_size != 0) &&
+		    (strcmp(secstrings + sechdrs[i].sh_name, ".toc") == 0)) {
+			/* Return the relocated ".toc" section */
+			return &(pi->sechdrs[i]);
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * get_toc_ptr - Get the TOC pointer (r2) of purgatory.
+ * @pi:          Purgatory Info.
+ *
+ * Returns r2 on success, 0 otherwise.
+ */
+static unsigned long get_toc_ptr(const struct purgatory_info *pi)
+{
+	unsigned long toc_ptr = 0;
+	const Elf_Shdr *sechdr;
+
+	sechdr = get_toc_section(pi);
+	if (!sechdr)
+		pr_err("Could not get the TOC section!\n");
+	else
+		toc_ptr = sechdr->sh_addr + 0x8000;	/* 0x8000 into TOC */
+
+	pr_debug("TOC pointer (r2) is 0x%lx\n", toc_ptr);
+	return toc_ptr;
+}
+
+/* Helper functions to apply relocations */
+static int do_relative_toc(unsigned long val, uint16_t *loc,
+			   unsigned long mask, int complain_signed)
+{
+	if (complain_signed && (val + 0x8000 > 0xffff)) {
+		pr_err("TOC16 relocation overflows (%lu)\n", val);
+		return -ENOEXEC;
+	}
+
+	if ((~mask & 0xffff) & val) {
+		pr_err("Bad TOC16 relocation (%lu)\n", val);
+		return -ENOEXEC;
+	}
+
+	*loc = (*loc & ~mask) | (val & mask);
+	return 0;
+}
+#ifdef PPC64_ELF_ABI_v2
+/* PowerPC64 specific values for the Elf64_Sym st_other field.  */
+#define STO_PPC64_LOCAL_BIT	5
+#define STO_PPC64_LOCAL_MASK	(7 << STO_PPC64_LOCAL_BIT)
+#define PPC64_LOCAL_ENTRY_OFFSET(other)					\
+	(((1 << (((other) & STO_PPC64_LOCAL_MASK) >> STO_PPC64_LOCAL_BIT)) \
+	 >> 2) << 2)
+
+static unsigned int local_entry_offset(const Elf64_Sym *sym)
+{
+	/* If this symbol has a local entry point, use it. */
+	return PPC64_LOCAL_ENTRY_OFFSET(sym->st_other);
+}
+#else
+static unsigned int local_entry_offset(const Elf64_Sym *sym)
+{
+	return 0;
+}
+#endif
+
+/**
+ * __kexec_do_relocs - Apply relocations based on relocation type.
+ * @my_r2:             TOC pointer.
+ * @sym:               Symbol to relocate.
+ * @r_type:            Relocation type.
+ * @loc:               Location to modify.
+ * @val:               Relocated symbol value.
+ * @addr:              Final location after relocation.
+ *
+ * Returns 0 on success, negative errno on error.
+ */
+static int __kexec_do_relocs(unsigned long my_r2, const Elf_Sym *sym,
+			     int r_type, void *loc, unsigned long val,
+			     unsigned long addr)
+{
+	int ret = 0;
+
+	switch (r_type) {
+	case R_PPC64_ADDR32:
+		/* Simply set it */
+		*(uint32_t *)loc = val;
+		break;
+
+	case R_PPC64_ADDR64:
+		/* Simply set it */
+		*(uint64_t *)loc = val;
+		break;
+
+	case R_PPC64_REL64:
+		*(uint64_t *)loc = val - (uint64_t)addr;
+		break;
+
+	case R_PPC64_REL32:
+		/* Convert value to relative */
+		val -= addr;
+		if (val + 0x80000000 > 0xffffffff) {
+			pr_err("REL32 %li out of range!\n", val);
+			return -ENOEXEC;
+		}
+
+		*(uint32_t *)loc = val;
+		break;
+
+	case R_PPC64_TOC:
+		*(uint64_t *)loc = my_r2;
+		break;
+
+	case R_PPC64_TOC16:
+		ret = do_relative_toc(val - my_r2, loc, 0xffff, 1);
+		break;
+
+	case R_PPC64_TOC16_DS:
+		ret = do_relative_toc(val - my_r2, loc, 0xfffc, 1);
+		break;
+
+	case R_PPC64_TOC16_LO:
+		ret = do_relative_toc(val - my_r2, loc, 0xffff, 0);
+		break;
+
+	case R_PPC64_TOC16_LO_DS:
+		ret = do_relative_toc(val - my_r2, loc, 0xfffc, 0);
+		break;
+
+	case R_PPC64_TOC16_HI:
+		ret = do_relative_toc((val - my_r2) >> 16, loc,
+				      0xffff, 0);
+		break;
+
+	case R_PPC64_TOC16_HA:
+		ret = do_relative_toc((val - my_r2 + 0x8000) >> 16, loc,
+				      0xffff, 0);
+		break;
+
+	case R_PPC64_REL24:
+		val += local_entry_offset(sym);
+		/* Convert value to relative */
+		val -= addr;
+		if (val + 0x2000000 > 0x3ffffff || (val & 3) != 0) {
+			pr_err("REL24 %li out of range!\n", val);
+			return -ENOEXEC;
+		}
+
+		/* Only replace bits 2 through 26 */
+		*(uint32_t *)loc = ((*(uint32_t *)loc & ~0x03fffffc) |
+				    (val & 0x03fffffc));
+		break;
+
+	case R_PPC64_ADDR16_LO:
+		*(uint16_t *)loc = val & 0xffff;
+		break;
+
+	case R_PPC64_ADDR16_HI:
+		*(uint16_t *)loc = (val >> 16) & 0xffff;
+		break;
+
+	case R_PPC64_ADDR16_HA:
+		*(uint16_t *)loc = (((val + 0x8000) >> 16) & 0xffff);
+		break;
+
+	case R_PPC64_ADDR16_HIGHER:
+		*(uint16_t *)loc = (((uint64_t)val >> 32) & 0xffff);
+		break;
+
+	case R_PPC64_ADDR16_HIGHEST:
+		*(uint16_t *)loc = (((uint64_t)val >> 48) & 0xffff);
+		break;
+
+		/* R_PPC64_REL16_HA and R_PPC64_REL16_LO are handled to support
+		 * ABIv2 r2 assignment based on r12 for PIC executable.
+		 * Here address is known, so replace
+		 *	0:	addis 2,12,.TOC.-0b@ha
+		 *		addi 2,2,.TOC.-0b@l
+		 * by
+		 *		lis 2,.TOC.@ha
+		 *		addi 2,2,.TOC.@l
+		 */
+	case R_PPC64_REL16_HA:
+		/* check that we are dealing with the addis 2,12 instruction */
+		if (((*(uint32_t *)loc) & 0xffff0000) != 0x3c4c0000) {
+			pr_err("Unexpected instruction for  R_PPC64_REL16_HA");
+			return -ENOEXEC;
+		}
+
+		val += my_r2;
+		/* replacing by lis 2 */
+		*(uint32_t *)loc = 0x3c400000 + ((val >> 16) & 0xffff);
+		break;
+
+	case R_PPC64_REL16_LO:
+		/* check that we are dealing with the addi 2,2 instruction */
+		if (((*(uint32_t *)loc) & 0xffff0000) != 0x38420000) {
+			pr_err("Unexpected instruction for R_PPC64_REL16_LO");
+			return -ENOEXEC;
+		}
+
+		val += my_r2 - 4;
+		*(uint16_t *)loc = val & 0xffff;
+		break;
+
+	default:
+		pr_err("Unknown rela relocation: %d\n", r_type);
+		ret = -ENOEXEC;
+		break;
+	}
+
+	return ret;
+}
+
+/**
  * setup_purgatory_ppc64 - initialize PPC64 specific purgatory's global
  *                         variables and call setup_purgatory() to initialize
  *                         common global variable.
@@ -636,6 +875,7 @@ int setup_purgatory_ppc64(struct kimage *image, const void *slave_code,
 			  const void *fdt, unsigned long kernel_load_addr,
 			  unsigned long fdt_load_addr)
 {
+	uint64_t val;
 	int ret;
 
 	ret = setup_purgatory(image, slave_code, fdt, kernel_load_addr,
@@ -658,6 +898,10 @@ int setup_purgatory_ppc64(struct kimage *image, const void *slave_code,
 			goto out;
 	}
 
+	/* Setup the TOC pointer */
+	val = get_toc_ptr(&(image->purgatory_info));
+	ret = kexec_purgatory_get_set_symbol(image, "my_toc", &val, sizeof(val),
+					     false);
 out:
 	if (ret)
 		pr_err("Failed to setup purgatory symbols");
@@ -781,6 +1025,99 @@ int arch_kexec_locate_mem_hole(struct kexec_buf *kbuf)
 		       kbuf->memsz);
 	}
 	return ret;
+}
+
+/**
+ * arch_kexec_apply_relocations_add - Apply relocations of type RELA
+ * @pi:                               Purgatory Info.
+ * @section:                          Section relocations applying to.
+ * @relsec:                           Section containing RELAs.
+ * @symtab:                           Corresponding symtab.
+ *
+ * Returns 0 on success, negative errno on error.
+ */
+int arch_kexec_apply_relocations_add(struct purgatory_info *pi,
+				     Elf_Shdr *section,
+				     const Elf_Shdr *relsec,
+				     const Elf_Shdr *symtab)
+{
+	const char *strtab, *name, *shstrtab;
+	int i, r_type, ret, err = -ENOEXEC;
+	const Elf_Shdr *sechdrs;
+	unsigned long my_r2;
+	Elf_Rela *relas;
+
+	/* String & section header string table */
+	sechdrs = (void *)pi->ehdr + pi->ehdr->e_shoff;
+	strtab = (char *)pi->ehdr + sechdrs[symtab->sh_link].sh_offset;
+	shstrtab = (char *)pi->ehdr + sechdrs[pi->ehdr->e_shstrndx].sh_offset;
+
+	relas = (void *)pi->ehdr + relsec->sh_offset;
+
+	pr_debug("Applying relocate section %s to %u\n",
+		 shstrtab + relsec->sh_name, relsec->sh_info);
+
+	/* Get the TOC pointer (r2) */
+	my_r2 = get_toc_ptr(pi);
+	if (!my_r2)
+		return err;
+
+	for (i = 0; i < relsec->sh_size / sizeof(*relas); i++) {
+		const Elf_Sym *sym;	/* symbol to relocate */
+		unsigned long addr;	/* final location after relocation */
+		unsigned long val;	/* relocated symbol value */
+		void *loc;		/* tmp location to modify */
+
+		sym = (void *)pi->ehdr + symtab->sh_offset;
+		sym += ELF64_R_SYM(relas[i].r_info);
+
+		if (sym->st_name)
+			name = strtab + sym->st_name;
+		else
+			name = shstrtab + sechdrs[sym->st_shndx].sh_name;
+
+		pr_debug("Symbol: %s info: %x shndx: %x value=%llx size: %llx\n",
+			 name, sym->st_info, sym->st_shndx, sym->st_value,
+			 sym->st_size);
+
+		if ((sym->st_shndx == SHN_UNDEF) &&
+		    (ELF_ST_TYPE(sym->st_info) != STT_NOTYPE)) {
+			pr_err("Undefined symbol: %s\n", name);
+			return err;
+		}
+
+		if (sym->st_shndx == SHN_COMMON) {
+			pr_err("symbol '%s' in common section\n", name);
+			return err;
+		}
+
+		if ((sym->st_shndx >= pi->ehdr->e_shnum) &&
+		    (sym->st_shndx != SHN_ABS)) {
+			pr_err("Invalid section %d for symbol %s\n",
+			       sym->st_shndx, name);
+			return err;
+		}
+
+		loc = pi->purgatory_buf;
+		loc += section->sh_offset;
+		loc += relas[i].r_offset;
+
+		val = sym->st_value;
+		if (sym->st_shndx != SHN_ABS)
+			val += pi->sechdrs[sym->st_shndx].sh_addr;
+		val += relas[i].r_addend;
+
+		addr = section->sh_addr + relas[i].r_offset;
+
+		pr_debug("Symbol: %s value=%lx address=%lx\n", name, val, addr);
+
+		r_type = ELF64_R_TYPE(relas[i].r_info);
+		ret = __kexec_do_relocs(my_r2, sym, r_type, loc, val, addr);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
 }
 
 /**
