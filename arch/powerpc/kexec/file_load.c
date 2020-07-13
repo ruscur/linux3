@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * ppc64 code to implement the kexec_file_load syscall
+ * powerpc code to implement the kexec_file_load syscall
  *
  * Copyright (C) 2004  Adam Litke (agl@us.ibm.com)
  * Copyright (C) 2004  IBM Corp.
@@ -16,26 +16,10 @@
 
 #include <linux/slab.h>
 #include <linux/kexec.h>
-#include <linux/of_fdt.h>
 #include <linux/libfdt.h>
 #include <asm/ima.h>
 
-#define SLAVE_CODE_SIZE		256
-
-const struct kexec_file_ops * const kexec_file_loaders[] = {
-	&kexec_elf64_ops,
-	NULL
-};
-
-int arch_kexec_kernel_image_probe(struct kimage *image, void *buf,
-				  unsigned long buf_len)
-{
-	/* We don't support crash kernels yet. */
-	if (image->type == KEXEC_TYPE_CRASH)
-		return -EOPNOTSUPP;
-
-	return kexec_image_probe_default(image, buf, buf_len);
-}
+#define SLAVE_CODE_SIZE		256	/* First 0x100 bytes */
 
 /**
  * setup_purgatory - initialize the purgatory's global variables
@@ -127,23 +111,16 @@ int delete_fdt_mem_rsv(void *fdt, unsigned long start, unsigned long size)
  * @initrd_len:		Size of the next initrd, or 0 if there will be none.
  * @cmdline:		Command line for the next kernel, or NULL if there will
  *			be none.
+ * @chosen_node:        Set this output parameter to chosen_node.
  *
  * Return: 0 on success, or negative errno on error.
  */
 int setup_new_fdt(const struct kimage *image, void *fdt,
 		  unsigned long initrd_load_addr, unsigned long initrd_len,
-		  const char *cmdline)
+		  const char *cmdline, int *node)
 {
 	int ret, chosen_node;
 	const void *prop;
-
-	/* Remove memory reservation for the current device tree. */
-	ret = delete_fdt_mem_rsv(fdt, __pa(initial_boot_params),
-				 fdt_totalsize(initial_boot_params));
-	if (ret == 0)
-		pr_debug("Removed old device tree reservation.\n");
-	else if (ret != -ENOENT)
-		return ret;
 
 	chosen_node = fdt_path_offset(fdt, "/chosen");
 	if (chosen_node == -FDT_ERR_NOTFOUND) {
@@ -157,6 +134,8 @@ int setup_new_fdt(const struct kimage *image, void *fdt,
 		pr_err("Malformed device tree: error reading /chosen.\n");
 		return -EINVAL;
 	}
+	if (node)
+		*node = chosen_node;
 
 	/* Did we boot using an initrd? */
 	prop = fdt_getprop(fdt, chosen_node, "linux,initrd-start", NULL);
@@ -241,10 +220,6 @@ int setup_new_fdt(const struct kimage *image, void *fdt,
 		pr_err("Error setting up the new device tree.\n");
 		return ret;
 	}
-
-	ret = fdt_setprop(fdt, chosen_node, "linux,booted-from-kexec", NULL, 0);
-	if (ret)
-		goto err;
 
 	return 0;
 
