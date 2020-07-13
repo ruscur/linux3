@@ -12,7 +12,7 @@
  * times. Then check the output count from perf is as expected.
  *
  * Based on:
- *   http://ozlabs.org/~anton/junkcode/perf_events_example1.c
+ *   https://ozlabs.org/~anton/junkcode/perf_events_example1.c
  *
  * Copyright (C) 2018 Michael Neuling, IBM Corporation.
  */

@@ -5,7 +5,7 @@
  *
  * DESCRIPTION
  *      GCC atomic builtin wrappers
- *      http://gcc.gnu.org/onlinedocs/gcc-4.1.0/gcc/Atomic-Builtins.html
+ *      https://gcc.gnu.org/onlinedocs/gcc-4.1.0/gcc/Atomic-Builtins.html
  *
  * AUTHOR
  *      Darren Hart <dvhart@linux.intel.com>

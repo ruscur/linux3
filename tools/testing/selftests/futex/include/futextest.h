@@ -211,7 +211,7 @@ futex_cmp_requeue_pi(futex_t *uaddr, futex_t val, futex_t *uaddr2, int nr_wake,
  * @newval:	The new value to try and assign the futex
  *
  * Implement cmpxchg using gcc atomic builtins.
- * http://gcc.gnu.org/onlinedocs/gcc-4.1.0/gcc/Atomic-Builtins.html
+ * https://gcc.gnu.org/onlinedocs/gcc-4.1.0/gcc/Atomic-Builtins.html
  *
  * Return the old futex value.
  */

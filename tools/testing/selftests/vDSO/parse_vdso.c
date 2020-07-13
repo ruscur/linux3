@@ -5,7 +5,7 @@
  * This code is meant to be linked in to various programs that run on Linux.
  * As such, it is available with as few restrictions as possible.  This file
  * is licensed under the Creative Commons Zero License, version 1.0,
- * available at http://creativecommons.org/publicdomain/zero/1.0/legalcode
+ * available at https://creativecommons.org/publicdomain/zero/1.0/legalcode
  *
  * The vDSO is a regular ELF DSO that the kernel maps into user space when
  * it starts a program.  It works equally well in statically and dynamically
