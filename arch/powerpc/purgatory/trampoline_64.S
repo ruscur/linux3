@@ -44,17 +44,25 @@ master:
 	mr	%r17,%r3	/* save cpu id to r17 */
 	mr	%r15,%r4	/* save physical address in reg15 */
 
-	or	%r3,%r3,%r3	/* ok now to high priority, lets boot */
-	lis	%r6,0x1
-	mtctr	%r6		/* delay a bit for slaves to catch up */
-	bdnz	.		/* before we overwrite 0-100 again */
-
 	bl	0f		/* Work out where we're running */
 0:	mflr	%r18
 
 	ld	%r2,(my_toc - 0b)(%r18)		/* setup toc */
 
 	ld	%r1,(stack - 0b)(%r18)		/* setup stack */
+
+	subi	%r1,%r1,112
+#if defined(_CALL_ELF) && _CALL_ELF == 2
+	bl	purgatory
+#else
+	bl	.purgatory
+#endif
+	nop
+80:
+	or	%r3,%r3,%r3	/* ok now to high priority, lets boot */
+	lis	%r6,0x1
+	mtctr	%r6		/* delay a bit for slaves to catch up */
+	bdnz	.		/* before we overwrite 0-100 again */
 
 	/* load device-tree address */
 	ld	%r3, (dt_offset - 0b)(%r18)
@@ -112,6 +120,11 @@ dt_offset:
 	.8byte  0x0
 	.size dt_offset, . - dt_offset
 
+	.balign 8
+	.globl backup_start
+backup_start:
+	.8byte  0x0
+	.size backup_start, . - backup_start
 
 	.balign 8
 	.globl my_toc
