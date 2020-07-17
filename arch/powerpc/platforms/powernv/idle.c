@@ -92,7 +92,7 @@ static int pnv_save_sprs_for_deep_states(void)
 		if (rc != 0)
 			return rc;
 
-		if (cpu_has_feature(CPU_FTR_ARCH_300)) {
+		if (pvr_version_is(PVR_POWER9)) {
 			rc = opal_slw_set_reg(pir, P9_STOP_SPR_MSR, msr_val);
 			if (rc)
 				return rc;
@@ -116,7 +116,7 @@ static int pnv_save_sprs_for_deep_states(void)
 				return rc;
 
 			/* Only p8 needs to set extra HID regiters */
-			if (!cpu_has_feature(CPU_FTR_ARCH_300)) {
+			if (!pvr_version_is(PVR_POWER9)) {
 
 				rc = opal_slw_set_reg(pir, SPRN_HID1, hid1_val);
 				if (rc != 0)
@@ -971,7 +971,7 @@ unsigned long pnv_cpu_offline(unsigned int cpu)
 
 	__ppc64_runlatch_off();
 
-	if (cpu_has_feature(CPU_FTR_ARCH_300) && deepest_stop_found) {
+	if (pvr_version_is(PVR_POWER9) && deepest_stop_found) {
 		unsigned long psscr;
 
 		psscr = mfspr(SPRN_PSSCR);
@@ -1175,7 +1175,7 @@ static void __init pnv_disable_deep_states(void)
 	pr_warn("cpuidle-powernv: Disabling idle states that lose full context\n");
 	pr_warn("cpuidle-powernv: Idle power-savings, CPU-Hotplug affected\n");
 
-	if (cpu_has_feature(CPU_FTR_ARCH_300) &&
+	if (pvr_version_is(PVR_POWER9) &&
 	    (pnv_deepest_stop_flag & OPAL_PM_LOSE_FULL_CONTEXT)) {
 		/*
 		 * Use the default stop state for CPU-Hotplug
@@ -1205,7 +1205,7 @@ static void __init pnv_probe_idle_states(void)
 		return;
 	}
 
-	if (cpu_has_feature(CPU_FTR_ARCH_300))
+	if (pvr_version_is(PVR_POWER9))
 		pnv_power9_idle_init();
 
 	for (i = 0; i < nr_pnv_idle_states; i++)
@@ -1278,7 +1278,7 @@ static int pnv_parse_cpuidle_dt(void)
 		pnv_idle_states[i].residency_ns = temp_u32[i];
 
 	/* For power9 */
-	if (cpu_has_feature(CPU_FTR_ARCH_300)) {
+	if (pvr_version_is(PVR_POWER9)) {
 		/* Read pm_crtl_val */
 		if (of_property_read_u64_array(np, "ibm,cpu-idle-state-psscr",
 					       temp_u64, nr_idle_states)) {
@@ -1337,7 +1337,7 @@ static int __init pnv_init_idle_states(void)
 		if (cpu == cpu_first_thread_sibling(cpu))
 			p->idle_state = (1 << threads_per_core) - 1;
 
-		if (!cpu_has_feature(CPU_FTR_ARCH_300)) {
+		if (!pvr_version_is(PVR_POWER9)) {
 			/* P7/P8 nap */
 			p->thread_idle_state = PNV_THREAD_RUNNING;
 		} else {
