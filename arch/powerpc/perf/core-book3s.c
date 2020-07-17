@@ -1218,7 +1218,7 @@ static void write_mmcr0(struct cpu_hw_events *cpuhw, unsigned long mmcr0)
 static void power_pmu_disable(struct pmu *pmu)
 {
 	struct cpu_hw_events *cpuhw;
-	unsigned long flags, mmcr0, val;
+	unsigned long flags, mmcr0, val, mmcra;
 
 	if (!ppmu)
 		return;
@@ -1251,12 +1251,24 @@ static void power_pmu_disable(struct pmu *pmu)
 		mb();
 		isync();
 
+		val = mmcra = cpuhw->mmcr.mmcra;
+
 		/*
 		 * Disable instruction sampling if it was enabled
 		 */
-		if (cpuhw->mmcr.mmcra & MMCRA_SAMPLE_ENABLE) {
-			mtspr(SPRN_MMCRA,
-			      cpuhw->mmcr.mmcra & ~MMCRA_SAMPLE_ENABLE);
+		if (cpuhw->mmcr.mmcra & MMCRA_SAMPLE_ENABLE)
+			val &= ~MMCRA_SAMPLE_ENABLE;
+
+		/* Disable BHRB via mmcra (BHRBRD) for p10 */
+		if (ppmu->flags & PPMU_ARCH_310S)
+			val |= MMCRA_BHRB_DISABLE;
+
+		/*
+		 * Write SPRN_MMCRA if mmcra has either disabled
+		 * instruction sampling or BHRB.
+		 */
+		if (val != mmcra) {
+			mtspr(SPRN_MMCRA, mmcra);
 			mb();
 			isync();
 		}
