@@ -15,6 +15,9 @@
 #define MAX_EVENT_ALTERNATIVES	8
 #define MAX_LIMITED_HWCOUNTERS	2
 
+extern u64 PERF_REG_EXTENDED_MASK;
+#define PERF_REG_EXTENDED_MASK	PERF_REG_EXTENDED_MASK
+
 struct perf_event;
 
 struct mmcr_regs {
@@ -62,6 +65,11 @@ struct power_pmu {
 	int 		*blacklist_ev;
 	/* BHRB entries in the PMU */
 	int		bhrb_nr;
+	/*
+	 * set this flag with `PERF_PMU_CAP_EXTENDED_REGS` if
+	 * the pmu supports extended perf regs capability
+	 */
+	int		capabilities;
 };
 
 /*
