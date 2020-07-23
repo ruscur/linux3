@@ -3649,15 +3649,8 @@ void lockdep_hardirqs_on_prepare(unsigned long ip)
 	if (unlikely(!debug_locks || current->lockdep_recursion))
 		return;
 
-	if (unlikely(current->hardirqs_enabled)) {
-		/*
-		 * Neither irq nor preemption are disabled here
-		 * so this is racy by nature but losing one hit
-		 * in a stat is not a big deal.
-		 */
-		__debug_atomic_inc(redundant_hardirqs_on);
+	if (DEBUG_LOCKS_WARN_ON(current->hardirqs_enabled))
 		return;
-	}
 
 	/*
 	 * We're enabling irqs and according to our state above irqs weren't
@@ -3695,15 +3688,8 @@ void noinstr lockdep_hardirqs_on(unsigned long ip)
 	if (unlikely(!debug_locks || curr->lockdep_recursion))
 		return;
 
-	if (curr->hardirqs_enabled) {
-		/*
-		 * Neither irq nor preemption are disabled here
-		 * so this is racy by nature but losing one hit
-		 * in a stat is not a big deal.
-		 */
-		__debug_atomic_inc(redundant_hardirqs_on);
+	if (DEBUG_LOCKS_WARN_ON(curr->hardirqs_enabled))
 		return;
-	}
 
 	/*
 	 * We're enabling irqs and according to our state above irqs weren't
@@ -3738,6 +3724,9 @@ void noinstr lockdep_hardirqs_off(unsigned long ip)
 	if (unlikely(!debug_locks || curr->lockdep_recursion))
 		return;
 
+	if (DEBUG_LOCKS_WARN_ON(!curr->hardirqs_enabled))
+		return;
+
 	/*
 	 * So we're supposed to get called after you mask local IRQs, but for
 	 * some reason the hardware doesn't quite think you did a proper job.
@@ -3745,17 +3734,13 @@ void noinstr lockdep_hardirqs_off(unsigned long ip)
 	if (DEBUG_LOCKS_WARN_ON(!irqs_disabled()))
 		return;
 
-	if (curr->hardirqs_enabled) {
-		/*
-		 * We have done an ON -> OFF transition:
-		 */
-		curr->hardirqs_enabled = 0;
-		curr->hardirq_disable_ip = ip;
-		curr->hardirq_disable_event = ++curr->irq_events;
-		debug_atomic_inc(hardirqs_off_events);
-	} else {
-		debug_atomic_inc(redundant_hardirqs_off);
-	}
+	/*
+	 * We have done an ON -> OFF transition:
+	 */
+	curr->hardirqs_enabled = 0;
+	curr->hardirq_disable_ip = ip;
+	curr->hardirq_disable_event = ++curr->irq_events;
+	debug_atomic_inc(hardirqs_off_events);
 }
 EXPORT_SYMBOL_GPL(lockdep_hardirqs_off);
 
@@ -3769,17 +3754,15 @@ void lockdep_softirqs_on(unsigned long ip)
 	if (unlikely(!debug_locks || current->lockdep_recursion))
 		return;
 
+	if (DEBUG_LOCKS_WARN_ON(curr->softirqs_enabled))
+		return;
+
 	/*
 	 * We fancy IRQs being disabled here, see softirq.c, avoids
 	 * funny state and nesting things.
 	 */
 	if (DEBUG_LOCKS_WARN_ON(!irqs_disabled()))
 		return;
-
-	if (curr->softirqs_enabled) {
-		debug_atomic_inc(redundant_softirqs_on);
-		return;
-	}
 
 	current->lockdep_recursion++;
 	/*
@@ -3809,26 +3792,26 @@ void lockdep_softirqs_off(unsigned long ip)
 	if (unlikely(!debug_locks || current->lockdep_recursion))
 		return;
 
+	if (DEBUG_LOCKS_WARN_ON(!curr->softirqs_enabled))
+		return;
+
 	/*
 	 * We fancy IRQs being disabled here, see softirq.c
 	 */
 	if (DEBUG_LOCKS_WARN_ON(!irqs_disabled()))
 		return;
 
-	if (curr->softirqs_enabled) {
-		/*
-		 * We have done an ON -> OFF transition:
-		 */
-		curr->softirqs_enabled = 0;
-		curr->softirq_disable_ip = ip;
-		curr->softirq_disable_event = ++curr->irq_events;
-		debug_atomic_inc(softirqs_off_events);
-		/*
-		 * Whoops, we wanted softirqs off, so why aren't they?
-		 */
-		DEBUG_LOCKS_WARN_ON(!softirq_count());
-	} else
-		debug_atomic_inc(redundant_softirqs_off);
+	/*
+	 * We have done an ON -> OFF transition:
+	 */
+	curr->softirqs_enabled = 0;
+	curr->softirq_disable_ip = ip;
+	curr->softirq_disable_event = ++curr->irq_events;
+	debug_atomic_inc(softirqs_off_events);
+	/*
+	 * Whoops, we wanted softirqs off, so why aren't they?
+	 */
+	DEBUG_LOCKS_WARN_ON(!softirq_count());
 }
 
 static int
@@ -5684,6 +5667,11 @@ void __init lockdep_init(void)
 
 	printk(" per task-struct memory footprint: %zu bytes\n",
 	       sizeof(((struct task_struct *)NULL)->held_locks));
+
+	WARN_ON(irqs_disabled());
+
+	current->hardirqs_enabled = 1;
+	current->softirqs_enabled = 1;
 }
 
 static void

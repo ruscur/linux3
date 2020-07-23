@@ -180,12 +180,8 @@ struct lockdep_stats {
 	unsigned int   chain_lookup_misses;
 	unsigned long  hardirqs_on_events;
 	unsigned long  hardirqs_off_events;
-	unsigned long  redundant_hardirqs_on;
-	unsigned long  redundant_hardirqs_off;
 	unsigned long  softirqs_on_events;
 	unsigned long  softirqs_off_events;
-	unsigned long  redundant_softirqs_on;
-	unsigned long  redundant_softirqs_off;
 	int            nr_unused_locks;
 	unsigned int   nr_redundant_checks;
 	unsigned int   nr_redundant;
