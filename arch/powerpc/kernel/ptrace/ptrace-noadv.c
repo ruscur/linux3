@@ -52,8 +52,11 @@ void ppc_gethwdinfo(struct ppc_debug_info *dbginfo)
 	dbginfo->sizeof_condition = 0;
 	if (IS_ENABLED(CONFIG_HAVE_HW_BREAKPOINT)) {
 		dbginfo->features = PPC_DEBUG_FEATURE_DATA_BP_RANGE;
-		if (dawr_enabled())
+		if (dawr_enabled()) {
 			dbginfo->features |= PPC_DEBUG_FEATURE_DATA_BP_DAWR;
+			if (cpu_has_feature(CPU_FTR_ARCH_31))
+				dbginfo->features |= PPC_DEBUG_FEATURE_DATA_BP_DAWR_ARCH_31;
+		}
 	} else {
 		dbginfo->features = 0;
 	}
