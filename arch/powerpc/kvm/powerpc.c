@@ -676,6 +676,9 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 			!kvmppc_hv_ops->enable_svm(NULL);
 		break;
 #endif
+	case KVM_CAP_PPC_DAWR1:
+		r = cpu_has_feature(CPU_FTR_DAWR1);
+		break;
 	default:
 		r = 0;
 		break;
