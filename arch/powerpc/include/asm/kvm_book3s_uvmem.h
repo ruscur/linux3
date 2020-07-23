@@ -23,6 +23,8 @@ int kvmppc_send_page_to_uv(struct kvm *kvm, unsigned long gfn);
 unsigned long kvmppc_h_svm_init_abort(struct kvm *kvm);
 void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *free,
 			     struct kvm *kvm, bool skip_page_out);
+int kvmppc_uv_migrate_mem_slot(struct kvm *kvm,
+			const struct kvm_memory_slot *memslot);
 #else
 static inline int kvmppc_uvmem_init(void)
 {
