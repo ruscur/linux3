@@ -2219,8 +2219,8 @@ registers, find a list below:
   PPC     KVM_REG_PPC_BESCR               64
   PPC     KVM_REG_PPC_TAR                 64
   PPC     KVM_REG_PPC_DPDES               64
-  PPC     KVM_REG_PPC_DAWR                64
-  PPC     KVM_REG_PPC_DAWRX               64
+  PPC     KVM_REG_PPC_DAWR0               64
+  PPC     KVM_REG_PPC_DAWRX0              64
   PPC     KVM_REG_PPC_CIABR               64
   PPC     KVM_REG_PPC_IC                  64
   PPC     KVM_REG_PPC_VTB                 64
