@@ -537,6 +537,8 @@ struct hv_guest_state {
 	s64 tb_offset;
 	u64 dawr0;
 	u64 dawrx0;
+	u64 dawr1;
+	u64 dawrx1;
 	u64 ciabr;
 	u64 hdec_expiry;
 	u64 purr;
