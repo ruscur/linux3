@@ -87,7 +87,7 @@ struct pnv_ioda_pe {
 	bool			tce_bypass_enabled;
 	uint64_t		tce_bypass_base;
 
-	/* MSIs. MVE index is identical for for 32 and 64 bit MSI
+	/* MSIs. MVE index is identical for 32 and 64 bit MSI
 	 * and -1 if not supported. (It's actually identical to the
 	 * PE number)
 	 */
