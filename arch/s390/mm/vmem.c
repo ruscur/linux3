@@ -399,10 +399,11 @@ out:
  */
 void __init vmem_map_init(void)
 {
-	struct memblock_region *reg;
+	phys_addr_t start, end;
+	u64 i;
 
-	for_each_memblock(memory, reg)
-		vmem_add_mem(reg->base, reg->size);
+	for_each_mem_range(i, &start, &end)
+		vmem_add_mem(start, end - start);
 	__set_memory((unsigned long)_stext,
 		     (unsigned long)(_etext - _stext) >> PAGE_SHIFT,
 		     SET_MEMORY_RO | SET_MEMORY_X);
@@ -428,16 +429,17 @@ void __init vmem_map_init(void)
  */
 static int __init vmem_convert_memory_chunk(void)
 {
-	struct memblock_region *reg;
+	phys_addr_t start, end;
 	struct memory_segment *seg;
+	u64 i;
 
 	mutex_lock(&vmem_mutex);
-	for_each_memblock(memory, reg) {
+	for_each_mem_range(i, &start, &end) {
 		seg = kzalloc(sizeof(*seg), GFP_KERNEL);
 		if (!seg)
 			panic("Out of memory...\n");
-		seg->start = reg->base;
-		seg->size = reg->size;
+		seg->start = start;
+		seg->size = end - start;
 		insert_memory_segment(seg);
 	}
 	mutex_unlock(&vmem_mutex);

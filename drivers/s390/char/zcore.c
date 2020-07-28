@@ -148,18 +148,19 @@ static ssize_t zcore_memmap_read(struct file *filp, char __user *buf,
 
 static int zcore_memmap_open(struct inode *inode, struct file *filp)
 {
-	struct memblock_region *reg;
+	phys_addr_t start, end;
 	char *buf;
 	int i = 0;
+	u64 r;
 
 	buf = kcalloc(memblock.memory.cnt, CHUNK_INFO_SIZE, GFP_KERNEL);
 	if (!buf) {
 		return -ENOMEM;
 	}
-	for_each_memblock(memory, reg) {
+	for_each_mem_range(r, &start, &end) {
 		sprintf(buf + (i++ * CHUNK_INFO_SIZE), "%016llx %016llx ",
-			(unsigned long long) reg->base,
-			(unsigned long long) reg->size);
+			(unsigned long long) start,
+			(unsigned long long) (end - start));
 	}
 	filp->private_data = buf;
 	return nonseekable_open(inode, filp);
