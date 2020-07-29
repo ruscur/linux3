@@ -3262,7 +3262,7 @@ static int enter_secure_mode(unsigned long kbase, unsigned long fdt)
 /*
  * Call the Ultravisor to transfer us to secure memory if we have an ESM blob.
  */
-static void setup_secure_guest(unsigned long kbase, unsigned long fdt)
+static void __init setup_secure_guest(unsigned long kbase, unsigned long fdt)
 {
 	int ret;
 
@@ -3292,7 +3292,7 @@ static void setup_secure_guest(unsigned long kbase, unsigned long fdt)
 	}
 }
 #else
-static void setup_secure_guest(unsigned long kbase, unsigned long fdt)
+static void __init setup_secure_guest(unsigned long kbase, unsigned long fdt)
 {
 }
 #endif /* CONFIG_PPC_SVM */
