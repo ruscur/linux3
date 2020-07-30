@@ -344,7 +344,9 @@
 #define H_COPY_TOFROM_GUEST	0xF80C
 
 /* Flags for H_SVM_PAGE_IN */
-#define H_PAGE_IN_SHARED        0x1
+#define H_PAGE_IN_NONSHARED	0x0  /* Page is not shared with the UV */
+#define H_PAGE_IN_SHARED	0x1  /* Page is shared with UV */
+#define H_PAGE_IN_MASK		0x1
 
 /* Platform-specific hcalls used by the Ultravisor */
 #define H_SVM_PAGE_IN		0xEF00

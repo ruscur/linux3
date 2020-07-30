@@ -938,12 +938,13 @@ unsigned long kvmppc_h_svm_page_in(struct kvm *kvm, unsigned long gpa,
 	if (page_shift != PAGE_SHIFT)
 		return H_P3;
 
-	if (flags & ~H_PAGE_IN_SHARED)
+	if (flags & ~H_PAGE_IN_MASK)
 		return H_P2;
 
 	if (flags & H_PAGE_IN_SHARED)
 		return kvmppc_share_page(kvm, gpa, page_shift);
 
+	/* handle H_PAGE_IN_NONSHARED */
 	ret = H_PARAMETER;
 	srcu_idx = srcu_read_lock(&kvm->srcu);
 	mmap_read_lock(kvm->mm);
