@@ -350,13 +350,13 @@ static bool lmb_is_removable(struct drmem_lmb *lmb)
 	return true;
 }
 
-static int dlpar_add_lmb(struct drmem_lmb *);
+static int dlpar_add_lmb(struct drmem_lmb *lmb, bool dt_update);
 
-static int dlpar_remove_lmb(struct drmem_lmb *lmb)
+static int dlpar_remove_lmb(struct drmem_lmb *lmb, bool dt_update)
 {
 	unsigned long block_sz;
 	phys_addr_t base_addr;
-	int rc, nid;
+	int rc, ret, nid;
 
 	if (!lmb_is_removable(lmb))
 		return -EINVAL;
@@ -372,6 +372,11 @@ static int dlpar_remove_lmb(struct drmem_lmb *lmb)
 	invalidate_lmb_associativity_index(lmb);
 	lmb_clear_nid(lmb);
 	lmb->flags &= ~DRCONF_MEM_ASSIGNED;
+	if (dt_update) {
+		ret = drmem_update_dt();
+		if (ret)
+			pr_warn("%s fail to update dt, but continue\n", __func__);
+	}
 
 	__remove_memory(nid, base_addr, block_sz);
 
@@ -387,6 +392,7 @@ static int dlpar_memory_remove_by_count(u32 lmbs_to_remove)
 	int lmbs_removed = 0;
 	int lmbs_available = 0;
 	int rc;
+	bool dt_update = false;
 
 	pr_info("Attempting to hot-remove %d LMB(s)\n", lmbs_to_remove);
 
@@ -409,7 +415,7 @@ static int dlpar_memory_remove_by_count(u32 lmbs_to_remove)
 	}
 
 	for_each_drmem_lmb(lmb) {
-		rc = dlpar_remove_lmb(lmb);
+		rc = dlpar_remove_lmb(lmb, dt_update);
 		if (rc)
 			continue;
 
@@ -421,16 +427,27 @@ static int dlpar_memory_remove_by_count(u32 lmbs_to_remove)
 		lmbs_removed++;
 		if (lmbs_removed == lmbs_to_remove)
 			break;
+		/* combine dt updating */
+		else if (lmbs_removed == lmbs_to_remove - 1)
+			dt_update = true;
 	}
 
 	if (lmbs_removed != lmbs_to_remove) {
+		bool rollback_dt_update = false;
+
 		pr_err("Memory hot-remove failed, adding LMB's back\n");
 
 		for_each_drmem_lmb(lmb) {
 			if (!drmem_lmb_reserved(lmb))
 				continue;
 
-			rc = dlpar_add_lmb(lmb);
+			/*
+			 * Even if dlpar_remove_lmb() fails to update dt, it is
+			 * harmless to update dt here.
+			 */
+			if (--lmbs_removed == 0 && dt_update)
+				rollback_dt_update = true;
+			rc = dlpar_add_lmb(lmb, rollback_dt_update);
 			if (rc)
 				pr_err("Failed to add LMB back, drc index %x\n",
 				       lmb->drc_index);
@@ -468,7 +485,7 @@ static int dlpar_memory_remove_by_index(u32 drc_index)
 	for_each_drmem_lmb(lmb) {
 		if (lmb->drc_index == drc_index) {
 			lmb_found = 1;
-			rc = dlpar_remove_lmb(lmb);
+			rc = dlpar_remove_lmb(lmb, true);
 			if (!rc)
 				dlpar_release_drc(lmb->drc_index);
 
@@ -493,6 +510,7 @@ static int dlpar_memory_remove_by_ic(u32 lmbs_to_remove, u32 drc_index)
 	struct drmem_lmb *lmb, *start_lmb, *end_lmb;
 	int lmbs_available = 0;
 	int rc;
+	bool dt_update = false;
 
 	pr_info("Attempting to hot-remove %u LMB(s) at %x\n",
 		lmbs_to_remove, drc_index);
@@ -519,7 +537,9 @@ static int dlpar_memory_remove_by_ic(u32 lmbs_to_remove, u32 drc_index)
 		if (!(lmb->flags & DRCONF_MEM_ASSIGNED))
 			continue;
 
-		rc = dlpar_remove_lmb(lmb);
+		if (lmb == end_lmb)
+			dt_update = true;
+		rc = dlpar_remove_lmb(lmb, dt_update);
 		if (rc)
 			break;
 
@@ -527,14 +547,17 @@ static int dlpar_memory_remove_by_ic(u32 lmbs_to_remove, u32 drc_index)
 	}
 
 	if (rc) {
-		pr_err("Memory indexed-count-remove failed, adding any removed LMBs\n");
+		bool rollback_dt_update = false;
 
+		pr_err("Memory indexed-count-remove failed, adding any removed LMBs\n");
 
 		for_each_drmem_lmb_in_range(lmb, start_lmb, end_lmb) {
 			if (!drmem_lmb_reserved(lmb))
 				continue;
-
-			rc = dlpar_add_lmb(lmb);
+			/* Since in removing path, dt is only updated if lmb == end_lmb */
+			if (lmb == end_lmb)
+				rollback_dt_update = true;
+			rc = dlpar_add_lmb(lmb, rollback_dt_update);
 			if (rc)
 				pr_err("Failed to add LMB, drc index %x\n",
 				       lmb->drc_index);
@@ -572,7 +595,7 @@ static inline int dlpar_memory_remove(struct pseries_hp_errorlog *hp_elog)
 {
 	return -EOPNOTSUPP;
 }
-static int dlpar_remove_lmb(struct drmem_lmb *lmb)
+static int dlpar_remove_lmb(struct drmem_lmb *lmb, bool dt_update)
 {
 	return -EOPNOTSUPP;
 }
@@ -591,10 +614,10 @@ static int dlpar_memory_remove_by_ic(u32 lmbs_to_remove, u32 drc_index)
 }
 #endif /* CONFIG_MEMORY_HOTREMOVE */
 
-static int dlpar_add_lmb(struct drmem_lmb *lmb)
+static int dlpar_add_lmb(struct drmem_lmb *lmb, bool dt_update)
 {
 	unsigned long block_sz;
-	int rc;
+	int rc, ret;
 
 	if (lmb->flags & DRCONF_MEM_ASSIGNED)
 		return -EINVAL;
@@ -607,6 +630,11 @@ static int dlpar_add_lmb(struct drmem_lmb *lmb)
 
 	lmb_set_nid(lmb);
 	lmb->flags |= DRCONF_MEM_ASSIGNED;
+	if (dt_update) {
+		ret = drmem_update_dt();
+		if (ret)
+			pr_warn("%s fail to update dt, but continue\n", __func__);
+	}
 
 	block_sz = memory_block_size_bytes();
 
@@ -625,7 +653,11 @@ static int dlpar_add_lmb(struct drmem_lmb *lmb)
 		invalidate_lmb_associativity_index(lmb);
 		lmb_clear_nid(lmb);
 		lmb->flags &= ~DRCONF_MEM_ASSIGNED;
-
+		if (dt_update) {
+			ret = drmem_update_dt();
+			if (ret)
+				pr_warn("%s fail to update dt during rollback, but continue\n", __func__);
+		}
 		__remove_memory(nid, base_addr, block_sz);
 	}
 
@@ -638,6 +670,7 @@ static int dlpar_memory_add_by_count(u32 lmbs_to_add)
 	int lmbs_available = 0;
 	int lmbs_added = 0;
 	int rc;
+	bool dt_update = false;
 
 	pr_info("Attempting to hot-add %d LMB(s)\n", lmbs_to_add);
 
@@ -664,7 +697,7 @@ static int dlpar_memory_add_by_count(u32 lmbs_to_add)
 		if (rc)
 			continue;
 
-		rc = dlpar_add_lmb(lmb);
+		rc = dlpar_add_lmb(lmb, dt_update);
 		if (rc) {
 			dlpar_release_drc(lmb->drc_index);
 			continue;
@@ -678,16 +711,23 @@ static int dlpar_memory_add_by_count(u32 lmbs_to_add)
 		lmbs_added++;
 		if (lmbs_added == lmbs_to_add)
 			break;
+		else if (lmbs_added == lmbs_to_add - 1)
+			dt_update = true;
 	}
 
 	if (lmbs_added != lmbs_to_add) {
+		bool rollback_dt_update = false;
+
 		pr_err("Memory hot-add failed, removing any added LMBs\n");
 
 		for_each_drmem_lmb(lmb) {
 			if (!drmem_lmb_reserved(lmb))
 				continue;
 
-			rc = dlpar_remove_lmb(lmb);
+			if (--lmbs_added == 0 && dt_update)
+				rollback_dt_update = true;
+
+			rc = dlpar_remove_lmb(lmb, rollback_dt_update);
 			if (rc)
 				pr_err("Failed to remove LMB, drc index %x\n",
 				       lmb->drc_index);
@@ -725,7 +765,7 @@ static int dlpar_memory_add_by_index(u32 drc_index)
 			lmb_found = 1;
 			rc = dlpar_acquire_drc(lmb->drc_index);
 			if (!rc) {
-				rc = dlpar_add_lmb(lmb);
+				rc = dlpar_add_lmb(lmb, true);
 				if (rc)
 					dlpar_release_drc(lmb->drc_index);
 			}
@@ -751,6 +791,7 @@ static int dlpar_memory_add_by_ic(u32 lmbs_to_add, u32 drc_index)
 	struct drmem_lmb *lmb, *start_lmb, *end_lmb;
 	int lmbs_available = 0;
 	int rc;
+	bool dt_update = false;
 
 	pr_info("Attempting to hot-add %u LMB(s) at index %x\n",
 		lmbs_to_add, drc_index);
@@ -781,7 +822,9 @@ static int dlpar_memory_add_by_ic(u32 lmbs_to_add, u32 drc_index)
 		if (rc)
 			break;
 
-		rc = dlpar_add_lmb(lmb);
+		if (lmb == end_lmb)
+			dt_update = true;
+		rc = dlpar_add_lmb(lmb, dt_update);
 		if (rc) {
 			dlpar_release_drc(lmb->drc_index);
 			break;
@@ -794,10 +837,14 @@ static int dlpar_memory_add_by_ic(u32 lmbs_to_add, u32 drc_index)
 		pr_err("Memory indexed-count-add failed, removing any added LMBs\n");
 
 		for_each_drmem_lmb_in_range(lmb, start_lmb, end_lmb) {
+			bool rollback_dt_update = false;
+
 			if (!drmem_lmb_reserved(lmb))
 				continue;
 
-			rc = dlpar_remove_lmb(lmb);
+			if (lmb == end_lmb)
+				rollback_dt_update = true;
+			rc = dlpar_remove_lmb(lmb, rollback_dt_update);
 			if (rc)
 				pr_err("Failed to remove LMB, drc index %x\n",
 				       lmb->drc_index);
@@ -876,9 +923,6 @@ int dlpar_memory(struct pseries_hp_errorlog *hp_elog)
 		rc = -EINVAL;
 		break;
 	}
-
-	if (!rc)
-		rc = drmem_update_dt();
 
 	unlock_device_hotplug();
 	return rc;
