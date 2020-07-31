@@ -221,25 +221,51 @@ static void initialize_distance_lookup_table(int nid,
 	}
 }
 
+static u32 nid_map[MAX_NUMNODES] = {[0 ... MAX_NUMNODES - 1] =  NUMA_NO_NODE};
+
+int firmware_group_id_to_nid(int firmware_gid)
+{
+	static int last_nid = 0;
+
+	/*
+	 * For PowerNV we don't change the node id. This helps to avoid
+	 * confusion w.r.t the expected node ids. On pseries, node numbers
+	 * are virtualized. Hence do logical node id for pseries.
+	 */
+	if (!firmware_has_feature(FW_FEATURE_LPAR))
+		return firmware_gid;
+
+	if (firmware_gid ==  -1)
+		return NUMA_NO_NODE;
+
+	if (nid_map[firmware_gid] == NUMA_NO_NODE)
+		nid_map[firmware_gid] = last_nid++;
+
+	return nid_map[firmware_gid];
+}
+
 /* Returns nid in the range [0..MAX_NUMNODES-1], or -1 if no useful numa
  * info is found.
  */
 static int associativity_to_nid(const __be32 *associativity)
 {
 	int nid = NUMA_NO_NODE;
+	int firmware_gid = -1;
 
 	if (!numa_enabled)
 		goto out;
 
 	if (of_read_number(associativity, 1) >= min_common_depth)
-		nid = of_read_number(&associativity[min_common_depth], 1);
+		firmware_gid = of_read_number(&associativity[min_common_depth], 1);
 
 	/* POWER4 LPAR uses 0xffff as invalid node */
-	if (nid == 0xffff || nid >= MAX_NUMNODES)
-		nid = NUMA_NO_NODE;
+	if (firmware_gid == 0xffff || firmware_gid >= MAX_NUMNODES)
+		firmware_gid = -1;
+
+	nid = firmware_group_id_to_nid(firmware_gid);
 
 	if (nid > 0 &&
-		of_read_number(associativity, 1) >= distance_ref_points_depth) {
+	    of_read_number(associativity, 1) >= distance_ref_points_depth) {
 		/*
 		 * Skip the length field and send start of associativity array
 		 */
@@ -432,24 +458,25 @@ static int of_get_assoc_arrays(struct assoc_arrays *aa)
 static int of_drconf_to_nid_single(struct drmem_lmb *lmb)
 {
 	struct assoc_arrays aa = { .arrays = NULL };
-	int default_nid = NUMA_NO_NODE;
-	int nid = default_nid;
+	int nid = NUMA_NO_NODE, firmware_gid;
 	int rc, index;
 
 	if ((min_common_depth < 0) || !numa_enabled)
-		return default_nid;
+		return NUMA_NO_NODE;
 
 	rc = of_get_assoc_arrays(&aa);
 	if (rc)
-		return default_nid;
+		return NUMA_NO_NODE;
 
 	if (min_common_depth <= aa.array_sz &&
 	    !(lmb->flags & DRCONF_MEM_AI_INVALID) && lmb->aa_index < aa.n_arrays) {
 		index = lmb->aa_index * aa.array_sz + min_common_depth - 1;
-		nid = of_read_number(&aa.arrays[index], 1);
+		firmware_gid = of_read_number(&aa.arrays[index], 1);
 
-		if (nid == 0xffff || nid >= MAX_NUMNODES)
-			nid = default_nid;
+		if (firmware_gid == 0xffff || firmware_gid >= MAX_NUMNODES)
+			firmware_gid = -1;
+
+		nid = firmware_group_id_to_nid(firmware_gid);
 
 		if (nid > 0) {
 			index = lmb->aa_index * aa.array_sz;

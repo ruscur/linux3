@@ -145,5 +145,6 @@ int dlpar_cpu_readd(int cpu);
 #endif
 #endif
 
+int firmware_group_id_to_nid(int firmware_gid);
 #endif /* __KERNEL__ */
 #endif	/* _ASM_POWERPC_TOPOLOGY_H */
