@@ -78,6 +78,7 @@
 
 #define IMM_L(i)               ((uintptr_t)(i) & 0xffff)
 #define IMM_DS(i)              ((uintptr_t)(i) & 0xfffc)
+#define IMM_DQ(i)		(((uintptr_t)(i) & 0xfff) << 4)
 
 /*
  * 16-bit immediate helper macros: HA() is for use with sign-extending instrs
@@ -272,6 +273,8 @@
 #define PPC_INST_STFD			0xd8000000
 #define PPC_PREFIX_MLS			0x06000000
 #define PPC_PREFIX_8LS			0x04000000
+#define PPC_PLXVP_EX_OP			0xe8000000
+#define PPC_PSTXVP_EX_OP		0xf8000000
 
 /* Prefixed instructions */
 #define PPC_INST_PLD			0xe4000000
@@ -296,6 +299,8 @@
 #define __PPC_XS(s)	((((s) & 0x1f) << 21) | (((s) & 0x20) >> 5))
 #define __PPC_XT(s)	__PPC_XS(s)
 #define __PPC_T_TLB(t)	(((t) & 0x3) << 21)
+#define __PPC_TP(tp)	(((tp) & 0xf) << 22)
+#define __PPC_TX(tx)	(((tx) & 0x1) << 21)
 #define __PPC_WC(w)	(((w) & 0x3) << 21)
 #define __PPC_WS(w)	(((w) & 0x1f) << 11)
 #define __PPC_SH(s)	__PPC_WS(s)
@@ -387,6 +392,18 @@
 #define PPC_RAW_STXVD2X(s, a, b)	(0x7c000798 | VSX_XX1((s), a, b))
 #define PPC_RAW_LXVD2X(s, a, b)		(0x7c000698 | VSX_XX1((s), a, b))
 #define PPC_RAW_MFVRD(a, t)		(0x7c000066 | VSX_XX1((t) + 32, a, R0))
+#define PPC_LXVP(tp, tx, a, i) \
+	(0x18000000 | __PPC_TP(tp) | __PPC_TX(tx) | ___PPC_RA(a) | IMM_DQ(i))
+#define PPC_STXVP(sp, sx, a, i) \
+	(0x18000001 | __PPC_TP(sp) | __PPC_TX(sx) | ___PPC_RA(a) | IMM_DQ(i) | 0x1)
+#define PPC_LXVPX(tp, tx, a, b) \
+	(0x7c00029a | __PPC_TP(tp) | __PPC_TX(tx) | ___PPC_RA(a) | ___PPC_RB(b))
+#define PPC_STXVPX(sp, sx, a, b) \
+	(0x7c00039a | __PPC_TP(sp) | __PPC_TX(sx) | ___PPC_RA(a) | ___PPC_RB(b))
+#define PPC_PLXVP(a, i, pr, tp, tx) \
+	((PPC_PREFIX_8LS | __PPC_PRFX_R(pr) | IMM_H(i)) << 32 | (PPC_PLXVP_EX_OP | __PPC_TP(tp) | __PPC_TX(tx) | ___PPC_RA(a) | IMM_L(i)))
+#define PPC_PSTXVP(a, i, pr, sp, sx) \
+	((PPC_PREFIX_8LS | __PPC_PRFX_R(pr) | IMM_H(i)) << 32 | (PPC_PSTXVP_EX_OP | __PPC_TP(sp) | __PPC_TX(sx) | ___PPC_RA(a) | IMM_L(i)))
 #define PPC_RAW_MTVRD(t, a)		(0x7c000166 | VSX_XX1((t) + 32, a, R0))
 #define PPC_RAW_VPMSUMW(t, a, b)	(0x10000488 | VSX_XX3((t), a, b))
 #define PPC_RAW_VPMSUMD(t, a, b)	(0x100004c8 | VSX_XX3((t), a, b))
