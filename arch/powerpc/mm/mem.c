@@ -37,6 +37,7 @@
 #include <asm/pgalloc.h>
 #include <asm/prom.h>
 #include <asm/io.h>
+#include <asm/mmu_fsl_e.h>
 #include <asm/mmu_context.h>
 #include <asm/mmu.h>
 #include <asm/smp.h>

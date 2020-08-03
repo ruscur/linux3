@@ -9,6 +9,7 @@
 #include <linux/mm.h>
 #include <linux/hugetlb.h>
 
+#include <asm/mmu_fsl_e.h>
 #include <asm/mmu.h>
 
 #ifdef CONFIG_PPC64

@@ -35,6 +35,7 @@
 #include <linux/stackprotector.h>
 #include <linux/pgtable.h>
 
+#include <asm/mmu_fsl_e.h>
 #include <asm/ptrace.h>
 #include <linux/atomic.h>
 #include <asm/irq.h>
