@@ -31,9 +31,17 @@
 
 #define SI_PKEY_OFFSET	0x20
 
+#ifndef SYS_pkey_mprotect
 #define SYS_pkey_mprotect	386
+#endif
+
+#ifndef SYS_pkey_alloc
 #define SYS_pkey_alloc		384
+#endif
+
+#ifndef SYS_pkey_free
 #define SYS_pkey_free		385
+#endif
 
 #define PKEY_BITS_PER_PKEY	2
 #define NR_PKEYS		32
