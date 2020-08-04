@@ -111,13 +111,12 @@ static void pseries_cpu_die(unsigned int cpu)
 	int cpu_status = 1;
 	unsigned int pcpu = get_hard_smp_processor_id(cpu);
 
-	for (tries = 0; tries < 25; tries++) {
+	for (tries = 0; tries < 50; tries++) {
 		cpu_status = smp_query_cpu_stopped(pcpu);
 		if (cpu_status == QCSS_STOPPED ||
 		    cpu_status == QCSS_HARDWARE_ERROR)
 			break;
-		cpu_relax();
-
+		msleep(100);
 	}
 
 	if (cpu_status != 0) {
