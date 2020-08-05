@@ -397,7 +397,7 @@ static void __init init_drmem_v1_lmbs(const __be32 *prop)
 
 static void __init init_drmem_v2_lmbs(const __be32 *prop)
 {
-	struct drmem_lmb *lmb;
+	struct drmem_lmb *lmb, *first;
 	struct of_drconf_cell_v2 dr_cell;
 	const __be32 *p;
 	u32 i, j, lmb_sets;
@@ -422,9 +422,17 @@ static void __init init_drmem_v2_lmbs(const __be32 *prop)
 	/* second pass, read in the LMB information */
 	lmb_index = 0;
 	p = prop;
+	first = NULL;
 
 	for (i = 0; i < lmb_sets; i++) {
 		read_drconf_v2_cell(&dr_cell, &p);
+
+		/*
+		 * Fetch the NUMA node id for the fist set or if the
+		 * associativity index is different from the previous set.
+		 */
+		if (first && dr_cell.aa_index != first->aa_index)
+			first = NULL;
 
 		for (j = 0; j < dr_cell.seq_lmbs; j++) {
 			lmb = &drmem_info->lmbs[lmb_index++];
@@ -438,7 +446,16 @@ static void __init init_drmem_v2_lmbs(const __be32 *prop)
 			lmb->aa_index = dr_cell.aa_index;
 			lmb->flags = dr_cell.flags;
 
-			lmb_set_nid(lmb);
+			/*
+			 * All the LMB in the set share the same NUMA
+			 * associativity property. So read that node only once.
+			 */
+			if (!first) {
+				lmb_set_nid(lmb);
+				first = lmb;
+			} else {
+				lmb->nid = first->nid;
+			}
 		}
 	}
 }
