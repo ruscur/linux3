@@ -152,7 +152,7 @@ static int wf_lm75_remove(struct i2c_client *client)
 {
 	struct wf_lm75_sensor *lm = i2c_get_clientdata(client);
 
-	DBG("wf_lm75: i2c detatch called for %s\n", lm->sens.name);
+	DBG("wf_lm75: i2c detach called for %s\n", lm->sens.name);
 
 	/* Mark client detached */
 	lm->i2c = NULL;
