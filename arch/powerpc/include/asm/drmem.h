@@ -123,4 +123,6 @@ static inline void lmb_clear_nid(struct drmem_lmb *lmb)
 }
 #endif
 
+extern int mem_addr_cells, mem_size_cells;
+
 #endif /* _ASM_POWERPC_LMB_H */

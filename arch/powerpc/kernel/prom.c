@@ -73,6 +73,7 @@ u64 ppc64_rma_size;
 #endif
 static phys_addr_t first_memblock_size;
 static int __initdata boot_cpu_count;
+int mem_addr_cells, mem_size_cells;
 
 static int __init early_parse_mem(char *p)
 {
@@ -536,6 +537,12 @@ static int __init early_init_dt_scan_memory_ppc(unsigned long node,
 						const char *uname,
 						int depth, void *data)
 {
+	/*
+	 * Make a copy from __initdata variable
+	 */
+	mem_addr_cells = dt_root_addr_cells;
+	mem_size_cells = dt_root_size_cells;
+
 #ifdef CONFIG_PPC_PSERIES
 	if (depth == 1 &&
 	    strcmp(uname, "ibm,dynamic-reconfiguration-memory") == 0) {
