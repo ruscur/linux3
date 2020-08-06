@@ -14,8 +14,6 @@
 #include <asm/prom.h>
 #include <asm/drmem.h>
 
-static int n_root_addr_cells, n_root_size_cells;
-
 static struct drmem_lmb_info __drmem_info;
 struct drmem_lmb_info *drmem_info = &__drmem_info;
 
@@ -196,8 +194,8 @@ static void read_drconf_v1_cell(struct drmem_lmb *lmb,
 {
 	const __be32 *p = *prop;
 
-	lmb->base_addr = of_read_number(p, n_root_addr_cells);
-	p += n_root_addr_cells;
+	lmb->base_addr = of_read_number(p, mem_addr_cells);
+	p += mem_addr_cells;
 	lmb->drc_index = of_read_number(p++, 1);
 
 	p++; /* skip reserved field */
@@ -233,8 +231,8 @@ static void read_drconf_v2_cell(struct of_drconf_cell_v2 *dr_cell,
 	const __be32 *p = *prop;
 
 	dr_cell->seq_lmbs = of_read_number(p++, 1);
-	dr_cell->base_addr = of_read_number(p, n_root_addr_cells);
-	p += n_root_addr_cells;
+	dr_cell->base_addr = of_read_number(p, mem_addr_cells);
+	p += mem_addr_cells;
 	dr_cell->drc_index = of_read_number(p++, 1);
 	dr_cell->aa_index = of_read_number(p++, 1);
 	dr_cell->flags = of_read_number(p++, 1);
@@ -285,10 +283,6 @@ int __init walk_drmem_lmbs_early(unsigned long node, void *data,
 	if (!prop || len < dt_root_size_cells * sizeof(__be32))
 		return ret;
 
-	/* Get the address & size cells */
-	n_root_addr_cells = dt_root_addr_cells;
-	n_root_size_cells = dt_root_size_cells;
-
 	drmem_info->lmb_size = dt_mem_next_cell(dt_root_size_cells, &prop);
 
 	usm = of_get_flat_dt_prop(node, "linux,drconf-usable-memory", &len);
@@ -318,12 +312,12 @@ static int init_drmem_lmb_size(struct device_node *dn)
 		return 0;
 
 	prop = of_get_property(dn, "ibm,lmb-size", &len);
-	if (!prop || len < n_root_size_cells * sizeof(__be32)) {
+	if (!prop || len < mem_size_cells * sizeof(__be32)) {
 		pr_info("Could not determine LMB size\n");
 		return -1;
 	}
 
-	drmem_info->lmb_size = of_read_number(prop, n_root_size_cells);
+	drmem_info->lmb_size = of_read_number(prop, mem_size_cells);
 	return 0;
 }
 
@@ -352,12 +346,6 @@ int walk_drmem_lmbs(struct device_node *dn, void *data,
 
 	if (!of_root)
 		return ret;
-
-	/* Get the address & size cells */
-	of_node_get(of_root);
-	n_root_addr_cells = of_n_addr_cells(of_root);
-	n_root_size_cells = of_n_size_cells(of_root);
-	of_node_put(of_root);
 
 	if (init_drmem_lmb_size(dn))
 		return ret;
