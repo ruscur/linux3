@@ -52,7 +52,6 @@ EXPORT_SYMBOL(node_to_cpumask_map);
 EXPORT_SYMBOL(node_data);
 
 static int min_common_depth;
-static int n_mem_addr_cells, n_mem_size_cells;
 static int form1_affinity;
 
 #define MAX_DISTANCE_REF_POINTS 4
@@ -355,19 +354,6 @@ err:
 	return -1;
 }
 
-static void __init get_n_mem_cells(int *n_addr_cells, int *n_size_cells)
-{
-	struct device_node *memory = NULL;
-
-	memory = of_find_node_by_type(memory, "memory");
-	if (!memory)
-		panic("numa.c: No memory nodes found!");
-
-	*n_addr_cells = of_n_addr_cells(memory);
-	*n_size_cells = of_n_size_cells(memory);
-	of_node_put(memory);
-}
-
 /*  dt_mem_next_cell is __init  */
 static unsigned long read_n_cells(int n, const __be32 **buf)
 {
@@ -639,12 +625,12 @@ static inline int __init read_usm_ranges(const __be32 **usm)
 	 * a counter followed by that many (base, size) duple.
 	 * read the counter from linux,drconf-usable-memory
 	 */
-	return read_n_cells(n_mem_size_cells, usm);
+	return read_n_cells(mem_size_cells, usm);
 }
 
 /*
  * Extract NUMA information from the ibm,dynamic-reconfiguration-memory
- * node.  This assumes n_mem_{addr,size}_cells have been set.
+ * node.  This assumes mem_{addr,size}_cells have been set.
  */
 static int __init numa_setup_drmem_lmb(struct drmem_lmb *lmb,
 					const __be32 **usm,
@@ -677,8 +663,8 @@ static int __init numa_setup_drmem_lmb(struct drmem_lmb *lmb,
 
 	do {
 		if (is_kexec_kdump) {
-			base = read_n_cells(n_mem_addr_cells, usm);
-			size = read_n_cells(n_mem_size_cells, usm);
+			base = read_n_cells(mem_addr_cells, usm);
+			size = read_n_cells(mem_size_cells, usm);
 		}
 
 		nid = of_drconf_to_nid_single(lmb);
@@ -741,8 +727,6 @@ static int __init parse_numa_properties(void)
 		node_set_online(nid);
 	}
 
-	get_n_mem_cells(&n_mem_addr_cells, &n_mem_size_cells);
-
 	for_each_node_by_type(memory, "memory") {
 		unsigned long start;
 		unsigned long size;
@@ -759,11 +743,11 @@ static int __init parse_numa_properties(void)
 			continue;
 
 		/* ranges in cell */
-		ranges = (len >> 2) / (n_mem_addr_cells + n_mem_size_cells);
+		ranges = (len >> 2) / (mem_addr_cells + mem_size_cells);
 new_range:
 		/* these are order-sensitive, and modify the buffer pointer */
-		start = read_n_cells(n_mem_addr_cells, &memcell_buf);
-		size = read_n_cells(n_mem_size_cells, &memcell_buf);
+		start = read_n_cells(mem_addr_cells, &memcell_buf);
+		size = read_n_cells(mem_size_cells, &memcell_buf);
 
 		/*
 		 * Assumption: either all memory nodes or none will
@@ -1042,11 +1026,11 @@ static int hot_add_node_scn_to_nid(unsigned long scn_addr)
 			continue;
 
 		/* ranges in cell */
-		ranges = (len >> 2) / (n_mem_addr_cells + n_mem_size_cells);
+		ranges = (len >> 2) / (mem_addr_cells + mem_size_cells);
 
 		while (ranges--) {
-			start = read_n_cells(n_mem_addr_cells, &memcell_buf);
-			size = read_n_cells(n_mem_size_cells, &memcell_buf);
+			start = read_n_cells(mem_addr_cells, &memcell_buf);
+			size = read_n_cells(mem_size_cells, &memcell_buf);
 
 			if ((scn_addr < start) || (scn_addr >= (start + size)))
 				continue;
