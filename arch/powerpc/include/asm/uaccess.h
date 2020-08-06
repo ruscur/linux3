@@ -15,48 +15,49 @@
  *
  * For historical reasons, these macros are grossly misnamed.
  *
- * The fs/ds values are now the highest legal address in the "segment".
+ * The fs/ds values are now a bool which tells the "segment" is user or kernel.
  * This simplifies the checking in the routines below.
  */
 
 #define MAKE_MM_SEG(s)  ((mm_segment_t) { (s) })
 
-#define KERNEL_DS	MAKE_MM_SEG(~0UL)
-#ifdef __powerpc64__
-/* We use TASK_SIZE_USER64 as TASK_SIZE is not constant */
-#define USER_DS		MAKE_MM_SEG(TASK_SIZE_USER64 - 1)
-#else
-#define USER_DS		MAKE_MM_SEG(TASK_SIZE - 1)
-#endif
+#define KERNEL_DS	MAKE_MM_SEG(true)
+#define USER_DS		MAKE_MM_SEG(false)
 
-#define get_fs()	(current->thread.addr_limit)
+#define get_fs()	(MAKE_MM_SEG(test_thread_flag(TIF_UACCESS_KERNEL)))
 
 static inline void set_fs(mm_segment_t fs)
 {
-	current->thread.addr_limit = fs;
-	/* On user-mode return check addr_limit (fs) is correct */
-	set_thread_flag(TIF_FSCHECK);
+	update_thread_flag(TIF_UACCESS_KERNEL, fs.uaccess_kernel);
 }
 
-#define uaccess_kernel() (get_fs().seg == KERNEL_DS.seg)
-#define user_addr_max()	(get_fs().seg)
+#define uaccess_kernel() (get_fs().uaccess_kernel)
+#define user_addr_max()	(get_fs().uaccess_kernel ? ~0UL : USER_ADDR_MAX - 1)
 
 #ifdef __powerpc64__
+
+#define USER_ADDR_MAX		TASK_SIZE_USER64
+
 /*
  * This check is sufficient because there is a large enough
  * gap between user addresses and the kernel addresses
  */
 #define __access_ok(addr, size, segment)	\
-	(((addr) <= (segment).seg) && ((size) <= (segment).seg))
+	segment.uaccess_kernel ?	\
+	1 : (addr) < USER_ADDR_MAX && ((size) < USER_ADDR_MAX)
 
 #else
+
+#define USER_ADDR_MAX		TASK_SIZE
 
 static inline int __access_ok(unsigned long addr, unsigned long size,
 			mm_segment_t seg)
 {
-	if (addr > seg.seg)
+	if (seg.uaccess_kernel)
+		return 1;
+	if (addr >= USER_ADDR_MAX)
 		return 0;
-	return (size == 0 || size - 1 <= seg.seg - addr);
+	return addr + size <= USER_ADDR_MAX;
 }
 
 #endif
