@@ -171,6 +171,13 @@ inline unsigned long copy_ckfpr_from_user(struct task_struct *task,
 
 int show_unhandled_signals = 1;
 
+static unsigned long get_clean_sp(unsigned long sp, int is_32)
+{
+	if (is_32)
+		return sp & 0x0ffffffffUL;
+	return sp;
+}
+
 /*
  * Allocate space for the signal frame
  */
