@@ -210,16 +210,16 @@ static bool bad_kernel_fault(struct pt_regs *regs, unsigned long error_code,
 		return true;
 	}
 
-	if (!is_exec && address < TASK_SIZE && (error_code & DSISR_PROTFAULT) &&
+	// Kernel fault on kernel address is bad
+	if (address >= TASK_SIZE)
+		return true;
+
+	if (!is_exec && (error_code & DSISR_PROTFAULT) &&
 	    !search_exception_tables(regs->nip)) {
 		pr_crit_ratelimited("Kernel attempted to access user page (%lx) - exploit attempt? (uid: %d)\n",
 				    address,
 				    from_kuid(&init_user_ns, current_uid()));
 	}
-
-	// Kernel fault on kernel address is bad
-	if (address >= TASK_SIZE)
-		return true;
 
 	// Fault on user outside of certain regions (eg. copy_tofrom_user()) is bad
 	if (!search_exception_tables(regs->nip))
