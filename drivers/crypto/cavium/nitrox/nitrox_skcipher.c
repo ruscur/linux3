@@ -249,9 +249,15 @@ static int nitrox_skcipher_crypt(struct skcipher_request *skreq, bool enc)
 	struct crypto_skcipher *cipher = crypto_skcipher_reqtfm(skreq);
 	struct nitrox_crypto_ctx *nctx = crypto_skcipher_ctx(cipher);
 	struct nitrox_kcrypt_request *nkreq = skcipher_request_ctx(skreq);
+	struct crypto_tfm *tfm = crypto_skcipher_tfm(cipher);
 	int ivsize = crypto_skcipher_ivsize(cipher);
 	struct se_crypto_request *creq;
+	const char *name;
 	int ret;
+
+	name = crypto_tfm_alg_name(tfm);
+	if (!skreq->cryptlen && flexi_cipher_type(name) == CIPHER_AES_XTS)
+		return 0;
 
 	creq = &nkreq->creq;
 	creq->flags = skreq->base.flags;
