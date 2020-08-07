@@ -275,6 +275,9 @@ int glue_xts_req_128bit(const struct common_glue_ctx *gctx,
 	unsigned int nbytes, tail;
 	int err;
 
+	if (!req->cryptlen)
+		return 0;
+
 	if (req->cryptlen < XTS_BLOCK_SIZE)
 		return -EINVAL;
 
