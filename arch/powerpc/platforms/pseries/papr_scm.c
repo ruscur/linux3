@@ -822,7 +822,7 @@ free_stats:
 	kfree(stats);
 	return rc ? rc : seq_buf_used(&s);
 }
-DEVICE_ATTR_RO(perf_stats);
+DEVICE_ATTR(perf_stats, 0400, perf_stats_show, NULL);
 
 static ssize_t flags_show(struct device *dev,
 			  struct device_attribute *attr, char *buf)
