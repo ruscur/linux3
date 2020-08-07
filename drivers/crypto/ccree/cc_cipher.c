@@ -912,14 +912,15 @@ static int cc_cipher_process(struct skcipher_request *req,
 
 	/* STAT_PHASE_0: Init and sanity checks */
 
-	if (validate_data_size(ctx_p, nbytes)) {
-		dev_dbg(dev, "Unsupported data size %d.\n", nbytes);
-		rc = -EINVAL;
-		goto exit_process;
-	}
 	if (nbytes == 0) {
 		/* No data to process is valid */
 		rc = 0;
+		goto exit_process;
+	}
+
+	if (validate_data_size(ctx_p, nbytes)) {
+		dev_dbg(dev, "Unsupported data size %d.\n", nbytes);
+		rc = -EINVAL;
 		goto exit_process;
 	}
 
