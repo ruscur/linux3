@@ -327,6 +327,9 @@ static int ppc_xts_encrypt(struct skcipher_request *req)
 	u8 b[2][AES_BLOCK_SIZE];
 	int err;
 
+	if (!req->cryptlen)
+		return 0;
+
 	if (req->cryptlen < AES_BLOCK_SIZE)
 		return -EINVAL;
 
@@ -365,6 +368,9 @@ static int ppc_xts_decrypt(struct skcipher_request *req)
 	u8 b[3][AES_BLOCK_SIZE];
 	le128 twk;
 	int err;
+
+	if (!req->cryptlen)
+		return 0;
 
 	if (req->cryptlen < AES_BLOCK_SIZE)
 		return -EINVAL;
