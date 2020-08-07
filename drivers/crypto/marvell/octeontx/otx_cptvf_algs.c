@@ -340,10 +340,15 @@ static inline int cpt_enc_dec(struct skcipher_request *req, u32 enc)
 {
 	struct crypto_skcipher *stfm = crypto_skcipher_reqtfm(req);
 	struct otx_cpt_req_ctx *rctx = skcipher_request_ctx(req);
+	struct crypto_tfm *tfm = crypto_skcipher_tfm(stfm);
+	struct otx_cpt_enc_ctx *ctx = crypto_tfm_ctx(tfm);
 	struct otx_cpt_req_info *req_info = &rctx->cpt_req;
 	u32 enc_iv_len = crypto_skcipher_ivsize(stfm);
 	struct pci_dev *pdev;
 	int status, cpu_num;
+
+	if (!req->cryptlen && ctx->cipher_type == OTX_CPT_AES_XTS)
+		return 0;
 
 	/* Validate that request doesn't exceed maximum CPT supported size */
 	if (req->cryptlen > OTX_CPT_MAX_REQ_SIZE)
