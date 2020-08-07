@@ -723,6 +723,10 @@ static int sec_alg_skcipher_crypto(struct skcipher_request *skreq,
 	bool split = skreq->src != skreq->dst;
 	gfp_t gfp = skreq->base.flags & CRYPTO_TFM_REQ_MAY_SLEEP ? GFP_KERNEL : GFP_ATOMIC;
 
+	if (!skreq->cryptlen && (ctx->cipher_alg == SEC_C_AES_XTS_128 ||
+				 ctx->cipher_alg == SEC_C_AES_XTS_256))
+		return 0;
+
 	mutex_init(&sec_req->lock);
 	sec_req->req_base = &skreq->base;
 	sec_req->err = 0;
