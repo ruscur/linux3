@@ -709,8 +709,8 @@ handle_dabr_fault:
  * to the "_switch" path.  If you change this , you'll have to
  * change the fork code also.
  *
- * The code which creates the new task context is in 'copy_thread'
- * in arch/ppc/kernel/process.c
+ * The code which creates the new task context is in 'copy_thread_tls'
+ * in arch/powerpc/kernel/process.c
  */
 _GLOBAL(_switch)
 	stwu	r1,-INT_FRAME_SIZE(r1)
