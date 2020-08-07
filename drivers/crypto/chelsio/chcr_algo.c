@@ -1372,7 +1372,11 @@ static int chcr_aes_encrypt(struct skcipher_request *req)
 	int err;
 	struct uld_ctx *u_ctx = ULD_CTX(c_ctx(tfm));
 	struct chcr_context *ctx = c_ctx(tfm);
+	int subtype = get_cryptoalg_subtype(tfm);
 	unsigned int cpu;
+
+	if (!req->cryptlen && subtype == CRYPTO_ALG_SUB_TYPE_XTS)
+		return 0;
 
 	cpu = get_cpu();
 	reqctx->txqidx = cpu % ctx->ntxq;
