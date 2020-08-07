@@ -1090,6 +1090,9 @@ static int artpec6_crypto_encrypt(struct skcipher_request *req)
 	void (*complete)(struct crypto_async_request *req);
 	int ret;
 
+	if (!req->cryptlen)
+		return 0;
+
 	req_ctx = skcipher_request_ctx(req);
 
 	switch (ctx->crypto_type) {
@@ -1134,6 +1137,9 @@ static int artpec6_crypto_decrypt(struct skcipher_request *req)
 	struct artpec6_cryptotfm_context *ctx = crypto_skcipher_ctx(cipher);
 	struct artpec6_crypto_request_context *req_ctx = NULL;
 	void (*complete)(struct crypto_async_request *req);
+
+	if (!req->cryptlen)
+		return 0;
 
 	req_ctx = skcipher_request_ctx(req);
 
