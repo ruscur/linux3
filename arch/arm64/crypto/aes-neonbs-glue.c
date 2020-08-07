@@ -330,6 +330,9 @@ static int __xts_crypt(struct skcipher_request *req, bool encrypt,
 	int first = 1;
 	u8 *out, *in;
 
+	if (!req->cryptlen)
+		return 0;
+
 	if (req->cryptlen < AES_BLOCK_SIZE)
 		return -EINVAL;
 
