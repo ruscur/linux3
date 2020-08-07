@@ -133,7 +133,7 @@ unsigned long copy_ckvsx_from_user(struct task_struct *task,
 	return 0;
 }
 #endif /* CONFIG_PPC_TRANSACTIONAL_MEM */
-#else
+#elif defined(CONFIG_PPC_FPU_REGS)
 inline unsigned long copy_fpr_to_user(void __user *to,
 				      struct task_struct *task)
 {
@@ -163,6 +163,16 @@ inline unsigned long copy_ckfpr_from_user(struct task_struct *task,
 				ELF_NFPREG * sizeof(double));
 }
 #endif /* CONFIG_PPC_TRANSACTIONAL_MEM */
+#else
+inline unsigned long copy_fpr_to_user(void __user *to, struct task_struct *task)
+{
+	return 0;
+}
+
+inline unsigned long copy_fpr_from_user(struct task_struct *task, void __user *from)
+{
+	return 0;
+}
 #endif
 
 /* Log an error when sending an unhandled signal to a process. Controlled

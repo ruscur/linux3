@@ -70,6 +70,7 @@ long arch_ptrace(struct task_struct *child, long request,
 			ret = ptrace_get_reg(child, (int) index, &tmp);
 			if (ret)
 				break;
+#ifdef CONFIG_PPC_FPU_REGS
 		} else {
 			unsigned int fpidx = index - PT_FPR0;
 
@@ -79,6 +80,7 @@ long arch_ptrace(struct task_struct *child, long request,
 				       sizeof(long));
 			else
 				tmp = child->thread.fp_state.fpscr;
+#endif
 		}
 		ret = put_user(tmp, datalp);
 		break;
@@ -103,6 +105,7 @@ long arch_ptrace(struct task_struct *child, long request,
 		CHECK_FULL_REGS(child->thread.regs);
 		if (index < PT_FPR0) {
 			ret = ptrace_put_reg(child, index, data);
+#ifdef CONFIG_PPC_FPU_REGS
 		} else {
 			unsigned int fpidx = index - PT_FPR0;
 
@@ -113,6 +116,7 @@ long arch_ptrace(struct task_struct *child, long request,
 			else
 				child->thread.fp_state.fpscr = data;
 			ret = 0;
+#endif
 		}
 		break;
 	}

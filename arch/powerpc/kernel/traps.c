@@ -1188,6 +1188,7 @@ static inline int __parse_fpscr(unsigned long fpscr)
 	return ret;
 }
 
+#ifdef CONFIG_PPC_FPU
 static void parse_fpe(struct pt_regs *regs)
 {
 	int code = 0;
@@ -1198,6 +1199,7 @@ static void parse_fpe(struct pt_regs *regs)
 
 	_exception(SIGFPE, regs, code, regs->nip);
 }
+#endif
 
 /*
  * Illegal instruction emulation support.  Originally written to
@@ -1477,11 +1479,13 @@ void program_check_exception(struct pt_regs *regs)
 	/* We can now get here via a FP Unavailable exception if the core
 	 * has no FPU, in that case the reason flags will be 0 */
 
+#ifdef CONFIG_PPC_FPU
 	if (reason & REASON_FP) {
 		/* IEEE FP exception */
 		parse_fpe(regs);
 		goto bail;
 	}
+#endif
 	if (reason & REASON_TRAP) {
 		unsigned long bugaddr;
 		/* Debugger is first in line to stop recursive faults in
