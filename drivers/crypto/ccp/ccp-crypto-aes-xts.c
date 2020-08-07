@@ -113,6 +113,9 @@ static int ccp_aes_xts_crypt(struct skcipher_request *req,
 	u32 unit_size;
 	int ret;
 
+	if (!req->cryptlen)
+		return 0;
+
 	if (!ctx->u.aes.key_len)
 		return -EINVAL;
 
