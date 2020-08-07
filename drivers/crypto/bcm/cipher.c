@@ -1754,6 +1754,9 @@ static int skcipher_enqueue(struct skcipher_request *req, bool encrypt)
 	    crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
 	int err;
 
+	if (!req->cryptlen && ctx->cipher.mode == CIPHER_MODE_XTS)
+		return 0;
+
 	flow_log("%s() enc:%u\n", __func__, encrypt);
 
 	rctx->gfp = (req->base.flags & (CRYPTO_TFM_REQ_MAY_BACKLOG |
