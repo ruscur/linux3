@@ -263,6 +263,9 @@ static int xts_encrypt(struct skcipher_request *req)
 	struct skcipher_request *subreq = &rctx->subreq;
 	int err;
 
+	if (!req->cryptlen)
+		return 0;
+
 	err = xts_init_crypt(req, xts_encrypt_done) ?:
 	      xts_xor_tweak_pre(req, true) ?:
 	      crypto_skcipher_encrypt(subreq) ?:
@@ -279,6 +282,9 @@ static int xts_decrypt(struct skcipher_request *req)
 	struct xts_request_ctx *rctx = skcipher_request_ctx(req);
 	struct skcipher_request *subreq = &rctx->subreq;
 	int err;
+
+	if (!req->cryptlen)
+		return 0;
 
 	err = xts_init_crypt(req, xts_decrypt_done) ?:
 	      xts_xor_tweak_pre(req, false) ?:
