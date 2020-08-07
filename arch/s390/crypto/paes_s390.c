@@ -494,6 +494,9 @@ static int xts_paes_crypt(struct skcipher_request *req, unsigned long modifier)
 		u8 init[16];
 	} xts_param;
 
+	if (!req->cryptlen)
+		return 0;
+
 	ret = skcipher_walk_virt(&walk, req, false);
 	if (ret)
 		return ret;
