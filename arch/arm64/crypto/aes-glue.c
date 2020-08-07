@@ -515,6 +515,9 @@ static int __maybe_unused xts_encrypt(struct skcipher_request *req)
 	struct scatterlist *src, *dst;
 	struct skcipher_walk walk;
 
+	if (!req->cryptlen)
+		return 0;
+
 	if (req->cryptlen < AES_BLOCK_SIZE)
 		return -EINVAL;
 
@@ -586,6 +589,9 @@ static int __maybe_unused xts_decrypt(struct skcipher_request *req)
 	struct skcipher_request subreq;
 	struct scatterlist *src, *dst;
 	struct skcipher_walk walk;
+
+	if (!req->cryptlen)
+		return 0;
 
 	if (req->cryptlen < AES_BLOCK_SIZE)
 		return -EINVAL;
