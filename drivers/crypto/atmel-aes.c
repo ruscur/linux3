@@ -1107,6 +1107,10 @@ static int atmel_aes_crypt(struct skcipher_request *req, unsigned long mode)
 		ctx->block_size = CFB64_BLOCK_SIZE;
 		break;
 
+	case AES_FLAGS_XTS:
+		if (!req->cryptlen)
+			return 0;
+
 	default:
 		ctx->block_size = AES_BLOCK_SIZE;
 		break;
