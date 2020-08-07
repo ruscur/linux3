@@ -2533,6 +2533,9 @@ static int safexcel_skcipher_aes_xts_cra_init(struct crypto_tfm *tfm)
 
 static int safexcel_encrypt_xts(struct skcipher_request *req)
 {
+	if (!req->cryptlen)
+		return 0;
+
 	if (req->cryptlen < XTS_BLOCK_SIZE)
 		return -EINVAL;
 	return safexcel_queue_req(&req->base, skcipher_request_ctx(req),
@@ -2541,6 +2544,9 @@ static int safexcel_encrypt_xts(struct skcipher_request *req)
 
 static int safexcel_decrypt_xts(struct skcipher_request *req)
 {
+	if (!req->cryptlen)
+		return 0;
+
 	if (req->cryptlen < XTS_BLOCK_SIZE)
 		return -EINVAL;
 	return safexcel_queue_req(&req->base, skcipher_request_ctx(req),
