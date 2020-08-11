@@ -3435,7 +3435,7 @@ static int kvmhv_load_hv_regs_and_go(struct kvm_vcpu *vcpu, u64 time_limit,
 	unsigned long host_pidr = mfspr(SPRN_PID);
 
 	hdec = time_limit - mftb();
-	if (hdec < 0)
+	if (hdec < 2048)
 		return BOOK3S_INTERRUPT_HV_DECREMENTER;
 	mtspr(SPRN_HDEC, hdec);
 
@@ -3564,7 +3564,7 @@ int kvmhv_p9_guest_entry(struct kvm_vcpu *vcpu, u64 time_limit,
 
 	dec = mfspr(SPRN_DEC);
 	tb = mftb();
-	if (dec < 512)
+	if (dec < 2048)
 		return BOOK3S_INTERRUPT_HV_DECREMENTER;
 	local_paca->kvm_hstate.dec_expires = dec + tb;
 	if (local_paca->kvm_hstate.dec_expires < time_limit)
