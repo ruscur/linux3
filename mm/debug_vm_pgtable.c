@@ -110,6 +110,7 @@ static void __init pte_advanced_tests(struct mm_struct *mm,
 	WARN_ON(pte_young(pte));
 }
 
+#ifdef CONFIG_NUMA_BALANCING
 static void __init pte_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 {
 	pte_t pte = pfn_pte(pfn, prot);
@@ -118,6 +119,8 @@ static void __init pte_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 	WARN_ON(!pte_savedwrite(pte_mk_savedwrite(pte_clear_savedwrite(pte))));
 	WARN_ON(pte_savedwrite(pte_clear_savedwrite(pte_mk_savedwrite(pte))));
 }
+#endif
+
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 static void __init pmd_basic_tests(unsigned long pfn, pgprot_t prot)
 {
@@ -221,6 +224,7 @@ static void __init pmd_huge_tests(pmd_t *pmdp, unsigned long pfn, pgprot_t prot)
 	WARN_ON(!pmd_none(pmd));
 }
 
+#ifdef CONFIG_NUMA_BALANCING
 static void __init pmd_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 {
 	pmd_t pmd = pfn_pmd(pfn, prot);
@@ -229,6 +233,7 @@ static void __init pmd_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 	WARN_ON(!pmd_savedwrite(pmd_mk_savedwrite(pmd_clear_savedwrite(pmd))));
 	WARN_ON(pmd_savedwrite(pmd_clear_savedwrite(pmd_mk_savedwrite(pmd))));
 }
+#endif
 
 #ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD
 static void __init pud_basic_tests(unsigned long pfn, pgprot_t prot)
@@ -1005,8 +1010,10 @@ static int __init debug_vm_pgtable(void)
 	pmd_huge_tests(pmdp, pmd_aligned, prot);
 	pud_huge_tests(pudp, pud_aligned, prot);
 
+#ifdef CONFIG_NUMA_BALANCING
 	pte_savedwrite_tests(pte_aligned, prot);
 	pmd_savedwrite_tests(pmd_aligned, prot);
+#endif
 
 	pte_unmap_unlock(ptep, ptl);
 
