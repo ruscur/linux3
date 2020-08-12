@@ -1006,8 +1006,8 @@ static int __init debug_vm_pgtable(void)
 	pud_leaf_tests(pud_aligned, prot);
 
 #ifdef CONFIG_NUMA_BALANCING
-	pte_savedwrite_tests(pte_aligned, prot);
-	pmd_savedwrite_tests(pmd_aligned, prot);
+	pte_savedwrite_tests(pte_aligned, protnone);
+	pmd_savedwrite_tests(pmd_aligned, protnone);
 #endif
 	pte_special_tests(pte_aligned, prot);
 	pte_protnone_tests(pte_aligned, protnone);
