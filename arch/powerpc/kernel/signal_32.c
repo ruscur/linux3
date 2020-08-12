@@ -58,8 +58,6 @@
 #define mcontext	mcontext32
 #define ucontext	ucontext32
 
-#define __save_altstack __compat_save_altstack
-
 /*
  * Userspace code may pass a ucontext which doesn't include VSX added
  * at the end.  We need to check for this case.
@@ -797,16 +795,36 @@ int handle_rt_signal32(struct ksignal *ksig, sigset_t *oldset,
 	/* Set up Signal Frame */
 	/* Put a Real Time Context onto stack */
 	rt_sf = get_sigframe(ksig, tsk, sizeof(*rt_sf), 1);
-	if (!access_ok(rt_sf, sizeof(*rt_sf)))
+	if (!user_write_access_begin(rt_sf, sizeof(*rt_sf)))
 		goto badframe;
 
 	/* Put the siginfo & fill in most of the ucontext */
-	if (copy_siginfo_to_user(&rt_sf->info, &ksig->info)
-	    || __put_user(0, &rt_sf->uc.uc_flags)
-	    || __save_altstack(&rt_sf->uc.uc_stack, regs->gpr[1])
-	    || __put_user(to_user_ptr(&rt_sf->uc.uc_mcontext),
-		    &rt_sf->uc.uc_regs)
-	    || put_sigset_t(&rt_sf->uc.uc_sigmask, oldset))
+	unsafe_put_user(0, &rt_sf->uc.uc_flags, failed);
+#ifdef CONFIG_PPC64
+	unsafe_compat_save_altstack(&rt_sf->uc.uc_stack, regs->gpr[1], failed);
+#else
+	unsafe_save_altstack(&rt_sf->uc.uc_stack, regs->gpr[1], failed);
+#endif
+	unsafe_put_user(to_user_ptr(&rt_sf->uc.uc_mcontext), &rt_sf->uc.uc_regs, failed);
+
+#ifdef CONFIG_PPC_TRANSACTIONAL_MEM
+	tm_frame = &rt_sf->uc_transact.uc_mcontext;
+	if (MSR_TM_ACTIVE(msr)) {
+		unsafe_put_user((unsigned long)&rt_sf->uc_transact,
+				&rt_sf->uc.uc_link, failed);
+		unsafe_put_user((unsigned long)tm_frame,
+				&rt_sf->uc_transact.uc_regs, failed);
+	}
+	else
+#endif
+	{
+		unsafe_put_user(0, &rt_sf->uc.uc_link, failed);
+	}
+	user_write_access_end();
+
+	if (put_sigset_t(&rt_sf->uc.uc_sigmask, oldset))
+		goto badframe;
+	if (copy_siginfo_to_user(&rt_sf->info, &ksig->info))
 		goto badframe;
 
 	/* Save user registers on the stack */
@@ -820,21 +838,13 @@ int handle_rt_signal32(struct ksignal *ksig, sigset_t *oldset,
 	}
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
-	tm_frame = &rt_sf->uc_transact.uc_mcontext;
 	if (MSR_TM_ACTIVE(msr)) {
-		if (__put_user((unsigned long)&rt_sf->uc_transact,
-			       &rt_sf->uc.uc_link) ||
-		    __put_user((unsigned long)tm_frame,
-			       &rt_sf->uc_transact.uc_regs))
-			goto badframe;
 		if (save_tm_user_regs(regs, frame, tm_frame, sigret, msr))
 			goto badframe;
 	}
 	else
 #endif
 	{
-		if (__put_user(0, &rt_sf->uc.uc_link))
-			goto badframe;
 		if (save_user_regs(regs, frame, tm_frame, sigret, 1))
 			goto badframe;
 	}
@@ -860,6 +870,9 @@ int handle_rt_signal32(struct ksignal *ksig, sigset_t *oldset,
 	regs->msr &= ~MSR_LE;
 	regs->msr |= (MSR_KERNEL & MSR_LE);
 	return 0;
+
+failed:
+	user_write_access_end();
 
 badframe:
 	signal_fault(tsk, regs, "handle_rt_signal32", rt_sf);
