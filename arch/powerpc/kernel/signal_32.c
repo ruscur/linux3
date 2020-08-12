@@ -98,7 +98,7 @@ static inline int get_sigset_t(sigset_t *set,
 #define to_user_ptr(p)		ptr_to_compat(p)
 #define from_user_ptr(p)	compat_ptr(p)
 
-static inline int save_general_regs(struct pt_regs *regs,
+static __always_inline int save_general_regs(struct pt_regs *regs,
 		struct mcontext __user *frame)
 {
 	elf_greg_t64 *gregs = (elf_greg_t64 *)regs;
@@ -113,10 +113,12 @@ static inline int save_general_regs(struct pt_regs *regs,
 		else
 			val = gregs[i];
 
-		if (__put_user(val, &frame->mc_gregs[i]))
-			return -EFAULT;
+		unsafe_put_user(val, &frame->mc_gregs[i], failed);
 	}
 	return 0;
+
+failed:
+	return 1;
 }
 
 static inline int restore_general_regs(struct pt_regs *regs,
@@ -151,11 +153,15 @@ static inline int get_sigset_t(sigset_t *set, const sigset_t __user *uset)
 #define to_user_ptr(p)		((unsigned long)(p))
 #define from_user_ptr(p)	((void __user *)(p))
 
-static inline int save_general_regs(struct pt_regs *regs,
+static __always_inline int save_general_regs(struct pt_regs *regs,
 		struct mcontext __user *frame)
 {
 	WARN_ON(!FULL_REGS(regs));
-	return __copy_to_user(&frame->mc_gregs, regs, GP_REGS_SIZE);
+	unsafe_copy_to_user(&frame->mc_gregs, regs, GP_REGS_SIZE, failed);
+	return 0;
+
+failed:
+	return 1;
 }
 
 static inline int restore_general_regs(struct pt_regs *regs,
@@ -258,16 +264,18 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 		flush_spe_to_thread(current);
 #endif
 
+	if (!user_write_access_begin(frame, sizeof(*frame)))
+		return 1;
+
 	/* save general registers */
 	if (save_general_regs(regs, frame))
-		return 1;
+		goto failed;
 
 #ifdef CONFIG_ALTIVEC
 	/* save altivec registers */
 	if (current->thread.used_vr) {
-		if (__copy_to_user(&frame->mc_vregs, &current->thread.vr_state,
-				   ELF_NVRREG * sizeof(vector128)))
-			return 1;
+		unsafe_copy_to_user(&frame->mc_vregs, &current->thread.vr_state,
+				    ELF_NVRREG * sizeof(vector128), failed);
 		/* set MSR_VEC in the saved MSR value to indicate that
 		   frame->mc_vregs contains valid data */
 		msr |= MSR_VEC;
@@ -280,11 +288,9 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 	 * most significant bits of that same vector. --BenH
 	 * Note that the current VRSAVE value is in the SPR at this point.
 	 */
-	if (__put_user(current->thread.vrsave, (u32 __user *)&frame->mc_vregs[32]))
-		return 1;
+	unsafe_put_user(current->thread.vrsave, (u32 __user *)&frame->mc_vregs[32], failed);
 #endif /* CONFIG_ALTIVEC */
-	if (copy_fpr_to_user(&frame->mc_fregs, current))
-		return 1;
+	unsafe_copy_fpr_to_user(&frame->mc_fregs, current, failed);
 
 	/*
 	 * Clear the MSR VSX bit to indicate there is no valid state attached
@@ -299,17 +305,15 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 	 * contains valid data
 	 */
 	if (current->thread.used_vsr && ctx_has_vsx_region) {
-		if (copy_vsx_to_user(&frame->mc_vsregs, current))
-			return 1;
+		unsafe_copy_vsx_to_user(&frame->mc_vsregs, current, failed);
 		msr |= MSR_VSX;
 	}
 #endif /* CONFIG_VSX */
 #ifdef CONFIG_SPE
 	/* save spe registers */
 	if (current->thread.used_spe) {
-		if (__copy_to_user(&frame->mc_vregs, current->thread.evr,
-				   ELF_NEVRREG * sizeof(u32)))
-			return 1;
+		unsafe_copy_to_user(&frame->mc_vregs, current->thread.evr,
+				    ELF_NEVRREG * sizeof(u32)), failed);
 		/* set MSR_SPE in the saved MSR value to indicate that
 		   frame->mc_vregs contains valid data */
 		msr |= MSR_SPE;
@@ -317,19 +321,18 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 	/* else assert((regs->msr & MSR_SPE) == 0) */
 
 	/* We always copy to/from spefscr */
-	if (__put_user(current->thread.spefscr, (u32 __user *)&frame->mc_vregs + ELF_NEVRREG))
-		return 1;
+	unsafe_put_user(current->thread.spefscr, (u32 __user *)&frame->mc_vregs + ELF_NEVRREG, failed);
 #endif /* CONFIG_SPE */
 
-	if (__put_user(msr, &frame->mc_gregs[PT_MSR]))
-		return 1;
+	unsafe_put_user(msr, &frame->mc_gregs[PT_MSR], failed);
 
 	if (sigret) {
 		/* Set up the sigreturn trampoline: li 0,sigret; sc */
-		if (__put_user(PPC_INST_ADDI + sigret, &frame->tramp[0])
-		    || __put_user(PPC_INST_SC, &frame->tramp[1]))
-			return 1;
+		unsafe_put_user(PPC_INST_ADDI + sigret, &frame->tramp[0], failed);
+		unsafe_put_user(PPC_INST_SC, &frame->tramp[1], failed);
 	}
+	user_write_access_end();
+
 	if (sigret)
 		flush_icache_range((unsigned long) &frame->tramp[0],
 				   (unsigned long) &frame->tramp[2]);
@@ -341,6 +344,10 @@ static int save_user_regs(struct pt_regs *regs, struct mcontext __user *frame,
 		return 1;
 
 	return 0;
+
+failed:
+	user_write_access_end();
+	return 1;
 }
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
@@ -369,15 +376,17 @@ static int save_tm_user_regs(struct pt_regs *regs,
 		flush_spe_to_thread(current);
 #endif
 
-	if (save_general_regs(&current->thread.ckpt_regs, frame))
+	if (!user_write_access_begin(frame, sizeof(*frame)))
 		return 1;
+
+	if (save_general_regs(&current->thread.ckpt_regs, frame))
+		goto failed;
 
 #ifdef CONFIG_ALTIVEC
 	/* save altivec registers */
 	if (current->thread.used_vr) {
-		if (__copy_to_user(&frame->mc_vregs, &current->thread.ckvr_state,
-				   ELF_NVRREG * sizeof(vector128)))
-			return 1;
+		unsafe_copy_to_user(&frame->mc_vregs, &current->thread.ckvr_state,
+				    ELF_NVRREG * sizeof(vector128), failed);
 
 		/* set MSR_VEC in the saved MSR value to indicate that
 		 * frame->mc_vregs contains valid data
@@ -390,13 +399,11 @@ static int save_tm_user_regs(struct pt_regs *regs,
 	 * significant bits of a vector, we "cheat" and stuff VRSAVE in the
 	 * most significant bits of that same vector. --BenH
 	 */
-	if (__put_user(current->thread.ckvrsave,
-		       (u32 __user *)&frame->mc_vregs[32]))
-		return 1;
+	unsafe_put_user(current->thread.ckvrsave,
+		        (u32 __user *)&frame->mc_vregs[32], failed);
 #endif /* CONFIG_ALTIVEC */
 
-	if (copy_ckfpr_to_user(&frame->mc_fregs, current))
-		return 1;
+	unsafe_copy_ckfpr_to_user(&frame->mc_fregs, current, failed);
 #ifdef CONFIG_VSX
 	/*
 	 * Copy VSR 0-31 upper half from thread_struct to local
@@ -405,8 +412,7 @@ static int save_tm_user_regs(struct pt_regs *regs,
 	 * contains valid data
 	 */
 	if (current->thread.used_vsr) {
-		if (copy_ckvsx_to_user(&frame->mc_vsregs, current))
-			return 1;
+		unsafe_copy_ckvsx_to_user(&frame->mc_vsregs, current, failed);
 		msr |= MSR_VSX;
 	}
 #endif /* CONFIG_VSX */
@@ -415,33 +421,36 @@ static int save_tm_user_regs(struct pt_regs *regs,
 	 * simply the same as in save_user_regs().
 	 */
 	if (current->thread.used_spe) {
-		if (__copy_to_user(&frame->mc_vregs, current->thread.evr,
-				   ELF_NEVRREG * sizeof(u32)))
-			return 1;
+		unsafe_copy_to_user(&frame->mc_vregs, current->thread.evr,
+				    ELF_NEVRREG * sizeof(u32), failed);
 		/* set MSR_SPE in the saved MSR value to indicate that
 		 * frame->mc_vregs contains valid data */
 		msr |= MSR_SPE;
 	}
 
 	/* We always copy to/from spefscr */
-	if (__put_user(current->thread.spefscr, (u32 __user *)&frame->mc_vregs + ELF_NEVRREG))
-		return 1;
+	unsafe_put_user(current->thread.spefscr,
+			(u32 __user *)&frame->mc_vregs + ELF_NEVRREG, failed);
 #endif /* CONFIG_SPE */
 
-	if (__put_user(msr, &frame->mc_gregs[PT_MSR]))
-		return 1;
+	unsafe_put_user(msr, &frame->mc_gregs[PT_MSR], failed);
+
 	if (sigret) {
 		/* Set up the sigreturn trampoline: li 0,sigret; sc */
-		if (__put_user(PPC_INST_ADDI + sigret, &frame->tramp[0])
-		    || __put_user(PPC_INST_SC, &frame->tramp[1]))
-			return 1;
+		unsafe_put_user(PPC_INST_ADDI + sigret, &frame->tramp[0], failed);
+		unsafe_put_user(PPC_INST_SC, &frame->tramp[1], failed);
 	}
+	user_write_access_end();
+
 	if (sigret)
 		flush_icache_range((unsigned long) &frame->tramp[0],
 				   (unsigned long) &frame->tramp[2]);
 
-	if (save_general_regs(regs, tm_frame))
+	if (!user_write_access_begin(tm_frame, sizeof(*tm_frame)))
 		return 1;
+
+	if (save_general_regs(regs, tm_frame))
+		goto failed;
 
 	/* Stash the top half of the 64bit MSR into the 32bit MSR word
 	 * of the transactional mcontext.  This way we have a backward-compatible
@@ -449,57 +458,48 @@ static int save_tm_user_regs(struct pt_regs *regs,
 	 * also look at what type of transaction (T or S) was active at the
 	 * time of the signal.
 	 */
-	if (__put_user((msr >> 32), &tm_frame->mc_gregs[PT_MSR]))
-		return 1;
+	unsafe_put_user((msr >> 32), &tm_frame->mc_gregs[PT_MSR], failed);
 
 #ifdef CONFIG_ALTIVEC
 	if (current->thread.used_vr) {
-		if (msr & MSR_VEC) {
-			if (__copy_to_user(&tm_frame->mc_vregs,
-					   &current->thread.vr_state,
-					   ELF_NVRREG * sizeof(vector128)))
-				return 1;
-		} else {
-			if (__copy_to_user(&tm_frame->mc_vregs,
-					   &current->thread.ckvr_state,
-					   ELF_NVRREG * sizeof(vector128)))
-				return 1;
-		}
+		if (msr & MSR_VEC)
+			unsafe_copy_to_user(&tm_frame->mc_vregs,
+					    &current->thread.vr_state,
+					    ELF_NVRREG * sizeof(vector128), failed);
+		else
+			unsafe_copy_to_user(&tm_frame->mc_vregs,
+					    &current->thread.ckvr_state,
+					    ELF_NVRREG * sizeof(vector128), failed);
 	}
 
-	if (msr & MSR_VEC) {
-		if (__put_user(current->thread.vrsave,
-			       (u32 __user *)&tm_frame->mc_vregs[32]))
-			return 1;
-	} else {
-		if (__put_user(current->thread.ckvrsave,
-			       (u32 __user *)&tm_frame->mc_vregs[32]))
-			return 1;
-	}
+	if (msr & MSR_VEC)
+		unsafe_put_user(current->thread.vrsave,
+			        (u32 __user *)&tm_frame->mc_vregs[32], failed);
+	else
+		unsafe_put_user(current->thread.ckvrsave,
+			        (u32 __user *)&tm_frame->mc_vregs[32], failed);
 #endif /* CONFIG_ALTIVEC */
 
-	if (msr & MSR_FP) {
-		if (copy_fpr_to_user(&tm_frame->mc_fregs, current))
-			return 1;
-	} else {
-		if (copy_ckfpr_to_user(&tm_frame->mc_fregs, current))
-			return 1;
-	}
+	if (msr & MSR_FP)
+		unsafe_copy_fpr_to_user(&tm_frame->mc_fregs, current, failed);
+	else
+		unsafe_copy_ckfpr_to_user(&tm_frame->mc_fregs, current, failed);
 
 #ifdef CONFIG_VSX
 	if (current->thread.used_vsr) {
-		if (msr & MSR_VSX) {
-			if (copy_vsx_to_user(&tm_frame->mc_vsregs,
-						      current))
-				return 1;
-		} else {
-			if (copy_ckvsx_to_user(&tm_frame->mc_vsregs, current))
-				return 1;
-		}
+		if (msr & MSR_VSX)
+			unsafe_copy_vsx_to_user(&tm_frame->mc_vsregs, current, failed);
+		else
+			unsafe_copy_ckvsx_to_user(&tm_frame->mc_vsregs, current, failed);
 	}
 #endif /* CONFIG_VSX */
 
+	user_write_access_end();
 	return 0;
+
+failed:
+	user_write_access_end();
+	return 1;
 }
 #endif
 
