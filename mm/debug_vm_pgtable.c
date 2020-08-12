@@ -45,9 +45,12 @@
  * pxx_clear() because of how dynamic page table folding works on s390. So
  * while loading up the entries do not change the lower 4 bits. It does not
  * have affect any other platform.
+ *
+ * Also avoid the 62nd bit on ppc64 that is used to mark a pte entry.
  */
 #define S390_MASK_BITS	4
-#define RANDOM_ORVALUE	GENMASK(BITS_PER_LONG - 1, S390_MASK_BITS)
+#define PPC_MASK_BITS	2
+#define RANDOM_ORVALUE	GENMASK(BITS_PER_LONG - 1 - PPC_MASK_BITS, S390_MASK_BITS)
 #define RANDOM_NZVALUE	GENMASK(7, 0)
 
 static void __init pte_basic_tests(unsigned long pfn, pgprot_t prot)
