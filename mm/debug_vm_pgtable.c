@@ -81,8 +81,6 @@ static void __init pte_advanced_tests(struct mm_struct *mm,
 	pte = ptep_get(ptep);
 	WARN_ON(pte_write(pte));
 
-	pte = pfn_pte(pfn, prot);
-	set_pte_at(mm, vaddr, ptep, pte);
 	ptep_get_and_clear(mm, vaddr, ptep);
 	pte = ptep_get(ptep);
 	WARN_ON(!pte_none(pte));
@@ -97,12 +95,14 @@ static void __init pte_advanced_tests(struct mm_struct *mm,
 	pte = ptep_get(ptep);
 	WARN_ON(!(pte_write(pte) && pte_dirty(pte)));
 
-	pte = pfn_pte(pfn, prot);
-	set_pte_at(mm, vaddr, ptep, pte);
 	ptep_get_and_clear_full(mm, vaddr, ptep, 1);
 	pte = ptep_get(ptep);
 	WARN_ON(!pte_none(pte));
 
+	/*
+	 * We should clear pte before we do set_pte_at
+	 */
+	pte = ptep_get_and_clear(mm, vaddr, ptep);
 	pte = pte_mkyoung(pte);
 	set_pte_at(mm, vaddr, ptep, pte);
 	ptep_test_and_clear_young(vma, vaddr, ptep);
