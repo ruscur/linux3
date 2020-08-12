@@ -1241,23 +1241,23 @@ int handle_signal32(struct ksignal *ksig, sigset_t *oldset,
 
 	/* Set up Signal Frame */
 	frame = get_sigframe(ksig, tsk, sizeof(*frame), 1);
-	if (!access_ok(frame, sizeof(*frame)))
+	if (!user_write_access_begin(frame, sizeof(*frame)))
 		goto badframe;
 	sc = (struct sigcontext __user *) &frame->sctx;
 
 #if _NSIG != 64
 #error "Please adjust handle_signal()"
 #endif
-	if (__put_user(to_user_ptr(ksig->ka.sa.sa_handler), &sc->handler)
-	    || __put_user(oldset->sig[0], &sc->oldmask)
+	unsafe_put_user(to_user_ptr(ksig->ka.sa.sa_handler), &sc->handler, failed);
+	unsafe_put_user(oldset->sig[0], &sc->oldmask, failed);
 #ifdef CONFIG_PPC64
-	    || __put_user((oldset->sig[0] >> 32), &sc->_unused[3])
+	unsafe_put_user((oldset->sig[0] >> 32), &sc->_unused[3], failed);
 #else
-	    || __put_user(oldset->sig[1], &sc->_unused[3])
+	unsafe_put_user(oldset->sig[1], &sc->_unused[3], failed);
 #endif
-	    || __put_user(to_user_ptr(&frame->mctx), &sc->regs)
-	    || __put_user(ksig->sig, &sc->signal))
-		goto badframe;
+	unsafe_put_user(to_user_ptr(&frame->mctx), &sc->regs, failed);
+	unsafe_put_user(ksig->sig, &sc->signal, failed);
+	user_write_access_end();
 
 	if (vdso32_sigtramp && tsk->mm->context.vdso_base) {
 		sigret = 0;
@@ -1299,6 +1299,9 @@ int handle_signal32(struct ksignal *ksig, sigset_t *oldset,
 	/* enter the signal handler in big-endian mode */
 	regs->msr &= ~MSR_LE;
 	return 0;
+
+failed:
+	user_write_access_end();
 
 badframe:
 	signal_fault(tsk, regs, "handle_signal32", frame);
