@@ -31,6 +31,23 @@
 #include <asm/pgalloc.h>
 #include <asm/tlbflush.h>
 
+#ifdef CONFIG_PPC_BOOK3S_64
+static inline pte_t debug_vm_pfn_pte(unsigned long pfn, pgprot_t pgprot)
+{
+	pte_t pte = pfn_pte(pfn, pgprot);
+	return __pte(pte_val(pte) | _PAGE_PTE);
+
+}
+static inline pmd_t debug_vm_pfn_pmd(unsigned long pfn, pgprot_t pgprot)
+{
+	pmd_t pmd = pfn_pmd(pfn, pgprot);
+	return __pmd(pmd_val(pmd) | _PAGE_PTE);
+}
+#else
+#define debug_vm_pfn_pte(pfn, pgprot) pfn_pte(pfn, pgprot)
+#define debug_vm_pfn_pmd(pfn, pgprot) pfn_pmd(pfn, pgprot)
+#endif
+
 /*
  * Please refer Documentation/vm/arch_pgtable_helpers.rst for the semantics
  * expectations that are being validated here. All future changes in here
@@ -55,7 +72,7 @@
 
 static void __init pte_basic_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	pr_debug("Validating PTE basic\n");
 	WARN_ON(!pte_same(pte, pte));
@@ -72,10 +89,10 @@ static void __init pte_advanced_tests(struct mm_struct *mm,
 				      unsigned long pfn, unsigned long vaddr,
 				      pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	pr_debug("Validating PTE advanced\n");
-	pte = pfn_pte(pfn, prot);
+	pte = debug_vm_pfn_pte(pfn, prot);
 	set_pte_at(mm, vaddr, ptep, pte);
 	ptep_set_wrprotect(mm, vaddr, ptep);
 	pte = ptep_get(ptep);
@@ -85,7 +102,7 @@ static void __init pte_advanced_tests(struct mm_struct *mm,
 	pte = ptep_get(ptep);
 	WARN_ON(!pte_none(pte));
 
-	pte = pfn_pte(pfn, prot);
+	pte = debug_vm_pfn_pte(pfn, prot);
 	pte = pte_wrprotect(pte);
 	pte = pte_mkclean(pte);
 	set_pte_at(mm, vaddr, ptep, pte);
@@ -113,7 +130,7 @@ static void __init pte_advanced_tests(struct mm_struct *mm,
 #ifdef CONFIG_NUMA_BALANCING
 static void __init pte_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	pr_debug("Validating PTE saved write\n");
 	WARN_ON(!pte_savedwrite(pte_mk_savedwrite(pte_clear_savedwrite(pte))));
@@ -124,7 +141,7 @@ static void __init pte_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 static void __init pmd_basic_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pfn_pmd(pfn, prot);
+	pmd_t pmd = debug_vm_pfn_pmd(pfn, prot);
 
 	if (!has_transparent_hugepage())
 		return;
@@ -160,7 +177,7 @@ static void __init pmd_advanced_tests(struct mm_struct *mm,
 
 	pgtable_trans_huge_deposit(mm, pmdp, pgtable);
 
-	pmd = pmd_mkhuge(pfn_pmd(pfn, prot));
+	pmd = pmd_mkhuge(debug_vm_pfn_pmd(pfn, prot));
 	set_pmd_at(mm, vaddr, pmdp, pmd);
 	pmdp_set_wrprotect(mm, vaddr, pmdp);
 	pmd = READ_ONCE(*pmdp);
@@ -170,7 +187,7 @@ static void __init pmd_advanced_tests(struct mm_struct *mm,
 	pmd = READ_ONCE(*pmdp);
 	WARN_ON(!pmd_none(pmd));
 
-	pmd = pmd_mkhuge(pfn_pmd(pfn, prot));
+	pmd = pmd_mkhuge(debug_vm_pfn_pmd(pfn, prot));
 	pmd = pmd_wrprotect(pmd);
 	pmd = pmd_mkclean(pmd);
 	set_pmd_at(mm, vaddr, pmdp, pmd);
@@ -184,7 +201,7 @@ static void __init pmd_advanced_tests(struct mm_struct *mm,
 	pmd = READ_ONCE(*pmdp);
 	WARN_ON(!pmd_none(pmd));
 
-	pmd = pmd_mkhuge(pfn_pmd(pfn, prot));
+	pmd = pmd_mkhuge(debug_vm_pfn_pmd(pfn, prot));
 	pmd = pmd_mkyoung(pmd);
 	set_pmd_at(mm, vaddr, pmdp, pmd);
 	pmdp_test_and_clear_young(vma, vaddr, pmdp);
@@ -198,7 +215,7 @@ static void __init pmd_advanced_tests(struct mm_struct *mm,
 
 static void __init pmd_leaf_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pfn_pmd(pfn, prot);
+	pmd_t pmd = debug_vm_pfn_pmd(pfn, prot);
 
 	pr_debug("Validating PMD leaf\n");
 	/*
@@ -230,7 +247,7 @@ static void __init pmd_huge_tests(pmd_t *pmdp, unsigned long pfn, pgprot_t prot)
 #ifdef CONFIG_NUMA_BALANCING
 static void __init pmd_savedwrite_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pfn_pmd(pfn, prot);
+	pmd_t pmd = debug_vm_pfn_pmd(pfn, prot);
 
 	pr_debug("Validating PMD saved write\n");
 	WARN_ON(!pmd_savedwrite(pmd_mk_savedwrite(pmd_clear_savedwrite(pmd))));
@@ -573,7 +590,7 @@ static void __init pmd_populate_tests(struct mm_struct *mm, pmd_t *pmdp,
 
 static void __init pte_special_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	if (!IS_ENABLED(CONFIG_ARCH_HAS_PTE_SPECIAL))
 		return;
@@ -584,7 +601,7 @@ static void __init pte_special_tests(unsigned long pfn, pgprot_t prot)
 
 static void __init pte_protnone_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	if (!IS_ENABLED(CONFIG_NUMA_BALANCING))
 		return;
@@ -597,7 +614,7 @@ static void __init pte_protnone_tests(unsigned long pfn, pgprot_t prot)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 static void __init pmd_protnone_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pmd_mkhuge(pfn_pmd(pfn, prot));
+	pmd_t pmd = pmd_mkhuge(debug_vm_pfn_pmd(pfn, prot));
 
 	if (!IS_ENABLED(CONFIG_NUMA_BALANCING))
 		return;
@@ -613,7 +630,7 @@ static void __init pmd_protnone_tests(unsigned long pfn, pgprot_t prot) { }
 #ifdef CONFIG_ARCH_HAS_PTE_DEVMAP
 static void __init pte_devmap_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	pr_debug("Validating PTE devmap\n");
 	WARN_ON(!pte_devmap(pte_mkdevmap(pte)));
@@ -622,7 +639,7 @@ static void __init pte_devmap_tests(unsigned long pfn, pgprot_t prot)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 static void __init pmd_devmap_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pfn_pmd(pfn, prot);
+	pmd_t pmd = debug_vm_pfn_pmd(pfn, prot);
 
 	pr_debug("Validating PMD devmap\n");
 	WARN_ON(!pmd_devmap(pmd_mkdevmap(pmd)));
@@ -651,7 +668,7 @@ static void __init pud_devmap_tests(unsigned long pfn, pgprot_t prot) { }
 
 static void __init pte_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	if (!IS_ENABLED(CONFIG_MEM_SOFT_DIRTY))
 		return;
@@ -663,7 +680,7 @@ static void __init pte_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 
 static void __init pte_swap_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 {
-	pte_t pte = pfn_pte(pfn, prot);
+	pte_t pte = debug_vm_pfn_pte(pfn, prot);
 
 	if (!IS_ENABLED(CONFIG_MEM_SOFT_DIRTY))
 		return;
@@ -676,7 +693,7 @@ static void __init pte_swap_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 static void __init pmd_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pfn_pmd(pfn, prot);
+	pmd_t pmd = debug_vm_pfn_pmd(pfn, prot);
 
 	if (!IS_ENABLED(CONFIG_MEM_SOFT_DIRTY))
 		return;
@@ -688,7 +705,7 @@ static void __init pmd_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 
 static void __init pmd_swap_soft_dirty_tests(unsigned long pfn, pgprot_t prot)
 {
-	pmd_t pmd = pfn_pmd(pfn, prot);
+	pmd_t pmd = debug_vm_pfn_pmd(pfn, prot);
 
 	if (!IS_ENABLED(CONFIG_MEM_SOFT_DIRTY) ||
 		!IS_ENABLED(CONFIG_ARCH_ENABLE_THP_MIGRATION))
@@ -711,7 +728,7 @@ static void __init pte_swap_tests(unsigned long pfn, pgprot_t prot)
 	pte_t pte;
 
 	pr_debug("Validating PTE swap\n");
-	pte = pfn_pte(pfn, prot);
+	pte = debug_vm_pfn_pte(pfn, prot);
 	swp = __pte_to_swp_entry(pte);
 	pte = __swp_entry_to_pte(swp);
 	WARN_ON(pfn != pte_pfn(pte));
@@ -724,7 +741,7 @@ static void __init pmd_swap_tests(unsigned long pfn, pgprot_t prot)
 	pmd_t pmd;
 
 	pr_debug("Validating PMD swap\n");
-	pmd = pfn_pmd(pfn, prot);
+	pmd = debug_vm_pfn_pmd(pfn, prot);
 	swp = __pmd_to_swp_entry(pmd);
 	pmd = __swp_entry_to_pmd(swp);
 	WARN_ON(pfn != pmd_pfn(pmd));
@@ -794,7 +811,7 @@ static void __init hugetlb_basic_tests(unsigned long pfn, pgprot_t prot)
 	WARN_ON(huge_pte_write(huge_pte_wrprotect(huge_pte_mkwrite(pte))));
 
 #ifdef CONFIG_ARCH_WANT_GENERAL_HUGETLB
-	pte = pfn_pte(pfn, prot);
+	pte = debug_vm_pfn_pte(pfn, prot);
 
 	WARN_ON(!pte_huge(pte_mkhuge(pte)));
 #endif /* CONFIG_ARCH_WANT_GENERAL_HUGETLB */
@@ -874,7 +891,7 @@ static void __init pmd_thp_tests(unsigned long pfn, pgprot_t prot)
 	 * needs to return true. pmd_present() should be true whenever
 	 * pmd_trans_huge() returns true.
 	 */
-	pmd = pfn_pmd(pfn, prot);
+	pmd = debug_vm_pfn_pmd(pfn, prot);
 	WARN_ON(!pmd_trans_huge(pmd_mkhuge(pmd)));
 
 #ifndef __HAVE_ARCH_PMDP_INVALIDATE
