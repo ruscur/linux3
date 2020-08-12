@@ -147,7 +147,7 @@ static void __init pmd_basic_tests(unsigned long pfn, pgprot_t prot)
 static void __init pmd_advanced_tests(struct mm_struct *mm,
 				      struct vm_area_struct *vma, pmd_t *pmdp,
 				      unsigned long pfn, unsigned long vaddr,
-				      pgprot_t prot)
+				      pgprot_t prot, pgtable_t pgtable)
 {
 	pmd_t pmd;
 
@@ -157,6 +157,8 @@ static void __init pmd_advanced_tests(struct mm_struct *mm,
 	pr_debug("Validating PMD advanced\n");
 	/* Align the address wrt HPAGE_PMD_SIZE */
 	vaddr = (vaddr & HPAGE_PMD_MASK) + HPAGE_PMD_SIZE;
+
+	pgtable_trans_huge_deposit(mm, pmdp, pgtable);
 
 	pmd = pmd_mkhuge(pfn_pmd(pfn, prot));
 	set_pmd_at(mm, vaddr, pmdp, pmd);
@@ -188,6 +190,8 @@ static void __init pmd_advanced_tests(struct mm_struct *mm,
 	pmdp_test_and_clear_young(vma, vaddr, pmdp);
 	pmd = READ_ONCE(*pmdp);
 	WARN_ON(pmd_young(pmd));
+
+	pgtable = pgtable_trans_huge_withdraw(mm, pmdp);
 }
 
 static void __init pmd_leaf_tests(unsigned long pfn, pgprot_t prot)
@@ -1002,7 +1006,7 @@ static int __init debug_vm_pgtable(void)
 	pgd_clear_tests(mm, pgdp);
 
 	pte_advanced_tests(mm, vma, ptep, pte_aligned, vaddr, prot);
-	pmd_advanced_tests(mm, vma, pmdp, pmd_aligned, vaddr, prot);
+	pmd_advanced_tests(mm, vma, pmdp, pmd_aligned, vaddr, prot, saved_ptep);
 	pud_advanced_tests(mm, vma, pudp, pud_aligned, vaddr, prot);
 	hugetlb_advanced_tests(mm, vma, ptep, pte_aligned, vaddr, prot);
 
