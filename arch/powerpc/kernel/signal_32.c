@@ -87,6 +87,8 @@ static inline int put_sigset_t(compat_sigset_t __user *uset, sigset_t *set)
 	return put_compat_sigset(uset, set, sizeof(*uset));
 }
 
+#define unsafe_put_sigset_t	unsafe_put_compat_sigset
+
 static inline int get_sigset_t(sigset_t *set,
 			       const compat_sigset_t __user *uset)
 {
@@ -142,6 +144,13 @@ static inline int put_sigset_t(sigset_t __user *uset, sigset_t *set)
 {
 	return copy_to_user(uset, set, sizeof(*uset));
 }
+
+#define unsafe_put_sigset_t(uset, set, label) do { 			\
+	sigset_t __user *__us = uset	;				\
+	const sigset_t *__s = set;					\
+									\
+	unsafe_copy_to_user(__us, __s, sizeof(*__us), label);		\
+} while (0)
 
 static inline int get_sigset_t(sigset_t *set, const sigset_t __user *uset)
 {
@@ -820,10 +829,11 @@ int handle_rt_signal32(struct ksignal *ksig, sigset_t *oldset,
 	{
 		unsafe_put_user(0, &rt_sf->uc.uc_link, failed);
 	}
+
+	unsafe_put_sigset_t(&rt_sf->uc.uc_sigmask, oldset, failed);
+
 	user_write_access_end();
 
-	if (put_sigset_t(&rt_sf->uc.uc_sigmask, oldset))
-		goto badframe;
 	if (copy_siginfo_to_user(&rt_sf->info, &ksig->info))
 		goto badframe;
 
