@@ -811,6 +811,12 @@ void __init early_init_devtree(void *params)
 
 	mmu_early_init_devtree();
 
+	/*
+	 * Reset ppc64_rma_size and memblock memory limit
+	 */
+	if (early_radix_enabled())
+		radix__setup_initial_memory_limit(memstart_addr, first_memblock_size);
+
 #ifdef CONFIG_PPC_POWERNV
 	/* Scan and build the list of machine check recoverable ranges */
 	of_scan_flat_dt(early_init_dt_scan_recoverable_ranges, NULL);

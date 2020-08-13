@@ -747,6 +747,8 @@ void radix__setup_initial_memory_limit(phys_addr_t first_memblock_base,
 	 * Radix mode is not limited by RMA / VRMA addressing.
 	 */
 	ppc64_rma_size = ULONG_MAX;
+
+	memblock_set_current_limit(MEMBLOCK_ALLOC_ANYWHERE);
 }
 
 #ifdef CONFIG_MEMORY_HOTPLUG
