@@ -223,7 +223,6 @@ _GLOBAL(_nmask_and_or_msr)
 	mfmsr	r0		/* Get current msr */
 	andc	r0,r0,r3	/* And off the bits set in r3 (first parm) */
 	or	r0,r0,r4	/* Or on the bits in r4 (second parm) */
-	SYNC			/* Some chip revs have problems here... */
 	mtmsr	r0		/* Update machine state */
 	isync
 	blr			/* Done */
