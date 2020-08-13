@@ -272,28 +272,31 @@ _ASM_NOKPROBE_SYMBOL(real_writeb)
 /*
  * Flush instruction cache.
  */
-#if !defined(CONFIG_PPC_8xx) && !defined(CONFIG_PPC_BOOK3S_32)
+#ifdef CONFIG_4xx
 _GLOBAL(flush_instruction_cache)
-#if defined(CONFIG_4xx)
 	lis	r3, KERNELBASE@h
 	iccci	0,r3
-#elif defined(CONFIG_FSL_BOOKE)
+	isync
+	blr
+EXPORT_SYMBOL(flush_instruction_cache)
+#endif
+
+#ifdef CONFIG_FSL_BOOKE
+_GLOBAL(flush_instruction_cache)
 #ifdef CONFIG_E200
 	mfspr   r3,SPRN_L1CSR0
 	ori     r3,r3,L1CSR0_CFI|L1CSR0_CLFC
 	/* msync; isync recommended here */
 	mtspr   SPRN_L1CSR0,r3
-	isync
-	blr
-#endif
+#else
 	mfspr	r3,SPRN_L1CSR1
 	ori	r3,r3,L1CSR1_ICFI|L1CSR1_ICLFR
 	mtspr	SPRN_L1CSR1,r3
-#endif /* CONFIG_4xx */
+#endif
 	isync
 	blr
 EXPORT_SYMBOL(flush_instruction_cache)
-#endif /* CONFIG_PPC_8xx || CONFIG_PPC_BOOK3S_32 */
+#endif
 
 /*
  * Copy a whole page.  We use the dcbz instruction on the destination
