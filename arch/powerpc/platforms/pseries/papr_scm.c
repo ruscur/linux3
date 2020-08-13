@@ -792,6 +792,10 @@ static ssize_t perf_stats_show(struct device *dev,
 	struct nvdimm *dimm = to_nvdimm(dev);
 	struct papr_scm_priv *p = nvdimm_provider_data(dimm);
 
+	/* Allow access only to perfmon capable users */
+	if (!perfmon_capable())
+		return -EACCES;
+
 	if (!p->stat_buffer_len)
 		return -ENOENT;
 
