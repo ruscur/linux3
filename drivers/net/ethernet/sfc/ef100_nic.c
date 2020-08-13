@@ -979,7 +979,7 @@ static int ef100_process_design_param(struct efx_nic *efx,
 		 * EFX_MIN_DMAQ_SIZE is divisible by GRANULARITY.
 		 * This is very unlikely to fail.
 		 */
-		if (EFX_MIN_DMAQ_SIZE % reader->value) {
+		if (EFX_MIN_DMAQ_SIZE % (u32)reader->value) {
 			netif_err(efx, probe, efx->net_dev,
 				  "%s size granularity is %llu, can't guarantee safety\n",
 				  reader->type == ESE_EF100_DP_GZ_RXQ_SIZE_GRANULARITY ? "RXQ" : "TXQ",
