@@ -1864,7 +1864,7 @@ static int do_change_param_reset(struct ibmvnic_adapter *adapter,
 
 	if (rc) {
 		netdev_err(adapter->netdev,
-			   "Couldn't initialize crq. rc=%d\n", rc);
+			   "%s: Couldn't initialize crq. rc=%d\n", __func__, rc);
 		return rc;
 	}
 
@@ -2089,7 +2089,7 @@ static int do_hard_reset(struct ibmvnic_adapter *adapter,
 	rc = init_crq_queue(adapter);
 	if (rc) {
 		netdev_err(adapter->netdev,
-			   "Couldn't initialize crq. rc=%d\n", rc);
+			   "%s: Couldn't initialize crq. rc=%d\n", __func__, rc);
 		return rc;
 	}
 
@@ -2912,7 +2912,7 @@ static struct ibmvnic_sub_crq_queue *init_sub_crq_queue(struct ibmvnic_adapter
 		rc = ibmvnic_reset_crq(adapter);
 
 	if (rc == H_CLOSED) {
-		dev_warn(dev, "Partner adapter not ready, waiting.\n");
+		dev_warn(dev, "%s: Partner adapter not ready, waiting.\n", __func__);
 	} else if (rc) {
 		dev_warn(dev, "Error %d registering sub-crq\n", rc);
 		goto reg_failed;
@@ -4865,7 +4865,7 @@ static int ibmvnic_reset_crq(struct ibmvnic_adapter *adapter)
 
 	if (rc == H_CLOSED)
 		/* Adapter is good, but other end is not ready */
-		dev_warn(dev, "Partner adapter not ready\n");
+		dev_warn(dev, "%s: Partner adapter not ready\n", __func__);
 	else if (rc != 0)
 		dev_warn(dev, "Couldn't register crq (rc=%d)\n", rc);
 
@@ -4926,7 +4926,7 @@ static int init_crq_queue(struct ibmvnic_adapter *adapter)
 	retrc = rc;
 
 	if (rc == H_CLOSED) {
-		dev_warn(dev, "Partner adapter not ready\n");
+		dev_warn(dev, "%s: Partner adapter not ready\n", __func__);
 	} else if (rc) {
 		dev_warn(dev, "Error %d opening adapter\n", rc);
 		goto reg_crq_failed;
@@ -5129,8 +5129,8 @@ static int ibmvnic_probe(struct vio_dev *dev, const struct vio_device_id *id)
 	do {
 		rc = init_crq_queue(adapter);
 		if (rc) {
-			dev_err(&dev->dev, "Couldn't initialize crq. rc=%d\n",
-				rc);
+			dev_err(&dev->dev, "%s: Couldn't initialize crq. rc=%d\n",
+				__func__, rc);
 			goto ibmvnic_init_fail;
 		}
 
