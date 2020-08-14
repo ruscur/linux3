@@ -239,7 +239,7 @@ static int associativity_to_nid(const __be32 *associativity)
 	if (nid == 0xffff || nid >= nr_node_ids)
 		nid = NUMA_NO_NODE;
 
-	if (nid > 0 &&
+	if (nid >= 0 &&
 		of_read_number(associativity, 1) >= distance_ref_points_depth) {
 		/*
 		 * Skip the length field and send start of associativity array
