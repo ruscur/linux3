@@ -244,7 +244,7 @@ int __init swiotlb_init_with_tbl(char *tlb, unsigned long nslabs, int verbose)
  * structures for the software IO TLB used to implement the DMA API.
  */
 void  __init
-swiotlb_init(int verbose)
+swiotlb_init_anywhere(int verbose, bool allocate_anywhere)
 {
 	size_t default_size = IO_TLB_DEFAULT_SIZE;
 	unsigned char *vstart;
@@ -257,8 +257,12 @@ swiotlb_init(int verbose)
 
 	bytes = io_tlb_nslabs << IO_TLB_SHIFT;
 
-	/* Get IO TLB memory from the low pages */
-	vstart = memblock_alloc_low(PAGE_ALIGN(bytes), PAGE_SIZE);
+	if (allocate_anywhere)
+		vstart = memblock_alloc(PAGE_ALIGN(bytes), PAGE_SIZE);
+	else
+		/* Get IO TLB memory from the low pages */
+		vstart = memblock_alloc_low(PAGE_ALIGN(bytes), PAGE_SIZE);
+
 	if (vstart && !swiotlb_init_with_tbl(vstart, io_tlb_nslabs, verbose))
 		return;
 

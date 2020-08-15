@@ -49,6 +49,7 @@
 #include <asm/swiotlb.h>
 #include <asm/rtas.h>
 #include <asm/kasan.h>
+#include <asm/svm.h>
 
 #include <mm/mmu_decl.h>
 
@@ -282,7 +283,11 @@ void __init mem_init(void)
 	 * back to to-down.
 	 */
 	memblock_set_bottom_up(true);
-	swiotlb_init(0);
+	/*
+	 * SVM guests can use the SWIOTLB wherever it is in memory,
+	 * even if not DMA-able.
+	 */
+	swiotlb_init_anywhere(0, is_secure_guest());
 #endif
 
 	high_memory = (void *) __va(max_low_pfn * PAGE_SIZE);

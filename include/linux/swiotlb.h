@@ -29,7 +29,13 @@ enum swiotlb_force {
  */
 #define IO_TLB_SHIFT 11
 
-extern void swiotlb_init(int verbose);
+void __init swiotlb_init_anywhere(int verbose, bool allocate_anywhere);
+
+static inline void swiotlb_init(int verbose)
+{
+	swiotlb_init_anywhere(verbose, false);
+}
+
 int swiotlb_init_with_tbl(char *tlb, unsigned long nslabs, int verbose);
 extern unsigned long swiotlb_nr_tbl(void);
 unsigned long swiotlb_size_or_default(void);
