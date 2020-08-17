@@ -221,26 +221,76 @@ static void initialize_distance_lookup_table(int nid,
 	}
 }
 
+
+static int domain_id_map[MAX_NUMNODES] = {[0 ... MAX_NUMNODES - 1] =  -1 };
+
+static int __affinity_domain_to_nid(int domain_id, int max_nid)
+{
+	int i;
+
+	for (i = 0; i < max_nid; i++) {
+		if (domain_id_map[i] == domain_id)
+			return i;
+	}
+	return NUMA_NO_NODE;
+}
+
+int affinity_domain_to_nid(struct affinity_domain *domain)
+{
+	int nid, domain_id;
+	static int last_nid = 0;
+	static DEFINE_SPINLOCK(node_id_lock);
+
+	domain_id = domain->id;
+	/*
+	 * For PowerNV we don't change the node id. This helps to avoid
+	 * confusion w.r.t the expected node ids. On pseries, node numbers
+	 * are virtualized. Hence do logical node id for pseries.
+	 */
+	if (!firmware_has_feature(FW_FEATURE_LPAR))
+		return domain_id;
+
+	if (domain_id ==  -1)
+		return NUMA_NO_NODE;
+
+	nid = __affinity_domain_to_nid(domain_id, last_nid);
+	if (nid == NUMA_NO_NODE) {
+		spin_lock(&node_id_lock);
+		/*  recheck with lock held */
+		nid = __affinity_domain_to_nid(domain_id, last_nid);
+		if (nid == NUMA_NO_NODE && last_nid < MAX_NUMNODES) {
+			nid = last_nid++;
+			domain_id_map[nid] = domain_id;
+		}
+		spin_unlock(&node_id_lock);
+	}
+
+	return nid;
+}
+
 /*
  * Returns nid in the range [0..nr_node_ids], or -1 if no useful NUMA
  * info is found.
  */
 static int associativity_to_nid(const __be32 *associativity)
 {
+	struct affinity_domain domain = { .id = -1 };
 	int nid = NUMA_NO_NODE;
 
 	if (!numa_enabled)
 		goto out;
 
 	if (of_read_number(associativity, 1) >= min_common_depth)
-		nid = of_read_number(&associativity[min_common_depth], 1);
+		domain.id = of_read_number(&associativity[min_common_depth], 1);
 
 	/* POWER4 LPAR uses 0xffff as invalid node */
-	if (nid == 0xffff || nid >= nr_node_ids)
-		nid = NUMA_NO_NODE;
+	if (domain.id == 0xffff)
+		domain.id = -1;
+
+	nid = affinity_domain_to_nid(&domain);
 
 	if (nid > 0 &&
-		of_read_number(associativity, 1) >= distance_ref_points_depth) {
+	    of_read_number(associativity, 1) >= distance_ref_points_depth) {
 		/*
 		 * Skip the length field and send start of associativity array
 		 */
@@ -432,25 +482,27 @@ static int of_get_assoc_arrays(struct assoc_arrays *aa)
  */
 static int of_drconf_to_nid_single(struct drmem_lmb *lmb)
 {
+	struct affinity_domain domain;
 	struct assoc_arrays aa = { .arrays = NULL };
-	int default_nid = NUMA_NO_NODE;
-	int nid = default_nid;
+	int nid = NUMA_NO_NODE;
 	int rc, index;
 
 	if ((min_common_depth < 0) || !numa_enabled)
-		return default_nid;
+		return NUMA_NO_NODE;
 
 	rc = of_get_assoc_arrays(&aa);
 	if (rc)
-		return default_nid;
+		return NUMA_NO_NODE;
 
 	if (min_common_depth <= aa.array_sz &&
 	    !(lmb->flags & DRCONF_MEM_AI_INVALID) && lmb->aa_index < aa.n_arrays) {
 		index = lmb->aa_index * aa.array_sz + min_common_depth - 1;
-		nid = of_read_number(&aa.arrays[index], 1);
+		domain.id = of_read_number(&aa.arrays[index], 1);
 
-		if (nid == 0xffff || nid >= nr_node_ids)
-			nid = default_nid;
+		if (domain.id == 0xffff)
+			domain.id = -1;
+
+		nid = affinity_domain_to_nid(&domain);
 
 		if (nid > 0) {
 			index = lmb->aa_index * aa.array_sz;

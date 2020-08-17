@@ -118,5 +118,10 @@ int get_physical_package_id(int cpu);
 #endif
 #endif
 
+struct affinity_domain {
+	int id;
+};
+
+int affinity_domain_to_nid(struct affinity_domain *domain);
 #endif /* __KERNEL__ */
 #endif	/* _ASM_POWERPC_TOPOLOGY_H */
