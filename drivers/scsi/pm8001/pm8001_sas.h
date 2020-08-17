@@ -494,6 +494,10 @@ struct isr_param {
 	struct pm8001_hba_info *drv_inst;
 	u32 irq_id;
 };
+struct tsk_param {
+	struct tasklet_struct tasklet;
+	u32 irq_id;
+};
 struct pm8001_hba_info {
 	char			name[PM8001_NAME_LENGTH];
 	struct list_head	list;
@@ -549,7 +553,7 @@ struct pm8001_hba_info {
 				[PM8001_NAME_LENGTH+1+3+1];
 #endif
 #ifdef PM8001_USE_TASKLET
-	struct tasklet_struct	tasklet[PM8001_MAX_MSIX_VEC];
+	struct tsk_param	tasklet[PM8001_MAX_MSIX_VEC];
 #endif
 	u32			logging_level;
 	u32			link_rate;
