@@ -208,9 +208,10 @@ static int ibmvscsi_send_crq(struct ibmvscsi_host_data *hostdata,
  * ibmvscsi_task: - Process srps asynchronously
  * @data:	ibmvscsi_host_data of host
  */
-static void ibmvscsi_task(void *data)
+static void ibmvscsi_task(struct tasklet_struct *t)
 {
-	struct ibmvscsi_host_data *hostdata = (struct ibmvscsi_host_data *)data;
+	struct ibmvscsi_host_data *hostdata = from_tasklet(hostdata, t,
+							   srp_task);
 	struct vio_dev *vdev = to_vio_dev(hostdata->dev);
 	struct viosrp_crq *crq;
 	int done = 0;
@@ -366,8 +367,7 @@ static int ibmvscsi_init_crq_queue(struct crq_queue *queue,
 	queue->cur = 0;
 	spin_lock_init(&queue->lock);
 
-	tasklet_init(&hostdata->srp_task, (void *)ibmvscsi_task,
-		     (unsigned long)hostdata);
+	tasklet_setup(&hostdata->srp_task, ibmvscsi_task);
 
 	if (request_irq(vdev->irq,
 			ibmvscsi_handle_event,
