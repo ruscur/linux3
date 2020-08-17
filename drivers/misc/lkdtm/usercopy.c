@@ -325,6 +325,7 @@ free_user:
 	vm_munmap(user_addr, PAGE_SIZE);
 }
 
+#ifdef CONFIG_SET_FS
 void lkdtm_USERCOPY_KERNEL_DS(void)
 {
 	char __user *user_ptr =
@@ -339,6 +340,7 @@ void lkdtm_USERCOPY_KERNEL_DS(void)
 		pr_err("copy_to_user() to noncanonical address succeeded!?\n");
 	set_fs(old_fs);
 }
+#endif
 
 void __init lkdtm_usercopy_init(void)
 {
