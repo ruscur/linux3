@@ -250,7 +250,8 @@ int affinity_domain_to_nid(struct affinity_domain *domain)
 	if (!firmware_has_feature(FW_FEATURE_LPAR))
 		return domain_id;
 
-	if (domain_id ==  -1)
+	/* POWER4 LPAR uses 0xffff as invalid node */
+	if (domain_id ==  -1 || domain_id == 0xffff)
 		return NUMA_NO_NODE;
 
 	nid = __affinity_domain_to_nid(domain_id, last_nid);
@@ -282,10 +283,6 @@ static int associativity_to_nid(const __be32 *associativity)
 
 	if (of_read_number(associativity, 1) >= min_common_depth)
 		domain.id = of_read_number(&associativity[min_common_depth], 1);
-
-	/* POWER4 LPAR uses 0xffff as invalid node */
-	if (domain.id == 0xffff)
-		domain.id = -1;
 
 	nid = affinity_domain_to_nid(&domain);
 
@@ -498,9 +495,6 @@ static int of_drconf_to_nid_single(struct drmem_lmb *lmb)
 	    !(lmb->flags & DRCONF_MEM_AI_INVALID) && lmb->aa_index < aa.n_arrays) {
 		index = lmb->aa_index * aa.array_sz + min_common_depth - 1;
 		domain.id = of_read_number(&aa.arrays[index], 1);
-
-		if (domain.id == 0xffff)
-			domain.id = -1;
 
 		nid = affinity_domain_to_nid(&domain);
 
