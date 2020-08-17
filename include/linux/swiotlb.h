@@ -35,6 +35,7 @@ extern unsigned long swiotlb_nr_tbl(void);
 unsigned long swiotlb_size_or_default(void);
 extern int swiotlb_late_init_with_tbl(char *tlb, unsigned long nslabs);
 extern void __init swiotlb_update_mem_attributes(void);
+void __init swiotlb_set_no_iotlb_memory(bool value);
 
 /*
  * Enumeration for sync targets

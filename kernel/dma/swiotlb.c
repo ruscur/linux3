@@ -132,6 +132,11 @@ early_param("swiotlb", setup_io_tlb_npages);
 
 static bool no_iotlb_memory;
 
+void __init swiotlb_set_no_iotlb_memory(bool value)
+{
+	no_iotlb_memory = value;
+}
+
 unsigned long swiotlb_nr_tbl(void)
 {
 	return unlikely(no_iotlb_memory) ? 0 : io_tlb_nslabs;
