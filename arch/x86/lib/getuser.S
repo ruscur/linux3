@@ -35,10 +35,18 @@
 #include <asm/smap.h>
 #include <asm/export.h>
 
+#ifdef CONFIG_X86_5LEVEL
+#define LOAD_TASK_SIZE_MAX \
+	ALTERNATIVE "mov $((1 << 47) - 4096),%rdx", \
+		    "mov $((1 << 56) - 4096),%rdx", X86_FEATURE_LA57
+#else
+#define LOAD_TASK_SIZE_MAX	mov $TASK_SIZE_MAX,%_ASM_DX
+#endif
+
 	.text
 SYM_FUNC_START(__get_user_1)
-	mov PER_CPU_VAR(current_task), %_ASM_DX
-	cmp TASK_addr_limit(%_ASM_DX),%_ASM_AX
+	LOAD_TASK_SIZE_MAX
+	cmp %_ASM_DX,%_ASM_AX
 	jae bad_get_user
 	sbb %_ASM_DX, %_ASM_DX		/* array_index_mask_nospec() */
 	and %_ASM_DX, %_ASM_AX
@@ -53,8 +61,8 @@ EXPORT_SYMBOL(__get_user_1)
 SYM_FUNC_START(__get_user_2)
 	add $1,%_ASM_AX
 	jc bad_get_user
-	mov PER_CPU_VAR(current_task), %_ASM_DX
-	cmp TASK_addr_limit(%_ASM_DX),%_ASM_AX
+	LOAD_TASK_SIZE_MAX
+	cmp %_ASM_DX,%_ASM_AX
 	jae bad_get_user
 	sbb %_ASM_DX, %_ASM_DX		/* array_index_mask_nospec() */
 	and %_ASM_DX, %_ASM_AX
@@ -69,8 +77,8 @@ EXPORT_SYMBOL(__get_user_2)
 SYM_FUNC_START(__get_user_4)
 	add $3,%_ASM_AX
 	jc bad_get_user
-	mov PER_CPU_VAR(current_task), %_ASM_DX
-	cmp TASK_addr_limit(%_ASM_DX),%_ASM_AX
+	LOAD_TASK_SIZE_MAX
+	cmp %_ASM_DX,%_ASM_AX
 	jae bad_get_user
 	sbb %_ASM_DX, %_ASM_DX		/* array_index_mask_nospec() */
 	and %_ASM_DX, %_ASM_AX
@@ -86,8 +94,8 @@ SYM_FUNC_START(__get_user_8)
 #ifdef CONFIG_X86_64
 	add $7,%_ASM_AX
 	jc bad_get_user
-	mov PER_CPU_VAR(current_task), %_ASM_DX
-	cmp TASK_addr_limit(%_ASM_DX),%_ASM_AX
+	LOAD_TASK_SIZE_MAX
+	cmp %_ASM_DX,%_ASM_AX
 	jae bad_get_user
 	sbb %_ASM_DX, %_ASM_DX		/* array_index_mask_nospec() */
 	and %_ASM_DX, %_ASM_AX
@@ -99,8 +107,8 @@ SYM_FUNC_START(__get_user_8)
 #else
 	add $7,%_ASM_AX
 	jc bad_get_user_8
-	mov PER_CPU_VAR(current_task), %_ASM_DX
-	cmp TASK_addr_limit(%_ASM_DX),%_ASM_AX
+	LOAD_TASK_SIZE_MAX
+	cmp %_ASM_DX,%_ASM_AX
 	jae bad_get_user_8
 	sbb %_ASM_DX, %_ASM_DX		/* array_index_mask_nospec() */
 	and %_ASM_DX, %_ASM_AX

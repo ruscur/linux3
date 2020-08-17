@@ -31,12 +31,18 @@
  * as they get called from within inline assembly.
  */
 
-#define ENTER	mov PER_CPU_VAR(current_task), %_ASM_BX
+#ifdef CONFIG_X86_5LEVEL
+#define LOAD_TASK_SIZE_MAX \
+	ALTERNATIVE "mov $((1 << 47) - 4096),%rbx", \
+		    "mov $((1 << 56) - 4096),%rbx", X86_FEATURE_LA57
+#else
+#define LOAD_TASK_SIZE_MAX	mov $TASK_SIZE_MAX,%_ASM_BX
+#endif
 
 .text
 SYM_FUNC_START(__put_user_1)
-	ENTER
-	cmp TASK_addr_limit(%_ASM_BX),%_ASM_CX
+	LOAD_TASK_SIZE_MAX
+	cmp %_ASM_BX,%_ASM_CX
 	jae .Lbad_put_user
 	ASM_STAC
 1:	movb %al,(%_ASM_CX)
@@ -47,8 +53,7 @@ SYM_FUNC_END(__put_user_1)
 EXPORT_SYMBOL(__put_user_1)
 
 SYM_FUNC_START(__put_user_2)
-	ENTER
-	mov TASK_addr_limit(%_ASM_BX),%_ASM_BX
+	LOAD_TASK_SIZE_MAX
 	sub $1,%_ASM_BX
 	cmp %_ASM_BX,%_ASM_CX
 	jae .Lbad_put_user
@@ -61,8 +66,7 @@ SYM_FUNC_END(__put_user_2)
 EXPORT_SYMBOL(__put_user_2)
 
 SYM_FUNC_START(__put_user_4)
-	ENTER
-	mov TASK_addr_limit(%_ASM_BX),%_ASM_BX
+	LOAD_TASK_SIZE_MAX
 	sub $3,%_ASM_BX
 	cmp %_ASM_BX,%_ASM_CX
 	jae .Lbad_put_user
@@ -75,8 +79,7 @@ SYM_FUNC_END(__put_user_4)
 EXPORT_SYMBOL(__put_user_4)
 
 SYM_FUNC_START(__put_user_8)
-	ENTER
-	mov TASK_addr_limit(%_ASM_BX),%_ASM_BX
+	LOAD_TASK_SIZE_MAX
 	sub $7,%_ASM_BX
 	cmp %_ASM_BX,%_ASM_CX
 	jae .Lbad_put_user
