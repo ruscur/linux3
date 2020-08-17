@@ -147,13 +147,14 @@ static void mvs_free(struct mvs_info *mvi)
 }
 
 #ifdef CONFIG_SCSI_MVSAS_TASKLET
-static void mvs_tasklet(unsigned long opaque)
+static void mvs_tasklet(struct tasklet_struct *t)
 {
 	u32 stat;
 	u16 core_nr, i = 0;
 
 	struct mvs_info *mvi;
-	struct sas_ha_struct *sha = (struct sas_ha_struct *)opaque;
+	struct mvs_prv_info *mpi = from_tasklet(mpi, t, mv_tasklet);
+	struct sas_ha_struct *sha = pci_get_drvdata(mpi->mvi[0]->pdev);
 
 	core_nr = ((struct mvs_prv_info *)sha->lldd_ha)->n_host;
 	mvi = ((struct mvs_prv_info *)sha->lldd_ha)->mvi[0];
@@ -564,8 +565,7 @@ static int mvs_pci_init(struct pci_dev *pdev, const struct pci_device_id *ent)
 	} while (nhost < chip->n_host);
 	mpi = (struct mvs_prv_info *)(SHOST_TO_SAS_HA(shost)->lldd_ha);
 #ifdef CONFIG_SCSI_MVSAS_TASKLET
-	tasklet_init(&(mpi->mv_tasklet), mvs_tasklet,
-		     (unsigned long)SHOST_TO_SAS_HA(shost));
+	tasklet_setup(&(mpi->mv_tasklet), mvs_tasklet);
 #endif
 
 	mvs_post_sas_ha_init(shost, chip);
