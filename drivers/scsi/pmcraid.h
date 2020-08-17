@@ -617,6 +617,11 @@ struct pmcraid_isr_param {
 	u8 hrrq_id;			/* hrrq entry index */
 };
 
+/* Tasklet parameters (one for each enabled tasklet) */
+struct pmcraid_tsk_param {
+	struct tasklet_struct tasklet;
+	u8 isr_tasklet_id;              /* isr_tasklet entry index */
+};
 
 /* AEN message header sent as part of event data to applications */
 struct pmcraid_aen_msg {
@@ -752,8 +757,8 @@ struct pmcraid_instance {
 	spinlock_t free_pool_lock;		/* free pool lock */
 	spinlock_t pending_pool_lock;		/* pending pool lock */
 
-	/* Tasklet to handle deferred processing */
-	struct tasklet_struct isr_tasklet[PMCRAID_NUM_MSIX_VECTORS];
+	/* Tasklet parameters and tasklets to handle deferred processing */
+	struct pmcraid_tsk_param isr_tasklet[PMCRAID_NUM_MSIX_VECTORS];
 
 	/* Work-queue (Shared) for deferred reset processing */
 	struct work_struct worker_q;
