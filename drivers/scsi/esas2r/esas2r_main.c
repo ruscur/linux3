@@ -1546,9 +1546,9 @@ void esas2r_complete_request_cb(struct esas2r_adapter *a,
 }
 
 /* Run tasklet to handle stuff outside of interrupt context. */
-void esas2r_adapter_tasklet(unsigned long context)
+void esas2r_adapter_tasklet(struct tasklet_struct *t)
 {
-	struct esas2r_adapter *a = (struct esas2r_adapter *)context;
+	struct esas2r_adapter *a = from_tasklet(a, t, tasklet);
 
 	if (unlikely(test_bit(AF2_TIMER_TICK, &a->flags2))) {
 		clear_bit(AF2_TIMER_TICK, &a->flags2);
