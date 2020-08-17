@@ -27,6 +27,7 @@
 #include <asm/reg.h>
 #include <asm/smp.h> /* Required for cpu_sibling_mask() in UP configs */
 #include <asm/opal.h>
+#include <asm/topology.h>
 #include <linux/timer.h>
 
 #define POWERNV_MAX_PSTATES_ORDER  8
@@ -1070,8 +1071,16 @@ static int init_chip_info(void)
 	}
 
 	for (i = 0; i < nr_chips; i++) {
+		struct affinity_domain domain;
+		unsigned int nid;
+
 		chips[i].id = chip[i];
-		cpumask_copy(&chips[i].mask, cpumask_of_node(chip[i]));
+		/*
+		 * On powervn platforms affinity domain id is same as chipd id.
+		 */
+		domain.id = chip[i];
+		nid = affinity_domain_to_nid(&domain);
+		cpumask_copy(&chips[i].mask, cpumask_of_node(nid));
 		INIT_WORK(&chips[i].throttle, powernv_cpufreq_work_fn);
 		for_each_cpu(cpu, &chips[i].mask)
 			per_cpu(chip_info, cpu) =  &chips[i];
