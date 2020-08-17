@@ -286,11 +286,16 @@ long ppc_del_hwdebug(struct task_struct *child, long data)
 	}
 	return ret;
 #else /* CONFIG_HAVE_HW_BREAKPOINT */
+	if (child->thread.hw_brk[data - 1].flags & HW_BRK_FLAG_DISABLED)
+		goto del;
+
 	if (child->thread.hw_brk[data - 1].address == 0)
 		return -ENOENT;
 
+del:
 	child->thread.hw_brk[data - 1].address = 0;
 	child->thread.hw_brk[data - 1].type = 0;
+	child->thread.hw_brk[data - 1].flags = 0;
 #endif /* CONFIG_HAVE_HW_BREAKPOINT */
 
 	return 0;
