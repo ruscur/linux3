@@ -38,6 +38,18 @@ int arch_ioremap_pud_supported(void);
 int arch_ioremap_pmd_supported(void);
 #else
 static inline void ioremap_huge_init(void) { }
+static inline int arch_ioremap_p4d_supported(void)
+{
+	return false;
+}
+static inline int arch_ioremap_pud_supported(void)
+{
+	return false;
+}
+static inline int arch_ioremap_pmd_supported(void)
+{
+	return false;
+}
 #endif
 
 /*
