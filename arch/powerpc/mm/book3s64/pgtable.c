@@ -141,7 +141,7 @@ pmd_t pfn_pmd(unsigned long pfn, pgprot_t pgprot)
 	unsigned long pmdv;
 
 	pmdv = (pfn << PAGE_SHIFT) & PTE_RPN_MASK;
-	return pmd_set_protbits(__pmd(pmdv), pgprot);
+	return __pmd(pmdv | pgprot_val(pgprot) | _PAGE_PTE);
 }
 
 pmd_t mk_pmd(struct page *page, pgprot_t pgprot)
