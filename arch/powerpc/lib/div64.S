@@ -13,6 +13,9 @@
 #include <asm/processor.h>
 
 _GLOBAL(__div64_32)
+	li	r9,0
+	cmplw	r4,r9	# check if divisor r4 is zero
+	beq	5f			# jump to label 5 if r4(divisor) is zero
 	lwz	r5,0(r3)	# get the dividend into r5/r6
 	lwz	r6,4(r3)
 	cmplw	r5,r4
@@ -52,4 +55,5 @@ _GLOBAL(__div64_32)
 4:	stw	r7,0(r3)	# return the quotient in *r3
 	stw	r8,4(r3)
 	mr	r3,r6		# return the remainder in r3
+5:					# return if divisor r4 is zero
 	blr
