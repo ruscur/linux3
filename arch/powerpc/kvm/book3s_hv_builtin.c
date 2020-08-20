@@ -807,6 +807,9 @@ static void inject_interrupt(struct kvm_vcpu *vcpu, int vec, u64 srr1_flags)
 		new_pc += 0xC000000000004000ULL;
 	}
 
+	if (msr & SRR1_PREFIXED)
+		srr1_flags |= SRR1_PREFIXED;
+
 	kvmppc_set_srr0(vcpu, pc);
 	kvmppc_set_srr1(vcpu, (msr & SRR1_MSR_BITS) | srr1_flags);
 	kvmppc_set_pc(vcpu, new_pc);

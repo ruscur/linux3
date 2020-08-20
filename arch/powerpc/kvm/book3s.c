@@ -456,13 +456,24 @@ int kvmppc_load_last_inst(struct kvm_vcpu *vcpu,
 {
 	ulong pc = kvmppc_get_pc(vcpu);
 	u32 word;
+	u64 doubleword;
 	int r;
 
 	if (type == INST_SC)
 		pc -= 4;
 
-	r = kvmppc_ld(vcpu, &pc, sizeof(u32), &word, false);
-	*inst = ppc_inst(word);
+	if ((kvmppc_get_msr(vcpu) & SRR1_PREFIXED)) {
+		r = kvmppc_ld(vcpu, &pc, sizeof(u64), &doubleword, false);
+#ifdef CONFIG_CPU_LITTLE_ENDIAN
+		*inst = ppc_inst_prefix(doubleword & 0xffffffff, doubleword >> 32);
+#else
+		*inst = ppc_inst_prefix(doubleword >> 32, doubleword & 0xffffffff);
+#endif
+	} else {
+		r = kvmppc_ld(vcpu, &pc, sizeof(u32), &word, false);
+		*inst = ppc_inst(word);
+	}
+
 	if (r == EMULATE_DONE)
 		return r;
 	else

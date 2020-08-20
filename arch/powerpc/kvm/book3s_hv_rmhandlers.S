@@ -1365,6 +1365,16 @@ END_FTR_SECTION_IFSET(CPU_FTR_HAS_PPR)
 	cmpwi	r12,BOOK3S_INTERRUPT_H_EMUL_ASSIST
 	bne	11f
 	mfspr	r3,SPRN_HEIR
+	andis.  r0,r11,SRR1_PREFIXED@h
+	cmpwi   r0,0
+	beq	12f
+	rldicl	r4,r3,0,32	/* Suffix */
+	srdi	r3,r3,32	/* Prefix */
+	b	11f
+12:
+BEGIN_FTR_SECTION
+	rldicl	r3,r3,0,32	/* Word */
+END_FTR_SECTION_IFSET(CPU_FTR_ARCH_31)
 11:	stw	r3,VCPU_HEIR(r9)
 	stw	r4,VCPU_HEIR+4(r9)
 
@@ -2175,6 +2185,10 @@ fast_interrupt_c_return:
 	ori	r4, r3, MSR_DR		/* Enable paging for data */
 	mtmsrd	r4
 	lwz	r8, 0(r10)
+	andis.  r7, r11, SRR1_PREFIXED@h
+	cmpwi   r7,0
+	beq	+4
+	lwz	r5, 4(r10)
 	mtmsrd	r3
 
 	/* Store the result */

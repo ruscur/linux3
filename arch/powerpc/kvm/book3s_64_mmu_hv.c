@@ -411,9 +411,13 @@ static int instruction_is_store(struct ppc_inst instr)
 	unsigned int mask;
 
 	mask = 0x10000000;
-	if ((ppc_inst_val(instr) & 0xfc000000) == 0x7c000000)
-		mask = 0x100;		/* major opcode 31 */
-	return (ppc_inst_val(instr) & mask) != 0;
+	if (ppc_inst_prefixed(instr)) {
+		return (ppc_inst_suffix(instr) & mask) != 0;
+	} else {
+		if ((ppc_inst_val(instr) & 0xfc000000) == 0x7c000000)
+			mask = 0x100;		/* major opcode 31 */
+		return (ppc_inst_val(instr) & mask) != 0;
+	}
 }
 
 int kvmppc_hv_emulate_mmio(struct kvm_vcpu *vcpu,
