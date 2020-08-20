@@ -336,12 +336,12 @@ static int kvmppc_emulate_psq_store(struct kvm_vcpu *vcpu,
  * Cuts out inst bits with ordering according to spec.
  * That means the leftmost bit is zero. All given bits are included.
  */
-static inline u32 inst_get_field(u32 inst, int msb, int lsb)
+static inline u32 inst_get_field(struct ppc_inst inst, int msb, int lsb)
 {
-	return kvmppc_get_field(inst, msb + 32, lsb + 32);
+	return kvmppc_get_field(ppc_inst_val(inst), msb + 32, lsb + 32);
 }
 
-static bool kvmppc_inst_is_paired_single(struct kvm_vcpu *vcpu, u32 inst)
+static bool kvmppc_inst_is_paired_single(struct kvm_vcpu *vcpu, struct ppc_inst inst)
 {
 	if (!(vcpu->arch.hflags & BOOK3S_HFLAG_PAIRED_SINGLE))
 		return false;
@@ -477,9 +477,10 @@ static bool kvmppc_inst_is_paired_single(struct kvm_vcpu *vcpu, u32 inst)
 	return false;
 }
 
-static int get_d_signext(u32 inst)
+static int get_d_signext(struct ppc_inst inst)
 {
-	int d = inst & 0x8ff;
+	u32 word = ppc_inst_val(inst);
+	int d = word & 0x8ff;
 
 	if (d & 0x800)
 		return -(d & 0x7ff);
@@ -620,7 +621,7 @@ static int kvmppc_ps_one_in(struct kvm_vcpu *vcpu, bool rc,
 
 int kvmppc_emulate_paired_single(struct kvm_vcpu *vcpu)
 {
-	u32 inst;
+	struct ppc_inst inst;
 	enum emulation_result emulated = EMULATE_DONE;
 	int ax_rd, ax_ra, ax_rb, ax_rc;
 	short full_d;
@@ -647,7 +648,7 @@ int kvmppc_emulate_paired_single(struct kvm_vcpu *vcpu)
 	fpr_b = &VCPU_FPR(vcpu, ax_rb);
 	fpr_c = &VCPU_FPR(vcpu, ax_rc);
 
-	rcomp = (inst & 1) ? true : false;
+	rcomp = (ppc_inst_val(inst) & 1) ? true : false;
 	cr = kvmppc_get_cr(vcpu);
 
 	if (!kvmppc_inst_is_paired_single(vcpu, inst))

@@ -3,6 +3,7 @@
 #define _TRACE_KVM_H
 
 #include <linux/tracepoint.h>
+#include <asm/inst.h>
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM kvm
@@ -11,11 +12,11 @@
  * Tracepoint for guest mode entry.
  */
 TRACE_EVENT(kvm_ppc_instr,
-	TP_PROTO(unsigned int inst, unsigned long _pc, unsigned int emulate),
+	TP_PROTO(struct ppc_inst *inst, unsigned long _pc, unsigned int emulate),
 	TP_ARGS(inst, _pc, emulate),
 
 	TP_STRUCT__entry(
-		__field(	unsigned int,	inst		)
+		__field(	struct ppc_inst *,	inst	)
 		__field(	unsigned long,	pc		)
 		__field(	unsigned int,	emulate		)
 	),
@@ -26,8 +27,8 @@ TRACE_EVENT(kvm_ppc_instr,
 		__entry->emulate	= emulate;
 	),
 
-	TP_printk("inst %u pc 0x%lx emulate %u\n",
-		  __entry->inst, __entry->pc, __entry->emulate)
+	TP_printk("inst %s pc 0x%lx emulate %u\n",
+		  ppc_inst_as_str(*(__entry->inst)), __entry->pc, __entry->emulate)
 );
 
 TRACE_EVENT(kvm_stlb_inval,

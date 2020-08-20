@@ -236,20 +236,21 @@ void kvmppc_emulate_tabort(struct kvm_vcpu *vcpu, int ra_val)
 #endif
 
 int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
-			      unsigned int inst, int *advance)
+			      struct ppc_inst inst, int *advance)
 {
 	int emulated = EMULATE_DONE;
 	int rt = get_rt(inst);
 	int rs = get_rs(inst);
 	int ra = get_ra(inst);
 	int rb = get_rb(inst);
-	u32 inst_sc = 0x44000002;
+	struct ppc_inst inst_sc = ppc_inst(0x44000002);
+	u32 word = ppc_inst_val(inst);
 
-	switch (get_op(inst)) {
+	switch (ppc_inst_primary_opcode(inst)) {
 	case 0:
 		emulated = EMULATE_FAIL;
 		if ((kvmppc_get_msr(vcpu) & MSR_LE) &&
-		    (inst == swab32(inst_sc))) {
+		    (ppc_inst_equal(inst, ppc_inst_swab(inst_sc)))) {
 			/*
 			 * This is the byte reversed syscall instruction of our
 			 * hypercall handler. Early versions of LE Linux didn't
@@ -301,7 +302,7 @@ int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
 		case OP_31_XOP_MTMSRD:
 		{
 			ulong rs_val = kvmppc_get_gpr(vcpu, rs);
-			if (inst & 0x10000) {
+			if (word & 0x10000) {
 				ulong new_msr = kvmppc_get_msr(vcpu);
 				new_msr &= ~(MSR_RI | MSR_EE);
 				new_msr |= rs_val & (MSR_RI | MSR_EE);
@@ -317,7 +318,7 @@ int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
 		{
 			int srnum;
 
-			srnum = kvmppc_get_field(inst, 12 + 32, 15 + 32);
+			srnum = kvmppc_get_field(word, 12 + 32, 15 + 32);
 			if (vcpu->arch.mmu.mfsrin) {
 				u32 sr;
 				sr = vcpu->arch.mmu.mfsrin(vcpu, srnum);
@@ -339,7 +340,7 @@ int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
 		}
 		case OP_31_XOP_MTSR:
 			vcpu->arch.mmu.mtsrin(vcpu,
-				(inst >> 16) & 0xf,
+				(word >> 16) & 0xf,
 				kvmppc_get_gpr(vcpu, rs));
 			break;
 		case OP_31_XOP_MTSRIN:
@@ -350,7 +351,7 @@ int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
 		case OP_31_XOP_TLBIE:
 		case OP_31_XOP_TLBIEL:
 		{
-			bool large = (inst & 0x00200000) ? true : false;
+			bool large = (word & 0x00200000) ? true : false;
 			ulong addr = kvmppc_get_gpr(vcpu, rb);
 			vcpu->arch.mmu.tlbie(vcpu, addr, large);
 			break;
@@ -407,7 +408,7 @@ int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
 			vcpu->arch.mmu.slbia(vcpu);
 			break;
 		case OP_31_XOP_SLBFEE:
-			if (!(inst & 1) || !vcpu->arch.mmu.slbfee) {
+			if (!(word & 1) || !vcpu->arch.mmu.slbfee) {
 				return EMULATE_FAIL;
 			} else {
 				ulong b, t;
@@ -507,7 +508,7 @@ int kvmppc_core_emulate_op_pr(struct kvm_vcpu *vcpu,
 					(((u64)(TM_CAUSE_EMULATE | TM_CAUSE_PERSISTENT))
 						 << TEXASR_FC_LG));
 
-				if ((inst >> 21) & 0x1)
+				if ((word >> 21) & 0x1)
 					vcpu->arch.texasr |= TEXASR_ROT;
 
 				if (kvmppc_get_msr(vcpu) & MSR_HV)
@@ -1029,12 +1030,12 @@ unprivileged:
 	return emulated;
 }
 
-u32 kvmppc_alignment_dsisr(struct kvm_vcpu *vcpu, unsigned int inst)
+u32 kvmppc_alignment_dsisr(struct kvm_vcpu *vcpu, struct ppc_inst inst)
 {
 	return make_dsisr(inst);
 }
 
-ulong kvmppc_alignment_dar(struct kvm_vcpu *vcpu, unsigned int inst)
+ulong kvmppc_alignment_dar(struct kvm_vcpu *vcpu, struct ppc_inst inst)
 {
 #ifdef CONFIG_PPC_BOOK3S_64
 	/*
@@ -1053,7 +1054,7 @@ ulong kvmppc_alignment_dar(struct kvm_vcpu *vcpu, unsigned int inst)
 	case OP_STFS:
 		if (ra)
 			dar = kvmppc_get_gpr(vcpu, ra);
-		dar += (s32)((s16)inst);
+		dar += (s32)((s16)ppc_inst_val(inst));
 		break;
 	case 31:
 		if (ra)
@@ -1061,7 +1062,8 @@ ulong kvmppc_alignment_dar(struct kvm_vcpu *vcpu, unsigned int inst)
 		dar += kvmppc_get_gpr(vcpu, rb);
 		break;
 	default:
-		printk(KERN_INFO "KVM: Unaligned instruction 0x%x\n", inst);
+		printk(KERN_INFO "KVM: Unaligned instruction %s\n",
+		       ppc_inst_as_str(inst));
 		break;
 	}
 

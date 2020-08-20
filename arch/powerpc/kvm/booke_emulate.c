@@ -40,7 +40,7 @@ static void kvmppc_emul_rfci(struct kvm_vcpu *vcpu)
 }
 
 int kvmppc_booke_emulate_op(struct kvm_vcpu *vcpu,
-                            unsigned int inst, int *advance)
+			    struct ppc_inst inst, int *advance)
 {
 	int emulated = EMULATE_DONE;
 	int rs = get_rs(inst);
@@ -94,7 +94,7 @@ int kvmppc_booke_emulate_op(struct kvm_vcpu *vcpu,
 
 		case OP_31_XOP_WRTEEI:
 			vcpu->arch.shared->msr = (vcpu->arch.shared->msr & ~MSR_EE)
-							 | (inst & MSR_EE);
+							 | (ppc_inst_val(inst) & MSR_EE);
 			kvmppc_set_exit_type(vcpu, EMULATED_WRTEE_EXITS);
 			break;
 

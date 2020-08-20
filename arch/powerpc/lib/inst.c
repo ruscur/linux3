@@ -18,7 +18,7 @@ int probe_user_read_inst(struct ppc_inst *inst,
 	err = copy_from_user_nofault(&val, nip, sizeof(val));
 	if (err)
 		return err;
-	if (get_op(val) == OP_PREFIX) {
+	if ((val >> 26) == OP_PREFIX) {
 		err = copy_from_user_nofault(&suffix, (void __user *)nip + 4, 4);
 		*inst = ppc_inst_prefix(val, suffix);
 	} else {
@@ -36,7 +36,7 @@ int probe_kernel_read_inst(struct ppc_inst *inst,
 	err = copy_from_kernel_nofault(&val, src, sizeof(val));
 	if (err)
 		return err;
-	if (get_op(val) == OP_PREFIX) {
+	if ((val >> 26) == OP_PREFIX) {
 		err = copy_from_kernel_nofault(&suffix, (void *)src + 4, 4);
 		*inst = ppc_inst_prefix(val, suffix);
 	} else {

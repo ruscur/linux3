@@ -268,8 +268,8 @@ extern void kvmhv_emulate_tm_rollback(struct kvm_vcpu *vcpu);
 
 extern void kvmppc_entry_trampoline(void);
 extern void kvmppc_hv_entry_trampoline(void);
-extern u32 kvmppc_alignment_dsisr(struct kvm_vcpu *vcpu, unsigned int inst);
-extern ulong kvmppc_alignment_dar(struct kvm_vcpu *vcpu, unsigned int inst);
+extern u32 kvmppc_alignment_dsisr(struct kvm_vcpu *vcpu, struct ppc_inst inst);
+extern ulong kvmppc_alignment_dar(struct kvm_vcpu *vcpu, struct ppc_inst inst);
 extern int kvmppc_h_pr(struct kvm_vcpu *vcpu, unsigned long cmd);
 extern void kvmppc_pr_init_default_hcalls(struct kvm *kvm);
 extern int kvmppc_hcall_impl_pr(unsigned long cmd);

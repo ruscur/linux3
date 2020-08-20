@@ -816,12 +816,12 @@ static int emulation_exit(struct kvm_vcpu *vcpu)
 		return RESUME_GUEST;
 
 	case EMULATE_FAIL:
-		printk(KERN_CRIT "%s: emulation at %lx failed (%08x)\n",
-		       __func__, vcpu->arch.regs.nip, vcpu->arch.last_inst);
+		printk(KERN_CRIT "%s: emulation at %lx failed (%s)\n",
+		       __func__, vcpu->arch.regs.nip, ppc_inst_as_str(vcpu->arch.last_inst));
 		/* For debugging, encode the failing instruction and
 		 * report it to userspace. */
-		vcpu->run->hw.hardware_exit_reason = ~0ULL << 32;
-		vcpu->run->hw.hardware_exit_reason |= vcpu->arch.last_inst;
+		run->hw.hardware_exit_reason = ~0ULL << 32;
+		run->hw.hardware_exit_reason |= ppc_inst_val(vcpu->arch.last_inst);
 		kvmppc_core_queue_program(vcpu, ESR_PIL);
 		return RESUME_HOST;
 
@@ -955,7 +955,7 @@ static void kvmppc_restart_interrupt(struct kvm_vcpu *vcpu,
 }
 
 static int kvmppc_resume_inst_load(struct kvm_vcpu *vcpu,
-				  enum emulation_result emulated, u32 last_inst)
+				  enum emulation_result emulated, struct ppc_inst last_inst)
 {
 	switch (emulated) {
 	case EMULATE_AGAIN:
@@ -966,8 +966,8 @@ static int kvmppc_resume_inst_load(struct kvm_vcpu *vcpu,
 		       __func__, vcpu->arch.regs.nip);
 		/* For debugging, encode the failing instruction and
 		 * report it to userspace. */
-		vcpu->run->hw.hardware_exit_reason = ~0ULL << 32;
-		vcpu->run->hw.hardware_exit_reason |= last_inst;
+		run->hw.hardware_exit_reason = ~0ULL << 32;
+		run->hw.hardware_exit_reason |= ppc_inst_val(last_inst);
 		kvmppc_core_queue_program(vcpu, ESR_PIL);
 		return RESUME_HOST;
 
@@ -987,7 +987,7 @@ int kvmppc_handle_exit(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 	int r = RESUME_HOST;
 	int s;
 	int idx;
-	u32 last_inst = KVM_INST_FETCH_FAILED;
+	struct ppc_inst last_inst = ppc_inst(KVM_INST_FETCH_FAILED);
 	enum emulation_result emulated = EMULATE_DONE;
 
 	/* update before a new last_exit_type is rewritten */
@@ -1089,7 +1089,7 @@ int kvmppc_handle_exit(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 
 	case BOOKE_INTERRUPT_PROGRAM:
 		if ((vcpu->guest_debug & KVM_GUESTDBG_USE_SW_BP) &&
-			(last_inst == KVMPPC_INST_SW_BREAKPOINT)) {
+			(ppc_inst_equal(last_inst, ppc_inst(KVMPPC_INST_SW_BREAKPOINT)))) {
 			/*
 			 * We are here because of an SW breakpoint instr,
 			 * so lets return to host to handle.

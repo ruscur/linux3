@@ -22,6 +22,7 @@
 #include <asm/disassemble.h>
 #include <asm/ppc-opcode.h>
 #include <asm/epapr_hcalls.h>
+#include <asm/code-patching.h>
 
 #define KVM_MAGIC_PAGE		(-4096L)
 #define magic_var(x) KVM_MAGIC_PAGE + offsetof(struct kvm_vcpu_arch_shared, x)
@@ -68,55 +69,49 @@ extern char kvm_tmp[];
 extern char kvm_tmp_end[];
 static int kvm_tmp_index;
 
-static void __init kvm_patch_ins(u32 *inst, u32 new_inst)
-{
-	*inst = new_inst;
-	flush_icache_range((ulong)inst, (ulong)inst + 4);
-}
-
-static void __init kvm_patch_ins_ll(u32 *inst, long addr, u32 rt)
+static void __init kvm_patch_ins_ll(struct ppc_inst *inst, long addr, u32 rt)
 {
 #ifdef CONFIG_64BIT
-	kvm_patch_ins(inst, KVM_INST_LD | rt | (addr & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_LD | rt | (addr & 0x0000fffc)));
 #else
-	kvm_patch_ins(inst, KVM_INST_LWZ | rt | (addr & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_LWZ | rt | (addr & 0x0000fffc)));
 #endif
 }
 
-static void __init kvm_patch_ins_ld(u32 *inst, long addr, u32 rt)
+static void __init kvm_patch_ins_ld(struct ppc_inst *inst, long addr, u32 rt)
 {
 #ifdef CONFIG_64BIT
-	kvm_patch_ins(inst, KVM_INST_LD | rt | (addr & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_LD | rt | (addr & 0x0000fffc)));
 #else
-	kvm_patch_ins(inst, KVM_INST_LWZ | rt | ((addr + 4) & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_LWZ | rt | ((addr + 4) & 0x0000fffc)));
 #endif
 }
 
-static void __init kvm_patch_ins_lwz(u32 *inst, long addr, u32 rt)
+static void __init kvm_patch_ins_lwz(struct ppc_inst *inst, long addr, u32 rt)
 {
-	kvm_patch_ins(inst, KVM_INST_LWZ | rt | (addr & 0x0000ffff));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_LWZ | rt | (addr & 0x0000ffff)));
 }
 
-static void __init kvm_patch_ins_std(u32 *inst, long addr, u32 rt)
+static void __init kvm_patch_ins_std(struct ppc_inst *inst, long addr, u32 rt)
 {
 #ifdef CONFIG_64BIT
-	kvm_patch_ins(inst, KVM_INST_STD | rt | (addr & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_STD | rt | (addr & 0x0000fffc)));
 #else
-	kvm_patch_ins(inst, KVM_INST_STW | rt | ((addr + 4) & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_STW | rt | ((addr + 4) & 0x0000fffc)));
 #endif
 }
 
-static void __init kvm_patch_ins_stw(u32 *inst, long addr, u32 rt)
+static void __init kvm_patch_ins_stw(struct ppc_inst *inst, long addr, u32 rt)
 {
-	kvm_patch_ins(inst, KVM_INST_STW | rt | (addr & 0x0000fffc));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_STW | rt | (addr & 0x0000fffc)));
 }
 
-static void __init kvm_patch_ins_nop(u32 *inst)
+static void __init kvm_patch_ins_nop(struct ppc_inst *inst)
 {
-	kvm_patch_ins(inst, KVM_INST_NOP);
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_NOP));
 }
 
-static void __init kvm_patch_ins_b(u32 *inst, int addr)
+static void __init kvm_patch_ins_b(struct ppc_inst *inst, int addr)
 {
 #if defined(CONFIG_RELOCATABLE) && defined(CONFIG_PPC_BOOK3S)
 	/* On relocatable kernels interrupts handlers and our code
@@ -126,7 +121,7 @@ static void __init kvm_patch_ins_b(u32 *inst, int addr)
 		return;
 #endif
 
-	kvm_patch_ins(inst, KVM_INST_B | (addr & KVM_INST_B_MASK));
+	raw_patch_instruction(inst, ppc_inst(KVM_INST_B | (addr & KVM_INST_B_MASK)));
 }
 
 static u32 * __init kvm_alloc(int len)
@@ -152,7 +147,7 @@ extern u32 kvm_emulate_mtmsrd_orig_ins_offs;
 extern u32 kvm_emulate_mtmsrd_len;
 extern u32 kvm_emulate_mtmsrd[];
 
-static void __init kvm_patch_ins_mtmsrd(u32 *inst, u32 rt)
+static void __init kvm_patch_ins_mtmsrd(struct ppc_inst *inst, u32 rt)
 {
 	u32 *p;
 	int distance_start;
@@ -177,13 +172,13 @@ static void __init kvm_patch_ins_mtmsrd(u32 *inst, u32 rt)
 	/* Modify the chunk to fit the invocation */
 	memcpy(p, kvm_emulate_mtmsrd, kvm_emulate_mtmsrd_len * 4);
 	p[kvm_emulate_mtmsrd_branch_offs] |= distance_end & KVM_INST_B_MASK;
-	switch (get_rt(rt)) {
+	switch (get_rt(ppc_inst(rt))) {
 	case 30:
-		kvm_patch_ins_ll(&p[kvm_emulate_mtmsrd_reg_offs],
+		kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_mtmsrd_reg_offs],
 				 magic_var(scratch2), KVM_RT_30);
 		break;
 	case 31:
-		kvm_patch_ins_ll(&p[kvm_emulate_mtmsrd_reg_offs],
+		kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_mtmsrd_reg_offs],
 				 magic_var(scratch1), KVM_RT_30);
 		break;
 	default:
@@ -191,7 +186,7 @@ static void __init kvm_patch_ins_mtmsrd(u32 *inst, u32 rt)
 		break;
 	}
 
-	p[kvm_emulate_mtmsrd_orig_ins_offs] = *inst;
+	p[kvm_emulate_mtmsrd_orig_ins_offs] = ppc_inst_val(ppc_inst_read(inst));
 	flush_icache_range((ulong)p, (ulong)p + kvm_emulate_mtmsrd_len * 4);
 
 	/* Patch the invocation */
@@ -205,7 +200,7 @@ extern u32 kvm_emulate_mtmsr_orig_ins_offs;
 extern u32 kvm_emulate_mtmsr_len;
 extern u32 kvm_emulate_mtmsr[];
 
-static void __init kvm_patch_ins_mtmsr(u32 *inst, u32 rt)
+static void __init kvm_patch_ins_mtmsr(struct ppc_inst *inst, u32 rt)
 {
 	u32 *p;
 	int distance_start;
@@ -232,17 +227,17 @@ static void __init kvm_patch_ins_mtmsr(u32 *inst, u32 rt)
 	p[kvm_emulate_mtmsr_branch_offs] |= distance_end & KVM_INST_B_MASK;
 
 	/* Make clobbered registers work too */
-	switch (get_rt(rt)) {
+	switch (get_rt(ppc_inst(rt))) {
 	case 30:
-		kvm_patch_ins_ll(&p[kvm_emulate_mtmsr_reg1_offs],
+		kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_mtmsr_reg1_offs],
 				 magic_var(scratch2), KVM_RT_30);
-		kvm_patch_ins_ll(&p[kvm_emulate_mtmsr_reg2_offs],
+		kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_mtmsr_reg2_offs],
 				 magic_var(scratch2), KVM_RT_30);
 		break;
 	case 31:
-		kvm_patch_ins_ll(&p[kvm_emulate_mtmsr_reg1_offs],
+		kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_mtmsr_reg1_offs],
 				 magic_var(scratch1), KVM_RT_30);
-		kvm_patch_ins_ll(&p[kvm_emulate_mtmsr_reg2_offs],
+		kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_mtmsr_reg2_offs],
 				 magic_var(scratch1), KVM_RT_30);
 		break;
 	default:
@@ -251,7 +246,7 @@ static void __init kvm_patch_ins_mtmsr(u32 *inst, u32 rt)
 		break;
 	}
 
-	p[kvm_emulate_mtmsr_orig_ins_offs] = *inst;
+	p[kvm_emulate_mtmsr_orig_ins_offs] = ppc_inst_val(ppc_inst_read(inst));
 	flush_icache_range((ulong)p, (ulong)p + kvm_emulate_mtmsr_len * 4);
 
 	/* Patch the invocation */
@@ -266,7 +261,7 @@ extern u32 kvm_emulate_wrtee_orig_ins_offs;
 extern u32 kvm_emulate_wrtee_len;
 extern u32 kvm_emulate_wrtee[];
 
-static void __init kvm_patch_ins_wrtee(u32 *inst, u32 rt, int imm_one)
+static void __init kvm_patch_ins_wrtee(struct ppc_inst *inst, u32 rt, int imm_one)
 {
 	u32 *p;
 	int distance_start;
@@ -297,13 +292,13 @@ static void __init kvm_patch_ins_wrtee(u32 *inst, u32 rt, int imm_one)
 			KVM_INST_LI | __PPC_RT(R30) | MSR_EE;
 	} else {
 		/* Make clobbered registers work too */
-		switch (get_rt(rt)) {
+		switch (get_rt(ppc_inst(rt))) {
 		case 30:
-			kvm_patch_ins_ll(&p[kvm_emulate_wrtee_reg_offs],
+			kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_wrtee_reg_offs],
 					 magic_var(scratch2), KVM_RT_30);
 			break;
 		case 31:
-			kvm_patch_ins_ll(&p[kvm_emulate_wrtee_reg_offs],
+			kvm_patch_ins_ll((struct ppc_inst *)&p[kvm_emulate_wrtee_reg_offs],
 					 magic_var(scratch1), KVM_RT_30);
 			break;
 		default:
@@ -312,7 +307,7 @@ static void __init kvm_patch_ins_wrtee(u32 *inst, u32 rt, int imm_one)
 		}
 	}
 
-	p[kvm_emulate_wrtee_orig_ins_offs] = *inst;
+	p[kvm_emulate_wrtee_orig_ins_offs] = ppc_inst_val(ppc_inst_read(inst));
 	flush_icache_range((ulong)p, (ulong)p + kvm_emulate_wrtee_len * 4);
 
 	/* Patch the invocation */
@@ -323,7 +318,7 @@ extern u32 kvm_emulate_wrteei_0_branch_offs;
 extern u32 kvm_emulate_wrteei_0_len;
 extern u32 kvm_emulate_wrteei_0[];
 
-static void __init kvm_patch_ins_wrteei_0(u32 *inst)
+static void __init kvm_patch_ins_wrteei_0(struct ppc_inst *inst)
 {
 	u32 *p;
 	int distance_start;
@@ -415,11 +410,11 @@ static void __init kvm_map_magic_page(void *data)
 	*features = out[0];
 }
 
-static void __init kvm_check_ins(u32 *inst, u32 features)
+static void __init kvm_check_ins(struct ppc_inst *inst, u32 features)
 {
-	u32 _inst = *inst;
-	u32 inst_no_rt = _inst & ~KVM_MASK_RT;
-	u32 inst_rt = _inst & KVM_MASK_RT;
+	struct ppc_inst _inst = ppc_inst_read(inst);
+	u32 inst_no_rt = ppc_inst_val(_inst) & ~KVM_MASK_RT;
+	u32 inst_rt = ppc_inst_val(_inst) & KVM_MASK_RT;
 
 	switch (inst_no_rt) {
 	/* Loads */
@@ -643,7 +638,7 @@ static void __init kvm_check_ins(u32 *inst, u32 features)
 #endif
 	}
 
-	switch (_inst) {
+	switch (ppc_inst_val(_inst)) {
 #ifdef CONFIG_BOOKE
 	case KVM_INST_WRTEEI_0:
 		kvm_patch_ins_wrteei_0(inst);
@@ -656,13 +651,13 @@ static void __init kvm_check_ins(u32 *inst, u32 features)
 	}
 }
 
-extern u32 kvm_template_start[];
-extern u32 kvm_template_end[];
+extern struct ppc_inst kvm_template_start[];
+extern struct ppc_inst kvm_template_end[];
 
 static void __init kvm_use_magic_page(void)
 {
-	u32 *p;
-	u32 *start, *end;
+	struct ppc_inst *p;
+	struct ppc_inst *start, *end;
 	u32 features;
 
 	/* Tell the host to map the magic page to -4096 on all CPUs */
@@ -685,10 +680,10 @@ static void __init kvm_use_magic_page(void)
 	 */
 	local_irq_disable();
 
-	for (p = start; p < end; p++) {
+	for (p = start; p < end; p = ppc_inst_next(p, p)) {
 		/* Avoid patching the template code */
 		if (p >= kvm_template_start && p < kvm_template_end) {
-			p = kvm_template_end - 1;
+			p = (void *)(kvm_template_end - 4);
 			continue;
 		}
 		kvm_check_ins(p, features);

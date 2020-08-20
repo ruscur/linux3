@@ -1093,7 +1093,7 @@ static int kvmppc_exit_pr_progint(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 {
 	enum emulation_result er;
 	ulong flags;
-	u32 last_inst;
+	struct ppc_inst last_inst;
 	int emul, r;
 
 	/*
@@ -1113,10 +1113,10 @@ static int kvmppc_exit_pr_progint(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 
 	if (kvmppc_get_msr(vcpu) & MSR_PR) {
 #ifdef EXIT_DEBUG
-		pr_info("Userspace triggered 0x700 exception at\n 0x%lx (0x%x)\n",
-			kvmppc_get_pc(vcpu), last_inst);
+		pr_info("Userspace triggered 0x700 exception at\n 0x%lx (%s)\n",
+			kvmppc_get_pc(vcpu), ppc_inst_as_str(last_inst));
 #endif
-		if ((last_inst & 0xff0007ff) != (INS_DCBZ & 0xfffffff7)) {
+		if ((ppc_inst_val(last_inst) & 0xff0007ff) != (INS_DCBZ & 0xfffffff7)) {
 			kvmppc_core_queue_program(vcpu, flags);
 			return RESUME_GUEST;
 		}
@@ -1132,8 +1132,8 @@ static int kvmppc_exit_pr_progint(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 		r = RESUME_GUEST;
 		break;
 	case EMULATE_FAIL:
-		pr_crit("%s: emulation at %lx failed (%08x)\n",
-			__func__, kvmppc_get_pc(vcpu), last_inst);
+		pr_crit("%s: emulation at %lx failed (%s)\n",
+			__func__, kvmppc_get_pc(vcpu), ppc_inst_as_str(last_inst));
 		kvmppc_core_queue_program(vcpu, flags);
 		r = RESUME_GUEST;
 		break;
@@ -1295,7 +1295,7 @@ int kvmppc_handle_exit_pr(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 		break;
 	case BOOK3S_INTERRUPT_SYSCALL:
 	{
-		u32 last_sc;
+		struct ppc_inst last_sc;
 		int emul;
 
 		/* Get last sc for papr */
@@ -1310,7 +1310,7 @@ int kvmppc_handle_exit_pr(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 		}
 
 		if (vcpu->arch.papr_enabled &&
-		    (last_sc == 0x44000022) &&
+		    (ppc_inst_equal(last_sc, ppc_inst(0x44000022))) &&
 		    !(kvmppc_get_msr(vcpu) & MSR_PR)) {
 			/* SC 1 papr hypercalls */
 			ulong cmd = kvmppc_get_gpr(vcpu, 3);
@@ -1362,7 +1362,7 @@ int kvmppc_handle_exit_pr(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 	{
 		int ext_msr = 0;
 		int emul;
-		u32 last_inst;
+		struct ppc_inst last_inst;
 
 		if (vcpu->arch.hflags & BOOK3S_HFLAG_PAIRED_SINGLE) {
 			/* Do paired single instruction emulation */
@@ -1396,7 +1396,7 @@ int kvmppc_handle_exit_pr(struct kvm_vcpu *vcpu, unsigned int exit_nr)
 	}
 	case BOOK3S_INTERRUPT_ALIGNMENT:
 	{
-		u32 last_inst;
+		struct ppc_inst last_inst;
 		int emul = kvmppc_get_last_inst(vcpu, INST_GENERIC, &last_inst);
 
 		if (emul == EMULATE_DONE) {

@@ -193,7 +193,7 @@ static int kvmppc_emulate_mfspr(struct kvm_vcpu *vcpu, int sprn, int rt)
  * from opcode tables in the future. */
 int kvmppc_emulate_instruction(struct kvm_vcpu *vcpu)
 {
-	u32 inst;
+	struct ppc_inst inst;
 	int rs, rt, sprn;
 	enum emulation_result emulated;
 	int advance = 1;
@@ -211,7 +211,7 @@ int kvmppc_emulate_instruction(struct kvm_vcpu *vcpu)
 	rt = get_rt(inst);
 	sprn = get_sprn(inst);
 
-	switch (get_op(inst)) {
+	switch (ppc_inst_primary_opcode(inst)) {
 	case OP_TRAP:
 #ifdef CONFIG_PPC_BOOK3S
 	case OP_TRAP_64:
@@ -269,7 +269,7 @@ int kvmppc_emulate_instruction(struct kvm_vcpu *vcpu)
 		 * Instruction with primary opcode 0. Based on PowerISA
 		 * these are illegal instructions.
 		 */
-		if (inst == KVMPPC_INST_SW_BREAKPOINT) {
+		if (ppc_inst_equal(inst, ppc_inst(KVMPPC_INST_SW_BREAKPOINT))) {
 			vcpu->run->exit_reason = KVM_EXIT_DEBUG;
 			vcpu->run->debug.arch.status = 0;
 			vcpu->run->debug.arch.address = kvmppc_get_pc(vcpu);
@@ -291,16 +291,17 @@ int kvmppc_emulate_instruction(struct kvm_vcpu *vcpu)
 			advance = 0;
 		} else if (emulated == EMULATE_FAIL) {
 			advance = 0;
-			printk(KERN_ERR "Couldn't emulate instruction 0x%08x "
-			       "(op %d xop %d)\n", inst, get_op(inst), get_xop(inst));
+			printk(KERN_ERR "Couldn't emulate instruction %s "
+			       "(op %d xop %d)\n", ppc_inst_as_str(inst),
+			       ppc_inst_primary_opcode(inst), get_xop(inst));
 		}
 	}
 
-	trace_kvm_ppc_instr(inst, kvmppc_get_pc(vcpu), emulated);
+	trace_kvm_ppc_instr(&inst, kvmppc_get_pc(vcpu), emulated);
 
 	/* Advance past emulated instruction. */
 	if (advance)
-		kvmppc_set_pc(vcpu, kvmppc_get_pc(vcpu) + 4);
+		kvmppc_set_pc(vcpu, kvmppc_get_pc(vcpu) + ppc_inst_len(inst));
 
 	return emulated;
 }

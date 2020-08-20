@@ -41,11 +41,13 @@ static void emulate_tx_failure(struct kvm_vcpu *vcpu, u64 failure_cause)
  */
 int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 {
-	u32 instr = vcpu->arch.emul_inst;
+	struct ppc_inst instr = vcpu->arch.emul_inst;
 	u64 msr = vcpu->arch.shregs.msr;
 	u64 newmsr, bescr;
+	u32 word;
 	int ra, rs;
 
+	word = ppc_inst_val(instr);
 	/*
 	 * rfid, rfebb, and mtmsrd encode bit 31 = 0 since it's a reserved bit
 	 * in these instructions, so masking bit 31 out doesn't change these
@@ -57,7 +59,7 @@ int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 	 * bit 31 set) can generate a softpatch interrupt. Hence both forms
 	 * are handled below for these instructions so they behave the same way.
 	 */
-	switch (instr & PO_XOP_OPCODE_MASK) {
+	switch (word & PO_XOP_OPCODE_MASK) {
 	case PPC_INST_RFID:
 		/* XXX do we need to check for PR=0 here? */
 		newmsr = vcpu->arch.shregs.srr1;
@@ -95,7 +97,7 @@ int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 		WARN_ON_ONCE(!(MSR_TM_SUSPENDED(msr) &&
 			       ((bescr >> 30) & 3) == 2));
 		bescr &= ~BESCR_GE;
-		if (instr & (1 << 11))
+		if (word & (1 << 11))
 			bescr |= BESCR_GE;
 		vcpu->arch.bescr = bescr;
 		msr = (msr & ~MSR_TS_MASK) | MSR_TS_T;
@@ -106,7 +108,7 @@ int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 
 	case PPC_INST_MTMSRD:
 		/* XXX do we need to check for PR=0 here? */
-		rs = (instr >> 21) & 0x1f;
+		rs = (word >> 21) & 0x1f;
 		newmsr = kvmppc_get_gpr(vcpu, rs);
 		/* check this is a Sx -> T1 transition */
 		WARN_ON_ONCE(!(MSR_TM_SUSPENDED(msr) &&
@@ -144,7 +146,7 @@ int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 		vcpu->arch.regs.ccr = (vcpu->arch.regs.ccr & 0x0fffffff) |
 			(((msr & MSR_TS_MASK) >> MSR_TS_S_LG) << 29);
 		/* L=1 => tresume, L=0 => tsuspend */
-		if (instr & (1 << 21)) {
+		if (word & (1 << 21)) {
 			if (MSR_TM_SUSPENDED(msr))
 				msr = (msr & ~MSR_TS_MASK) | MSR_TS_T;
 		} else {
@@ -177,7 +179,7 @@ int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 		}
 		/* If failure was not previously recorded, recompute TEXASR */
 		if (!(vcpu->arch.orig_texasr & TEXASR_FS)) {
-			ra = (instr >> 16) & 0x1f;
+			ra = (word >> 16) & 0x1f;
 			if (ra)
 				ra = kvmppc_get_gpr(vcpu, ra) & 0xff;
 			emulate_tx_failure(vcpu, ra);
@@ -225,7 +227,8 @@ int kvmhv_p9_tm_emulation(struct kvm_vcpu *vcpu)
 
 	/* What should we do here? We didn't recognize the instruction */
 	kvmppc_core_queue_program(vcpu, SRR1_PROGILL);
-	pr_warn_ratelimited("Unrecognized TM-related instruction %#x for emulation", instr);
+	pr_warn_ratelimited("Unrecognized TM-related instruction %s for emulation",
+			    ppc_inst_as_str(instr));
 
 	return RESUME_GUEST;
 }

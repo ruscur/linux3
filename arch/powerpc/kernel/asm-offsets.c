@@ -73,6 +73,8 @@
 #include "../xmon/xmon_bpts.h"
 #endif
 
+#include <asm/inst.h>
+
 #define STACK_PT_REGS_OFFSET(sym, val)	\
 	DEFINE(sym, STACK_FRAME_OVERHEAD + offsetof(struct pt_regs, val))
 

@@ -19,10 +19,12 @@
  */
 int kvmhv_p9_tm_emulation_early(struct kvm_vcpu *vcpu)
 {
-	u32 instr = vcpu->arch.emul_inst;
+	struct ppc_inst instr = vcpu->arch.emul_inst;
 	u64 newmsr, msr, bescr;
+	u32 word;
 	int rs;
 
+	word = ppc_inst_val(instr);
 	/*
 	 * rfid, rfebb, and mtmsrd encode bit 31 = 0 since it's a reserved bit
 	 * in these instructions, so masking bit 31 out doesn't change these
@@ -34,7 +36,7 @@ int kvmhv_p9_tm_emulation_early(struct kvm_vcpu *vcpu)
 	 * generate a softpatch interrupt. Hence both forms are handled below
 	 * for tsr. to make them behave the same way.
 	 */
-	switch (instr & PO_XOP_OPCODE_MASK) {
+	switch (word & PO_XOP_OPCODE_MASK) {
 	case PPC_INST_RFID:
 		/* XXX do we need to check for PR=0 here? */
 		newmsr = vcpu->arch.shregs.srr1;
@@ -61,7 +63,7 @@ int kvmhv_p9_tm_emulation_early(struct kvm_vcpu *vcpu)
 		if (((bescr >> 30) & 3) != 2)
 			return 0;
 		bescr &= ~BESCR_GE;
-		if (instr & (1 << 11))
+		if (word & (1 << 11))
 			bescr |= BESCR_GE;
 		mtspr(SPRN_BESCR, bescr);
 		msr = (msr & ~MSR_TS_MASK) | MSR_TS_T;
@@ -72,7 +74,7 @@ int kvmhv_p9_tm_emulation_early(struct kvm_vcpu *vcpu)
 
 	case PPC_INST_MTMSRD:
 		/* XXX do we need to check for PR=0 here? */
-		rs = (instr >> 21) & 0x1f;
+		rs = (word >> 21) & 0x1f;
 		newmsr = kvmppc_get_gpr(vcpu, rs);
 		msr = vcpu->arch.shregs.msr;
 		/* check this is a Sx -> T1 transition */
@@ -95,7 +97,7 @@ int kvmhv_p9_tm_emulation_early(struct kvm_vcpu *vcpu)
 		if (!(vcpu->arch.hfscr & HFSCR_TM) || !(msr & MSR_TM))
 			return 0;
 		/* L=1 => tresume => set TS to T (0b10) */
-		if (instr & (1 << 21))
+		if (word & (1 << 21))
 			vcpu->arch.shregs.msr = (msr & ~MSR_TS_MASK) | MSR_TS_T;
 		/* Set CR0 to 0b0010 */
 		vcpu->arch.regs.ccr = (vcpu->arch.regs.ccr & 0x0fffffff) |

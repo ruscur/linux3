@@ -623,7 +623,7 @@ void kvmppc_mmu_map(struct kvm_vcpu *vcpu, u64 eaddr, gpa_t gpaddr,
 
 #ifdef CONFIG_KVM_BOOKE_HV
 int kvmppc_load_last_inst(struct kvm_vcpu *vcpu,
-		enum instruction_fetch_type type, u32 *instr)
+		enum instruction_fetch_type type, struct ppc_inst *instr)
 {
 	gva_t geaddr;
 	hpa_t addr;
@@ -706,14 +706,14 @@ int kvmppc_load_last_inst(struct kvm_vcpu *vcpu,
 	/* Map a page and get guest's instruction */
 	page = pfn_to_page(pfn);
 	eaddr = (unsigned long)kmap_atomic(page);
-	*instr = *(u32 *)(eaddr | (unsigned long)(addr & ~PAGE_MASK));
+	*instr = ppc_inst_read((struct ppc_inst *)(eaddr | (unsigned long)(addr & ~PAGE_MASK)));
 	kunmap_atomic((u32 *)eaddr);
 
 	return EMULATE_DONE;
 }
 #else
 int kvmppc_load_last_inst(struct kvm_vcpu *vcpu,
-		enum instruction_fetch_type type, u32 *instr)
+		enum instruction_fetch_type type, struct ppc_inst *instr)
 {
 	return EMULATE_AGAIN;
 }

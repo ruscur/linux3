@@ -1348,7 +1348,7 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 		rd = (suffix >> 21) & 0x1f;
 		op->reg = rd;
 		op->val = regs->gpr[rd];
-		suffixopcode = get_op(suffix);
+		suffixopcode = suffix >> 26;
 		prefixtype = (word >> 24) & 0x3;
 		switch (prefixtype) {
 		case 2:
@@ -2737,7 +2737,7 @@ int analyse_instr(struct instruction_op *op, const struct pt_regs *regs,
 		op->reg = rd;
 		op->val = regs->gpr[rd];
 
-		suffixopcode = get_op(suffix);
+		suffixopcode = suffix >> 26;
 		prefixtype = (word >> 24) & 0x3;
 		switch (prefixtype) {
 		case 0: /* Type 00  Eight-Byte Load/Store */

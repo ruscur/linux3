@@ -25,6 +25,7 @@
 #include <asm/cacheflush.h>
 #include <asm/hvcall.h>
 #include <asm/mce.h>
+#include <asm/inst.h>
 
 #define KVM_MAX_VCPUS		NR_CPUS
 #define KVM_MAX_VCORES		NR_CPUS
@@ -751,7 +752,7 @@ struct kvm_vcpu_arch {
 	u8 prodded;
 	u8 doorbell_request;
 	u8 irq_pending; /* Used by XIVE to signal pending guest irqs */
-	u32 last_inst;
+	struct ppc_inst last_inst;
 
 	struct rcuwait *waitp;
 	struct kvmppc_vcore *vcore;
@@ -810,7 +811,7 @@ struct kvm_vcpu_arch {
 	u64 busy_stolen;
 	u64 busy_preempt;
 
-	u32 emul_inst;
+	struct ppc_inst emul_inst;
 
 	u32 online;
 

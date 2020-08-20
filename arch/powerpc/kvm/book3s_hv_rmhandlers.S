@@ -1360,10 +1360,13 @@ END_FTR_SECTION_IFSET(CPU_FTR_HAS_PPR)
 	   if this is an HEI (HV emulation interrupt, e40) */
 	li	r3,KVM_INST_FETCH_FAILED
 	stw	r3,VCPU_LAST_INST(r9)
+	li	r4,0xff
+	stw	r4,VCPU_LAST_INST+4(r9)
 	cmpwi	r12,BOOK3S_INTERRUPT_H_EMUL_ASSIST
 	bne	11f
 	mfspr	r3,SPRN_HEIR
 11:	stw	r3,VCPU_HEIR(r9)
+	stw	r4,VCPU_HEIR+4(r9)
 
 	/* these are volatile across C function calls */
 	mfctr	r3
@@ -2160,6 +2163,7 @@ fast_interrupt_c_return:
 
 	/* If this is for emulated MMIO, load the instruction word */
 2:	li	r8, KVM_INST_FETCH_FAILED	/* In case lwz faults */
+	li	r5, 0xff
 
 	/* Set guest mode to 'jump over instruction' so if lwz faults
 	 * we'll just continue at the next IP. */
@@ -2175,6 +2179,7 @@ fast_interrupt_c_return:
 
 	/* Store the result */
 	stw	r8, VCPU_LAST_INST(r9)
+	stw	r5, VCPU_LAST_INST+4(r9)
 
 	/* Unset guest mode. */
 	li	r0, KVM_GUEST_MODE_HOST_HV

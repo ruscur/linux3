@@ -930,7 +930,7 @@ u64 fsl_pci_immrbar_base(struct pci_controller *hose)
 }
 
 #ifdef CONFIG_E500
-static int mcheck_handle_load(struct pt_regs *regs, u32 inst)
+static int mcheck_handle_load(struct pt_regs *regs, struct ppc_inst inst)
 {
 	unsigned int rd, ra, rb, d;
 
@@ -1050,7 +1050,7 @@ static int is_in_pci_mem_space(phys_addr_t addr)
 
 int fsl_pci_mcheck_exception(struct pt_regs *regs)
 {
-	u32 inst;
+	struct ppc_inst inst;
 	int ret;
 	phys_addr_t addr = 0;
 

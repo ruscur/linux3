@@ -134,6 +134,7 @@ struct kvmppc_host_state {
 #endif
 };
 
+#include <asm/inst.h>
 struct kvmppc_book3s_shadow_vcpu {
 	bool in_use;
 	ulong gpr[14];
@@ -146,7 +147,7 @@ struct kvmppc_book3s_shadow_vcpu {
 	ulong shadow_srr1;
 	ulong fault_dar;
 	u32 fault_dsisr;
-	u32 last_inst;
+	struct ppc_inst last_inst;
 
 #ifdef CONFIG_PPC_BOOK3S_32
 	u32     sr[16];			/* Guest SRs */

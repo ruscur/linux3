@@ -123,7 +123,7 @@ static void save_hv_return_state(struct kvm_vcpu *vcpu, int trap,
 		hr->asdr = vcpu->arch.fault_gpa;
 		break;
 	case BOOK3S_INTERRUPT_H_EMUL_ASSIST:
-		hr->heir = vcpu->arch.emul_inst;
+		hr->heir = ppc_inst_val(vcpu->arch.emul_inst);
 		break;
 	}
 }
@@ -183,7 +183,7 @@ void kvmhv_restore_hv_return_state(struct kvm_vcpu *vcpu,
 	vcpu->arch.fault_dar = hr->hdar;
 	vcpu->arch.fault_dsisr = hr->hdsisr;
 	vcpu->arch.fault_gpa = hr->asdr;
-	vcpu->arch.emul_inst = hr->heir;
+	vcpu->arch.emul_inst = ppc_inst_read((struct ppc_inst *)&hr->heir);
 	vcpu->arch.shregs.srr0 = hr->srr0;
 	vcpu->arch.shregs.srr1 = hr->srr1;
 	vcpu->arch.shregs.sprg0 = hr->sprg[0];

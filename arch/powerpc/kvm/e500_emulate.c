@@ -84,7 +84,7 @@ static int kvmppc_e500_emul_msgsnd(struct kvm_vcpu *vcpu, int rb)
 #endif
 
 static int kvmppc_e500_emul_ehpriv(struct kvm_vcpu *vcpu,
-				   unsigned int inst, int *advance)
+				   struct ppc_inst inst, int *advance)
 {
 	int emulated = EMULATE_DONE;
 
@@ -112,7 +112,7 @@ static int kvmppc_e500_emul_dcbtls(struct kvm_vcpu *vcpu)
 	return EMULATE_DONE;
 }
 
-static int kvmppc_e500_emul_mftmr(struct kvm_vcpu *vcpu, unsigned int inst,
+static int kvmppc_e500_emul_mftmr(struct kvm_vcpu *vcpu, struct ppc_inst inst,
 				  int rt)
 {
 	/* Expose one thread per vcpu */
@@ -126,7 +126,7 @@ static int kvmppc_e500_emul_mftmr(struct kvm_vcpu *vcpu, unsigned int inst,
 }
 
 int kvmppc_core_emulate_op_e500(struct kvm_vcpu *vcpu,
-				unsigned int inst, int *advance)
+				struct ppc_inst inst, int *advance)
 {
 	int emulated = EMULATE_DONE;
 	int ra = get_ra(inst);

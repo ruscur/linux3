@@ -452,15 +452,17 @@ int kvmppc_xlate(struct kvm_vcpu *vcpu, ulong eaddr, enum xlate_instdata xlid,
 }
 
 int kvmppc_load_last_inst(struct kvm_vcpu *vcpu,
-		enum instruction_fetch_type type, u32 *inst)
+		enum instruction_fetch_type type, struct ppc_inst *inst)
 {
 	ulong pc = kvmppc_get_pc(vcpu);
+	u32 word;
 	int r;
 
 	if (type == INST_SC)
 		pc -= 4;
 
-	r = kvmppc_ld(vcpu, &pc, sizeof(u32), inst, false);
+	r = kvmppc_ld(vcpu, &pc, sizeof(u32), &word, false);
+	*inst = ppc_inst(word);
 	if (r == EMULATE_DONE)
 		return r;
 	else

@@ -44,7 +44,7 @@ TRACE_EVENT(kvm_exit,
 		__field(	unsigned long,	pc		)
 		__field(	unsigned long,	msr		)
 		__field(	unsigned long,	dar		)
-		__field(	unsigned long,	last_inst	)
+		__field(	struct ppc_inst *,	last_inst	)
 	),
 
 	TP_fast_assign(
@@ -52,20 +52,20 @@ TRACE_EVENT(kvm_exit,
 		__entry->pc		= kvmppc_get_pc(vcpu);
 		__entry->dar		= kvmppc_get_fault_dar(vcpu);
 		__entry->msr		= vcpu->arch.shared->msr;
-		__entry->last_inst	= vcpu->arch.last_inst;
+		__entry->last_inst	= &(vcpu->arch.last_inst);
 	),
 
 	TP_printk("exit=%s"
 		" | pc=0x%lx"
 		" | msr=0x%lx"
 		" | dar=0x%lx"
-		" | last_inst=0x%lx"
+		" | last_inst=%s"
 		,
 		__print_symbolic(__entry->exit_nr, kvm_trace_symbol_exit),
 		__entry->pc,
 		__entry->msr,
 		__entry->dar,
-		__entry->last_inst
+		ppc_inst_as_str(*(__entry->last_inst))
 		)
 );
 

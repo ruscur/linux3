@@ -304,11 +304,11 @@ int kvmppc_emulate_mmio(struct kvm_vcpu *vcpu)
 		break;
 	case EMULATE_FAIL:
 	{
-		u32 last_inst;
+		struct ppc_inst last_inst;
 
 		kvmppc_get_last_inst(vcpu, INST_GENERIC, &last_inst);
 		/* XXX Deliver Program interrupt to guest. */
-		pr_emerg("%s: emulation failed (%08x)\n", __func__, last_inst);
+		pr_emerg("%s: emulation failed (%s)\n", __func__, ppc_inst_as_str(last_inst));
 		r = RESUME_HOST;
 		break;
 	}

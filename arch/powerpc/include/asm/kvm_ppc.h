@@ -29,6 +29,8 @@
 #include <asm/cpu_has_feature.h>
 #endif
 
+#include <asm/inst.h>
+
 /*
  * KVMPPC_INST_SW_BREAKPOINT is debug Instruction
  * for supporting software breakpoint.
@@ -84,7 +86,7 @@ extern int kvmppc_handle_vsx_store(struct kvm_vcpu *vcpu,
 				int is_default_endian);
 
 extern int kvmppc_load_last_inst(struct kvm_vcpu *vcpu,
-				 enum instruction_fetch_type type, u32 *inst);
+				 enum instruction_fetch_type type, struct ppc_inst *inst);
 
 extern int kvmppc_ld(struct kvm_vcpu *vcpu, ulong *eaddr, int size, void *ptr,
 		     bool data);
@@ -291,7 +293,7 @@ struct kvmppc_ops {
 	void (*destroy_vm)(struct kvm *kvm);
 	int (*get_smmu_info)(struct kvm *kvm, struct kvm_ppc_smmu_info *info);
 	int (*emulate_op)(struct kvm_vcpu *vcpu,
-			  unsigned int inst, int *advance);
+			  struct ppc_inst inst, int *advance);
 	int (*emulate_mtspr)(struct kvm_vcpu *vcpu, int sprn, ulong spr_val);
 	int (*emulate_mfspr)(struct kvm_vcpu *vcpu, int sprn, ulong *spr_val);
 	void (*fast_vcpu_kick)(struct kvm_vcpu *vcpu);
@@ -320,20 +322,20 @@ extern struct kvmppc_ops *kvmppc_hv_ops;
 extern struct kvmppc_ops *kvmppc_pr_ops;
 
 static inline int kvmppc_get_last_inst(struct kvm_vcpu *vcpu,
-				enum instruction_fetch_type type, u32 *inst)
+				enum instruction_fetch_type type, struct ppc_inst *inst)
 {
 	int ret = EMULATE_DONE;
-	u32 fetched_inst;
+	struct ppc_inst fetched_inst;
 
 	/* Load the instruction manually if it failed to do so in the
 	 * exit path */
-	if (vcpu->arch.last_inst == KVM_INST_FETCH_FAILED)
+	if (ppc_inst_equal(vcpu->arch.last_inst, ppc_inst(KVM_INST_FETCH_FAILED)))
 		ret = kvmppc_load_last_inst(vcpu, type, &vcpu->arch.last_inst);
 
 	/*  Write fetch_failed unswapped if the fetch failed */
 	if (ret == EMULATE_DONE)
 		fetched_inst = kvmppc_need_byteswap(vcpu) ?
-				swab32(vcpu->arch.last_inst) :
+				ppc_inst_swab(vcpu->arch.last_inst) :
 				vcpu->arch.last_inst;
 	else
 		fetched_inst = vcpu->arch.last_inst;

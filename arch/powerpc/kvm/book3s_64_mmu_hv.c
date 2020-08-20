@@ -406,20 +406,20 @@ static int kvmppc_mmu_book3s_64_hv_xlate(struct kvm_vcpu *vcpu, gva_t eaddr,
  * embodied here.)  If the instruction isn't a load or store, then
  * this doesn't return anything useful.
  */
-static int instruction_is_store(unsigned int instr)
+static int instruction_is_store(struct ppc_inst instr)
 {
 	unsigned int mask;
 
 	mask = 0x10000000;
-	if ((instr & 0xfc000000) == 0x7c000000)
+	if ((ppc_inst_val(instr) & 0xfc000000) == 0x7c000000)
 		mask = 0x100;		/* major opcode 31 */
-	return (instr & mask) != 0;
+	return (ppc_inst_val(instr) & mask) != 0;
 }
 
 int kvmppc_hv_emulate_mmio(struct kvm_vcpu *vcpu,
 			   unsigned long gpa, gva_t ea, int is_store)
 {
-	u32 last_inst;
+	struct ppc_inst last_inst;
 
 	/*
 	 * Fast path - check if the guest physical address corresponds to a
