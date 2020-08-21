@@ -210,6 +210,11 @@ int pseries_pcibios_sriov_disable(struct pci_dev *pdev)
 }
 #endif
 
+static resource_size_t pseries_pcibios_default_alignment(void)
+{
+	return PAGE_SIZE;
+}
+
 static void __init pSeries_request_regions(void)
 {
 	if (!isa_io_base)
@@ -230,6 +235,8 @@ void __init pSeries_final_fixup(void)
 	pSeries_request_regions();
 
 	eeh_show_enabled();
+
+	ppc_md.pcibios_default_alignment = pseries_pcibios_default_alignment;
 
 #ifdef CONFIG_PCI_IOV
 	ppc_md.pcibios_sriov_enable = pseries_pcibios_sriov_enable;
