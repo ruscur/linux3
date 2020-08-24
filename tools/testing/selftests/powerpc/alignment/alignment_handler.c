@@ -64,12 +64,14 @@ int bufsize;
 int debug;
 int testing;
 volatile int gotsig;
+bool haveprefixes;
 char *cipath = "/dev/fb0";
 long cioffset;
 
 void sighandler(int sig, siginfo_t *info, void *ctx)
 {
 	ucontext_t *ucp = ctx;
+	u32 inst;
 
 	if (!testing) {
 		signal(sig, SIG_DFL);
@@ -77,7 +79,12 @@ void sighandler(int sig, siginfo_t *info, void *ctx)
 	}
 	gotsig = sig;
 #ifdef __powerpc64__
-	ucp->uc_mcontext.gp_regs[PT_NIP] += 4;
+	if (haveprefixes) {
+		inst = *(u32 *)ucp->uc_mcontext.gp_regs[PT_NIP];
+		ucp->uc_mcontext.gp_regs[PT_NIP] += ((inst >> 26 == 1) ? 8 : 4);
+	} else {
+		ucp->uc_mcontext.gp_regs[PT_NIP] += 4;
+	}
 #else
 	ucp->uc_mcontext.uc_regs->gregs[PT_NIP] += 4;
 #endif
@@ -647,6 +654,8 @@ int main(int argc, char *argv[])
 		perror("sigaction");
 		exit(1);
 	}
+
+	haveprefixes = have_hwcap2(PPC_FEATURE2_ARCH_3_1);
 
 	rc |= test_harness(test_alignment_handler_vsx_206,
 			   "test_alignment_handler_vsx_206");
