@@ -3,7 +3,9 @@
 #define _ASM_POWERPC_SYNCH_H 
 #ifdef __KERNEL__
 
+#include <asm/cputable.h>
 #include <asm/feature-fixups.h>
+#include <asm/ppc-opcode.h>
 #include <asm/asm-const.h>
 
 #ifndef __ASSEMBLY__
@@ -19,6 +21,17 @@ static inline void eieio(void)
 static inline void isync(void)
 {
 	__asm__ __volatile__ ("isync" : : : "memory");
+}
+
+static inline void ppc_after_tlbiel_barrier(void)
+{
+        asm volatile("ptesync": : :"memory");
+	/*
+	 * POWER9, POWER10 need a cp_abort after tlbiel. For POWER9 this could
+	 * possibly be limited to tasks which have mapped foreign address, similar
+	 * to cp_abort in context switch.
+	 */
+        asm volatile(ASM_FTR_IFSET(PPC_CP_ABORT, "", %0) : : "i" (CPU_FTR_ARCH_300) : "memory");
 }
 #endif /* __ASSEMBLY__ */
 
