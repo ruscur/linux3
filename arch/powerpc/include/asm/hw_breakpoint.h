@@ -40,7 +40,8 @@ struct arch_hw_breakpoint {
 #ifdef CONFIG_PPC_8xx
 #define HW_BREAKPOINT_SIZE  0x4
 #else
-#define HW_BREAKPOINT_SIZE  0x8
+#define HW_BREAKPOINT_SIZE		0x8
+#define HW_BREAKPOINT_SIZE_QUADWORD	0x10
 #endif
 
 #define DABR_MAX_LEN	8
