@@ -9,6 +9,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mman.h>
 #include <linux/uaccess.h>
+#include <linux/kthread.h>
 #include <asm/cacheflush.h>
 
 /* Whether or not to fill the target memory area with do_nothing(). */
@@ -221,6 +222,151 @@ void lkdtm_ACCESS_NULL(void)
 	*ptr = tmp;
 	pr_err("FAIL: survived bad write\n");
 }
+
+#if defined(CONFIG_PPC) || defined(CONFIG_X86_64)
+#if defined(CONFIG_STRICT_KERNEL_RWX) && defined(CONFIG_SMP)
+/*
+ * This is just a dummy location to patch-over.
+ */
+static void patching_target(void)
+{
+	return;
+}
+
+#ifdef CONFIG_PPC
+#include <asm/code-patching.h>
+struct ppc_inst * const patch_site = (struct ppc_inst *)&patching_target;
+#endif
+
+#ifdef CONFIG_X86_64
+#include <asm/text-patching.h>
+int * const patch_site = (int *)&patching_target;
+#endif
+
+static inline int lkdtm_do_patch(int data)
+{
+#ifdef CONFIG_PPC
+	return patch_instruction(patch_site, ppc_inst(data));
+#endif
+#ifdef CONFIG_X86_64
+	text_poke(patch_site, &data, sizeof(int));
+	return 0;
+#endif
+}
+
+static inline bool lkdtm_verify_patch(int data)
+{
+#ifdef CONFIG_PPC
+	return ppc_inst_equal(ppc_inst_read(READ_ONCE(patch_site)),
+			ppc_inst(data));
+#endif
+#ifdef CONFIG_X86_64
+	return READ_ONCE(*patch_site) == data;
+#endif
+}
+
+static int lkdtm_patching_cpu(void *data)
+{
+	int err = 0;
+	int val = 0xdeadbeef;
+
+	pr_info("starting patching_cpu=%d\n", smp_processor_id());
+	do {
+		err = lkdtm_do_patch(val);
+	} while (lkdtm_verify_patch(val) && !err && !kthread_should_stop());
+
+	if (err)
+		pr_warn("patch_instruction returned error: %d\n", err);
+
+	set_current_state(TASK_INTERRUPTIBLE);
+	while (!kthread_should_stop()) {
+		schedule();
+		set_current_state(TASK_INTERRUPTIBLE);
+	}
+
+	return err;
+}
+
+void lkdtm_HIJACK_PATCH(void)
+{
+#ifdef CONFIG_PPC
+	struct ppc_inst original_insn = ppc_inst_read(READ_ONCE(patch_site));
+#endif
+#ifdef CONFIG_X86_64
+	int original_insn = READ_ONCE(*patch_site);
+#endif
+	struct task_struct *patching_kthrd;
+	int patching_cpu, hijacker_cpu, attempts;
+	unsigned long addr;
+	bool hijacked;
+	const int bad_data = 0xbad00bad;
+
+	if (num_online_cpus() < 2) {
+		pr_warn("need at least two cpus\n");
+		return;
+	}
+
+	hijacker_cpu = smp_processor_id();
+	patching_cpu = cpumask_any_but(cpu_online_mask, hijacker_cpu);
+
+	patching_kthrd = kthread_create_on_node(&lkdtm_patching_cpu, NULL,
+						cpu_to_node(patching_cpu),
+						"lkdtm_patching_cpu");
+	kthread_bind(patching_kthrd, patching_cpu);
+	wake_up_process(patching_kthrd);
+
+	addr = offset_in_page(patch_site) | read_cpu_patching_addr(patching_cpu);
+
+	pr_info("starting hijacker_cpu=%d\n", hijacker_cpu);
+	for (attempts = 0; attempts < 100000; ++attempts) {
+		/* Use __put_user to catch faults without an Oops */
+		hijacked = !__put_user(bad_data, (int *)addr);
+
+		if (hijacked) {
+			if (kthread_stop(patching_kthrd))
+				pr_err("error trying to stop patching thread\n");
+			break;
+		}
+	}
+	pr_info("hijack attempts: %d\n", attempts);
+
+	if (hijacked) {
+		if (lkdtm_verify_patch(bad_data))
+			pr_err("overwrote kernel text\n");
+		/*
+		 * There are window conditions where the hijacker cpu manages to
+		 * write to the patch site but the site gets overwritten again by
+		 * the patching cpu. We still consider that a "successful" hijack
+		 * since the hijacker cpu did not fault on the write.
+		 */
+		pr_err("FAIL: wrote to another cpu's patching area\n");
+	} else {
+		kthread_stop(patching_kthrd);
+	}
+
+	/* Restore the original insn for any future lkdtm tests */
+#ifdef CONFIG_PPC
+	patch_instruction(patch_site, original_insn);
+#endif
+#ifdef CONFIG_X86_64
+	lkdtm_do_patch(original_insn);
+#endif
+}
+
+#else
+
+void lkdtm_HIJACK_PATCH(void)
+{
+	if (!IS_ENABLED(CONFIG_PPC) && !IS_ENABLED(CONFIG_X86_64))
+		pr_err("XFAIL: this test only runs on x86_64 or powerpc\n");
+	if (!IS_ENABLED(CONFIG_STRICT_KERNEL_RWX))
+		pr_err("XFAIL: this test requires CONFIG_STRICT_KERNEL_RWX\n");
+	if (!IS_ENABLED(CONFIG_SMP))
+		pr_err("XFAIL: this test requires CONFIG_SMP\n");
+}
+
+#endif /* CONFIG_STRICT_KERNEL_RWX && CONFIG_SMP */
+#endif /* CONFIG_PPC || CONFIG_X86_64 */
 
 void __init lkdtm_perms_init(void)
 {
