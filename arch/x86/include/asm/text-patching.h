@@ -148,4 +148,8 @@ void int3_emulate_call(struct pt_regs *regs, unsigned long func)
 }
 #endif /* !CONFIG_UML_X86 */
 
+#ifdef CONFIG_LKDTM
+unsigned long read_cpu_patching_addr(unsigned int cpu);
+#endif
+
 #endif /* _ASM_X86_TEXT_PATCHING_H */
