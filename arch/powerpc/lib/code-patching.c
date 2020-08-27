@@ -11,6 +11,8 @@
 #include <linux/cpuhotplug.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/sched/task.h>
+#include <linux/random.h>
 
 #include <asm/tlbflush.h>
 #include <asm/page.h>
@@ -107,6 +109,44 @@ static inline void unuse_temporary_mm(struct temp_mm *temp_mm)
 			if (temp_mm->brk[i].type != 0)
 				__set_breakpoint(i, &temp_mm->brk[i]);
 	}
+}
+
+static struct mm_struct *patching_mm __ro_after_init;
+static unsigned long patching_addr __ro_after_init;
+
+void __init poking_init(void)
+{
+	spinlock_t *ptl; /* for protecting pte table */
+	pte_t *ptep;
+
+	/*
+	 * Some parts of the kernel (static keys for example) depend on
+	 * successful code patching. Code patching under STRICT_KERNEL_RWX
+	 * requires this setup - otherwise we cannot patch at all. We use
+	 * BUG_ON() here and later since an early failure is preferred to
+	 * buggy behavior and/or strange crashes later.
+	 */
+	patching_mm = copy_init_mm();
+	BUG_ON(!patching_mm);
+
+	/*
+	 * Choose a randomized, page-aligned address from the range:
+	 * [PAGE_SIZE, DEFAULT_MAP_WINDOW - PAGE_SIZE]
+	 * The lower address bound is PAGE_SIZE to avoid the zero-page.
+	 * The upper address bound is DEFAULT_MAP_WINDOW - PAGE_SIZE to stay
+	 * under DEFAULT_MAP_WINDOW in hash.
+	 */
+	patching_addr = PAGE_SIZE + ((get_random_long() & PAGE_MASK)
+			% (DEFAULT_MAP_WINDOW - 2 * PAGE_SIZE));
+
+	/*
+	 * PTE allocation uses GFP_KERNEL which means we need to pre-allocate
+	 * the PTE here. We cannot do the allocation during patching with IRQs
+	 * disabled (ie. "atomic" context).
+	 */
+	ptep = get_locked_pte(patching_mm, patching_addr, &ptl);
+	BUG_ON(!ptep);
+	pte_unmap_unlock(ptep, ptl);
 }
 
 static DEFINE_PER_CPU(struct vm_struct *, text_poke_area);
