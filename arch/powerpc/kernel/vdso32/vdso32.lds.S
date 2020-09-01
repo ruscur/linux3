@@ -61,7 +61,6 @@ SECTIONS
 	.fixup		: { *(.fixup) }
 
 	.dynamic	: { *(.dynamic) }		:text	:dynamic
-	.got		: { *(.got) }			:text
 	.plt		: { *(.plt) }
 
 	_end = .;
@@ -108,7 +107,9 @@ SECTIONS
 	.debug_varnames  0 : { *(.debug_varnames) }
 
 	/DISCARD/	: {
+		*(.got)
 		*(.note.GNU-stack)
+		*(.branch_lt)
 		*(.data .data.* .gnu.linkonce.d.* .sdata*)
 		*(.bss .sbss .dynbss .dynsbss)
 		*(.glink .iplt .plt .rela*)
