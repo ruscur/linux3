@@ -361,7 +361,7 @@ static void __init fixup_cede0_latency(void)
 	for (i = 0; i < nr_xcede_records; i++) {
 		struct xcede_latency_record *record = &payload->records[i];
 		u64 latency_tb = be64_to_cpu(record->latency_ticks);
-		u64 latency_us = tb_to_ns(latency_tb) / NSEC_PER_USEC;
+		u64 latency_us = DIV_ROUND_UP_ULL(tb_to_ns(latency_tb), NSEC_PER_USEC);
 
 		if (latency_us < min_latency_us)
 			min_latency_us = latency_us;
