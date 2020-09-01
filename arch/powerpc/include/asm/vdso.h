@@ -24,19 +24,7 @@ int vdso_getcpu_init(void);
 
 #else /* __ASSEMBLY__ */
 
-#ifdef __VDSO64__
-#define V_FUNCTION_BEGIN(name)		\
-	.globl name;			\
-	name:				\
-
-#define V_FUNCTION_END(name)		\
-	.size name,.-name;
-
-#define V_LOCAL_FUNC(name) (name)
-#endif /* __VDSO64__ */
-
-#ifdef __VDSO32__
-
+#if defined(__VDSO32__) || defined (__VDSO64__)
 #define V_FUNCTION_BEGIN(name)		\
 	.globl name;			\
 	.type name,@function; 		\
@@ -46,8 +34,7 @@ int vdso_getcpu_init(void);
 	.size name,.-name;
 
 #define V_LOCAL_FUNC(name) (name)
-
-#endif /* __VDSO32__ */
+#endif /* __VDSO{32|64}__ */
 
 #endif /* __ASSEMBLY__ */
 

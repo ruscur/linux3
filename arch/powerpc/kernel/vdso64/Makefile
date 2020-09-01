@@ -32,9 +32,13 @@ $(obj)/%.so: OBJCOPYFLAGS := -S
 $(obj)/%.so: $(obj)/%.so.dbg FORCE
 	$(call if_changed,objcopy)
 
+ldflags-y := -shared -soname linux-vdso64.so.1 \
+	$(call ld-option, --eh-frame-hdr) \
+	$(call ld-option, --orphan-handling=warn) -T
+
 # actual build commands
-quiet_cmd_vdso64ld = VDSO64L $@
-      cmd_vdso64ld = $(CC) $(c_flags) -o $@ -Wl,-T$(filter %.lds,$^) $(filter %.o,$^) $(call cc-ldoption, -Wl$(comma)--orphan-handling=warn)
+quiet_cmd_vdso64ld = LD      $@
+      cmd_vdso64ld = $(cmd_ld)
 
 # install commands for the unstripped file
 quiet_cmd_vdso_install = INSTALL $@
