@@ -789,7 +789,7 @@ static int register_mem_sect_under_node(struct memory_block *mem_blk,
 		 * case, during hotplug we know that all pages in the memory
 		 * block belong to the same node.
 		 */
-		if (system_state == SYSTEM_BOOTING) {
+		if (system_state < SYSTEM_RUNNING) {
 			page_nid = get_nid_for_pfn(pfn);
 			if (page_nid < 0)
 				continue;
