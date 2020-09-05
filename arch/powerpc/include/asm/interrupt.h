@@ -8,6 +8,16 @@
 #include <asm/ftrace.h>
 #include <asm/runlatch.h>
 
+static inline void nap_adjust_return(struct pt_regs *regs)
+{
+#ifdef CONFIG_PPC_970_NAP
+	if (test_thread_local_flags(_TLF_NAPPING)) {
+		clear_thread_local_flags(_TLF_NAPPING);
+		regs->nip = (unsigned long)power4_idle_nap_return;
+	}
+#endif
+}
+
 #ifdef CONFIG_PPC_BOOK3S_64
 static inline void interrupt_enter_prepare(struct pt_regs *regs)
 {
@@ -33,6 +43,8 @@ static inline void interrupt_async_enter_prepare(struct pt_regs *regs)
 	if (cpu_has_feature(CPU_FTR_CTRL) &&
 	    !test_thread_local_flags(_TLF_RUNLATCH))
 		__ppc64_runlatch_on();
+
+	nap_adjust_return(regs);
 }
 
 #else /* CONFIG_PPC_BOOK3S_64 */
@@ -71,6 +83,8 @@ static inline void interrupt_nmi_enter_prepare(struct pt_regs *regs, struct inte
 #endif
 
 	this_cpu_set_ftrace_enabled(0);
+
+	nap_adjust_return(regs);
 
 	nmi_enter();
 }
