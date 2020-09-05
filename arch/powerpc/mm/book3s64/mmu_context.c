@@ -152,6 +152,7 @@ void hash__setup_new_exec(void)
 
 static int radix__init_new_context(struct mm_struct *mm)
 {
+#ifdef CONFIG_PPC_RADIX_MMU
 	unsigned long rts_field;
 	int index, max_id;
 
@@ -177,6 +178,9 @@ static int radix__init_new_context(struct mm_struct *mm)
 	mm->context.hash_context = NULL;
 
 	return index;
+#else
+	return -ENOTSUPP;
+#endif
 }
 
 int init_new_context(struct task_struct *tsk, struct mm_struct *mm)

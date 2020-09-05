@@ -1726,10 +1726,12 @@ void __init hpte_init_pseries(void)
 
 void radix_init_pseries(void)
 {
+#ifdef CONFIG_PPC_RADIX_MMU
 	pr_info("Using radix MMU under hypervisor\n");
 
 	pseries_lpar_register_process_table(__pa(process_tb),
 						0, PRTB_SIZE_SHIFT - 12);
+#endif
 }
 
 #ifdef CONFIG_PPC_SMLPAR
