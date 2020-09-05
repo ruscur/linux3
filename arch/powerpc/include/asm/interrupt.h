@@ -4,6 +4,7 @@
 
 #include <linux/context_tracking.h>
 #include <linux/hardirq.h>
+#include <asm/cputime.h>
 #include <asm/ftrace.h>
 
 #ifdef CONFIG_PPC_BOOK3S_64
@@ -16,6 +17,9 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs)
 	if (user_mode(regs)) {
 		CT_WARN_ON(ct_state() == CONTEXT_KERNEL);
 		user_exit_irqoff();
+
+		account_cpu_user_entry();
+		account_stolen_time();
 	} else {
 		CT_WARN_ON(ct_state() == CONTEXT_USER);
 	}
