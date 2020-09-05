@@ -9,6 +9,10 @@
 #ifdef CONFIG_PPC_BOOK3S_64
 static inline void interrupt_enter_prepare(struct pt_regs *regs)
 {
+	if (irq_soft_mask_set_return(IRQS_ALL_DISABLED) == IRQS_ENABLED)
+		trace_hardirqs_off();
+	local_paca->irq_happened |= PACA_IRQ_HARD_DIS;
+
 	if (user_mode(regs)) {
 		CT_WARN_ON(ct_state() == CONTEXT_KERNEL);
 		user_exit_irqoff();
