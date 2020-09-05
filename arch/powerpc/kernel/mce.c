@@ -592,13 +592,6 @@ EXPORT_SYMBOL_GPL(machine_check_print_event_info);
 DEFINE_INTERRUPT_HANDLER_NMI(machine_check_early)
 {
 	long handled = 0;
-	bool nested = in_nmi();
-	u8 ftrace_enabled = this_cpu_get_ftrace_enabled();
-
-	this_cpu_set_ftrace_enabled(0);
-
-	if (!nested)
-		nmi_enter();
 
 	hv_nmi_check_nonrecoverable(regs);
 
@@ -607,11 +600,6 @@ DEFINE_INTERRUPT_HANDLER_NMI(machine_check_early)
 	 */
 	if (ppc_md.machine_check_early)
 		handled = ppc_md.machine_check_early(regs);
-
-	if (!nested)
-		nmi_exit();
-
-	this_cpu_set_ftrace_enabled(ftrace_enabled);
 
 	return handled;
 }

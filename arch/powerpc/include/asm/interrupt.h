@@ -31,6 +31,27 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs)
 }
 #endif /* CONFIG_PPC_BOOK3S_64 */
 
+struct interrupt_nmi_state {
+#ifdef CONFIG_PPC64
+	u8 ftrace_enabled;
+#endif
+};
+
+static inline void interrupt_nmi_enter_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
+{
+	this_cpu_set_ftrace_enabled(0);
+
+	nmi_enter();
+}
+
+static inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
+{
+	nmi_exit();
+
+	this_cpu_set_ftrace_enabled(state->ftrace_enabled);
+}
+
+
 /**
  * DECLARE_INTERRUPT_HANDLER_RAW - Declare raw interrupt handler function
  * @func:	Function name of the entry point
@@ -177,9 +198,14 @@ static __always_inline long ___##func(struct pt_regs *regs);		\
 									\
 __visible noinstr long func(struct pt_regs *regs)			\
 {									\
+	struct interrupt_nmi_state state;				\
 	long ret;							\
 									\
+	interrupt_nmi_enter_prepare(regs, &state);			\
+									\
 	ret = ___##func (regs);						\
+									\
+	interrupt_nmi_exit_prepare(regs, &state);			\
 									\
 	return ret;							\
 }									\
