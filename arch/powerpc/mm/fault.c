@@ -548,7 +548,6 @@ NOKPROBE_SYMBOL(__do_page_fault);
 
 DEFINE_INTERRUPT_HANDLER_RET(do_page_fault)
 {
-	enum ctx_state prev_state = exception_enter();
 	unsigned long address = regs->dar;
 	unsigned long error_code = regs->dsisr;
 	long err;
@@ -570,8 +569,6 @@ DEFINE_INTERRUPT_HANDLER_RET(do_page_fault)
 		}
 	}
 #endif
-
-	exception_exit(prev_state);
 
 	return err;
 }

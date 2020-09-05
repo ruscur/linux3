@@ -6,6 +6,23 @@
 #include <linux/hardirq.h>
 #include <asm/ftrace.h>
 
+#ifdef CONFIG_PPC_BOOK3S_64
+static inline void interrupt_enter_prepare(struct pt_regs *regs)
+{
+	if (user_mode(regs)) {
+		CT_WARN_ON(ct_state() == CONTEXT_KERNEL);
+		user_exit_irqoff();
+	} else {
+		CT_WARN_ON(ct_state() == CONTEXT_USER);
+	}
+}
+
+#else /* CONFIG_PPC_BOOK3S_64 */
+static inline void interrupt_enter_prepare(struct pt_regs *regs)
+{
+}
+#endif /* CONFIG_PPC_BOOK3S_64 */
+
 /**
  * DECLARE_INTERRUPT_HANDLER_RAW - Declare raw interrupt handler function
  * @func:	Function name of the entry point
@@ -60,6 +77,8 @@ static __always_inline void ___##func(struct pt_regs *regs);		\
 									\
 __visible noinstr void func(struct pt_regs *regs)			\
 {									\
+	interrupt_enter_prepare(regs);					\
+									\
 	___##func (regs);						\
 }									\
 									\
@@ -90,6 +109,8 @@ __visible noinstr long func(struct pt_regs *regs)			\
 {									\
 	long ret;							\
 									\
+	interrupt_enter_prepare(regs);					\
+									\
 	ret = ___##func (regs);						\
 									\
 	return ret;							\
@@ -118,6 +139,8 @@ static __always_inline void ___##func(struct pt_regs *regs);		\
 									\
 __visible noinstr void func(struct pt_regs *regs)			\
 {									\
+	interrupt_enter_prepare(regs);					\
+									\
 	___##func (regs);						\
 }									\
 									\

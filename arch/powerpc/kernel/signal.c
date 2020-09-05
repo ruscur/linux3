@@ -310,8 +310,6 @@ static void do_signal(struct task_struct *tsk)
 
 void do_notify_resume(struct pt_regs *regs, unsigned long thread_info_flags)
 {
-	user_exit();
-
 	/* Check valid addr_limit, TIF check is done there */
 	addr_limit_user_check();
 
@@ -331,8 +329,6 @@ void do_notify_resume(struct pt_regs *regs, unsigned long thread_info_flags)
 		tracehook_notify_resume(regs);
 		rseq_handle_notify_resume(NULL, regs);
 	}
-
-	user_enter();
 }
 
 unsigned long get_tm_stackpointer(struct task_struct *tsk)
