@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/powerpc/4xx/apm,apm82181.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: APM APM82181 device tree bindings
+
+description:
+  AppliedMicro APM82181 Wi-Fi/network SoCs based
+  on the PPC464-CPU architecture.
+
+maintainers:
+  - Christian Lamparter <chunkeey@gmail.com>
+
+properties:
+  $nodename:
+    const: '/'
+  compatible:
+    oneOf:
+      - description: APM82181 based boards
+        items:
+          - enum:
+              - apm,bluestone
+              - meraki,mr24
+              - wd,mybooklive
+          - const: amcc,apm82181
+
+...
