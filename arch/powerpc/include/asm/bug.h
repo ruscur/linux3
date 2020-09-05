@@ -111,7 +111,6 @@
 #ifndef __ASSEMBLY__
 
 struct pt_regs;
-extern long do_page_fault(struct pt_regs *);
 extern long hash__do_page_fault(struct pt_regs *);
 extern void bad_page_fault(struct pt_regs *, unsigned long, int);
 extern void _exception(int, struct pt_regs *, int, unsigned long);

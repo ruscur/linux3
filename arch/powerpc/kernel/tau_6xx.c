@@ -124,7 +124,7 @@ static void TAUupdate(int cpu)
  * with interrupts disabled
  */
 
-void TAUException(struct pt_regs * regs)
+DEFINE_INTERRUPT_HANDLER(TAUException) /* XXX async? */
 {
 	int cpu = smp_processor_id();
 
