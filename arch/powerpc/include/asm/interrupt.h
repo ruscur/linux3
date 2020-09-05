@@ -6,6 +6,7 @@
 #include <linux/hardirq.h>
 #include <asm/cputime.h>
 #include <asm/ftrace.h>
+#include <asm/runlatch.h>
 
 #ifdef CONFIG_PPC_BOOK3S_64
 static inline void interrupt_enter_prepare(struct pt_regs *regs)
@@ -25,8 +26,20 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs)
 	}
 }
 
+static inline void interrupt_async_enter_prepare(struct pt_regs *regs)
+{
+	interrupt_enter_prepare(regs);
+
+	if (cpu_has_feature(CPU_FTR_CTRL) &&
+	    !test_thread_local_flags(_TLF_RUNLATCH))
+		__ppc64_runlatch_on();
+}
+
 #else /* CONFIG_PPC_BOOK3S_64 */
 static inline void interrupt_enter_prepare(struct pt_regs *regs)
+{
+}
+static inline void interrupt_async_enter_prepare(struct pt_regs *regs)
 {
 }
 #endif /* CONFIG_PPC_BOOK3S_64 */
@@ -75,7 +88,6 @@ static inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct inter
 	local_paca->irq_soft_mask = state->irq_soft_mask;
 #endif
 }
-
 
 /**
  * DECLARE_INTERRUPT_HANDLER_RAW - Declare raw interrupt handler function
@@ -193,7 +205,7 @@ static __always_inline void ___##func(struct pt_regs *regs);		\
 									\
 __visible noinstr void func(struct pt_regs *regs)			\
 {									\
-	interrupt_enter_prepare(regs);					\
+	interrupt_async_enter_prepare(regs);				\
 									\
 	___##func (regs);						\
 }									\
