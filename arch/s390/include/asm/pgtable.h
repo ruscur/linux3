@@ -512,6 +512,48 @@ static inline bool mm_pmd_folded(struct mm_struct *mm)
 }
 #define mm_pmd_folded(mm) mm_pmd_folded(mm)
 
+/*
+ * With dynamic page table levels on s390, the static pXd_addr_end() functions
+ * will not return corresponding dynamic boundaries. This is no problem as long
+ * as only pXd pointers are passed down during page table walk, because
+ * pXd_offset() will simply return the given pointer for folded levels, and the
+ * pointer iteration over a range simply happens at the correct page table
+ * level.
+ * It is however a problem with gup_fast, or other places walking the page
+ * tables w/o locks using READ_ONCE(), and passing down the pXd values instead
+ * of pointers. In this case, the pointer given to pXd_offset() is a pointer to
+ * a stack variable, which cannot be used for pointer iteration at the correct
+ * level. Instead, the iteration then has to happen by going up to pgd level
+ * again. To allow this, provide pXd_addr_end_folded() functions with an
+ * additional pXd value parameter, which can be used on s390 to determine the
+ * folding level and return the corresponding boundary.
+ */
+static inline unsigned long rste_addr_end_folded(unsigned long rste, unsigned long addr, unsigned long end)
+{
+	unsigned long type = (rste & _REGION_ENTRY_TYPE_MASK) >> 2;
+	unsigned long size = 1UL << (_SEGMENT_SHIFT + type * 11);
+	unsigned long boundary = (addr + size) & ~(size - 1);
+
+	/*
+	 * FIXME The below check is for internal testing only, to be removed
+	 */
+	VM_BUG_ON(type < (_REGION_ENTRY_TYPE_R3 >> 2));
+
+	return (boundary - 1) < (end - 1) ? boundary : end;
+}
+
+#define pgd_addr_end_folded pgd_addr_end_folded
+static inline unsigned long pgd_addr_end_folded(pgd_t pgd, unsigned long addr, unsigned long end)
+{
+	return rste_addr_end_folded(pgd_val(pgd), addr, end);
+}
+
+#define p4d_addr_end_folded p4d_addr_end_folded
+static inline unsigned long p4d_addr_end_folded(p4d_t p4d, unsigned long addr, unsigned long end)
+{
+	return rste_addr_end_folded(p4d_val(p4d), addr, end);
+}
+
 static inline int mm_has_pgste(struct mm_struct *mm)
 {
 #ifdef CONFIG_PGSTE
