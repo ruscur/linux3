@@ -219,7 +219,7 @@ static int __ref modify_pmd_table(pud_t *pud, unsigned long addr,
 
 	pmd = pmd_offset(pud, addr);
 	for (; addr < end; addr = next, pmd++) {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (!add) {
 			if (pmd_none(*pmd))
 				continue;
@@ -320,7 +320,7 @@ static int modify_pud_table(p4d_t *p4d, unsigned long addr, unsigned long end,
 		prot &= ~_REGION_ENTRY_NOEXEC;
 	pud = pud_offset(p4d, addr);
 	for (; addr < end; addr = next, pud++) {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (!add) {
 			if (pud_none(*pud))
 				continue;
@@ -394,7 +394,7 @@ static int modify_p4d_table(pgd_t *pgd, unsigned long addr, unsigned long end,
 
 	p4d = p4d_offset(pgd, addr);
 	for (; addr < end; addr = next, p4d++) {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (!add) {
 			if (p4d_none(*p4d))
 				continue;
@@ -449,8 +449,8 @@ static int modify_pagetable(unsigned long start, unsigned long end, bool add,
 	if (WARN_ON_ONCE(!PAGE_ALIGNED(start | end)))
 		return -EINVAL;
 	for (addr = start; addr < end; addr = next) {
-		next = pgd_addr_end(addr, end);
 		pgd = pgd_offset_k(addr);
+		next = pgd_addr_end(*pgd, addr, end);
 
 		if (!add) {
 			if (pgd_none(*pgd))

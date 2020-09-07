@@ -412,7 +412,7 @@ static int copy_pmd(pud_t *dst_pudp, pud_t *src_pudp, unsigned long start,
 	do {
 		pmd_t pmd = READ_ONCE(*src_pmdp);
 
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(pmd, addr, end);
 		if (pmd_none(pmd))
 			continue;
 		if (pmd_table(pmd)) {
@@ -447,7 +447,7 @@ static int copy_pud(p4d_t *dst_p4dp, p4d_t *src_p4dp, unsigned long start,
 	do {
 		pud_t pud = READ_ONCE(*src_pudp);
 
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(pud, addr, end);
 		if (pud_none(pud))
 			continue;
 		if (pud_table(pud)) {
@@ -473,8 +473,10 @@ static int copy_p4d(pgd_t *dst_pgdp, pgd_t *src_pgdp, unsigned long start,
 	dst_p4dp = p4d_offset(dst_pgdp, start);
 	src_p4dp = p4d_offset(src_pgdp, start);
 	do {
-		next = p4d_addr_end(addr, end);
-		if (p4d_none(READ_ONCE(*src_p4dp)))
+		p4d_t p4d = READ_ONCE(*src_p4dp);
+
+		next = p4d_addr_end(p4d, addr, end);
+		if (p4d_none(p4d))
 			continue;
 		if (copy_pud(dst_p4dp, src_p4dp, addr, next))
 			return -ENOMEM;
@@ -492,8 +494,10 @@ static int copy_page_tables(pgd_t *dst_pgdp, unsigned long start,
 
 	dst_pgdp = pgd_offset_pgd(dst_pgdp, start);
 	do {
-		next = pgd_addr_end(addr, end);
-		if (pgd_none(READ_ONCE(*src_pgdp)))
+		pgd_t pgd = READ_ONCE(*src_pgdp);
+
+		next = pgd_addr_end(pgd, addr, end);
+		if (pgd_none(pgd))
 			continue;
 		if (copy_p4d(dst_pgdp, src_pgdp, addr, next))
 			return -ENOMEM;

@@ -318,7 +318,7 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	if (pmd_trans_huge(*pmd)) {
 		pmd_t orig_pmd;
-		unsigned long next = pmd_addr_end(addr, end);
+		unsigned long next = pmd_addr_end(*pmd, addr, end);
 
 		tlb_change_page_size(tlb, HPAGE_PMD_SIZE);
 		ptl = pmd_trans_huge_lock(pmd, vma);
@@ -573,7 +573,7 @@ static int madvise_free_pte_range(pmd_t *pmd, unsigned long addr,
 	int nr_swap = 0;
 	unsigned long next;
 
-	next = pmd_addr_end(addr, end);
+	next = pmd_addr_end(*pmd, addr, end);
 	if (pmd_trans_huge(*pmd))
 		if (madvise_free_huge_pmd(tlb, vma, pmd, addr, next))
 			goto next;

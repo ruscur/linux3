@@ -352,7 +352,7 @@ static void hugetlb_free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 		unsigned long more;
 
 		pmd = pmd_offset(pud, addr);
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (!is_hugepd(__hugepd(pmd_val(*pmd)))) {
 			if (pmd_none_or_clear_bad(pmd))
 				continue;
@@ -409,7 +409,7 @@ static void hugetlb_free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
 	start = addr;
 	do {
 		pud = pud_offset(p4d, addr);
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (!is_hugepd(__hugepd(pud_val(*pud)))) {
 			if (pud_none_or_clear_bad(pud))
 				continue;
@@ -478,9 +478,9 @@ void hugetlb_free_pgd_range(struct mmu_gather *tlb,
 	 */
 
 	do {
-		next = pgd_addr_end(addr, end);
 		pgd = pgd_offset(tlb->mm, addr);
 		p4d = p4d_offset(pgd, addr);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (!is_hugepd(__hugepd(pgd_val(*pgd)))) {
 			if (p4d_none_or_clear_bad(p4d))
 				continue;

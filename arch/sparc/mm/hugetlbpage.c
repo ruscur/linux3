@@ -428,7 +428,7 @@ static void hugetlb_free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 	start = addr;
 	pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (pmd_none(*pmd))
 			continue;
 		if (is_hugetlb_pmd(*pmd))
@@ -465,7 +465,7 @@ static void hugetlb_free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
 	start = addr;
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (pud_none_or_clear_bad(pud))
 			continue;
 		if (is_hugetlb_pud(*pud))
@@ -519,7 +519,7 @@ void hugetlb_free_pgd_range(struct mmu_gather *tlb,
 	pgd = pgd_offset(tlb->mm, addr);
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (p4d_none_or_clear_bad(p4d))
 			continue;
 		hugetlb_free_pud_range(tlb, p4d, addr, next, floor, ceiling);

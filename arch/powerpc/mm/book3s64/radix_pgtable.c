@@ -832,7 +832,7 @@ static void __meminit remove_pmd_table(pmd_t *pmd_start, unsigned long addr,
 
 	pmd = pmd_start + pmd_index(addr);
 	for (; addr < end; addr = next, pmd++) {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		if (!pmd_present(*pmd))
 			continue;
@@ -862,7 +862,7 @@ static void __meminit remove_pud_table(pud_t *pud_start, unsigned long addr,
 
 	pud = pud_start + pud_index(addr);
 	for (; addr < end; addr = next, pud++) {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 
 		if (!pud_present(*pud))
 			continue;
@@ -893,10 +893,9 @@ static void __meminit remove_pagetable(unsigned long start, unsigned long end)
 	spin_lock(&init_mm.page_table_lock);
 
 	for (addr = start; addr < end; addr = next) {
-		next = pgd_addr_end(addr, end);
-
 		pgd = pgd_offset_k(addr);
 		p4d = p4d_offset(pgd, addr);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (!p4d_present(*p4d))
 			continue;
 

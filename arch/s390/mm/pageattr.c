@@ -162,7 +162,7 @@ static int walk_pmd_level(pud_t *pudp, unsigned long addr, unsigned long end,
 	do {
 		if (pmd_none(*pmdp))
 			return -EINVAL;
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmdp, addr, end);
 		if (pmd_large(*pmdp)) {
 			if (addr & ~PMD_MASK || addr + PMD_SIZE > next) {
 				rc = split_pmd_page(pmdp, addr);
@@ -239,7 +239,7 @@ static int walk_pud_level(p4d_t *p4d, unsigned long addr, unsigned long end,
 	do {
 		if (pud_none(*pudp))
 			return -EINVAL;
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pudp, addr, end);
 		if (pud_large(*pudp)) {
 			if (addr & ~PUD_MASK || addr + PUD_SIZE > next) {
 				rc = split_pud_page(pudp, addr);
@@ -269,7 +269,7 @@ static int walk_p4d_level(pgd_t *pgd, unsigned long addr, unsigned long end,
 	do {
 		if (p4d_none(*p4dp))
 			return -EINVAL;
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4dp, addr, end);
 		rc = walk_pud_level(p4dp, addr, next, flags);
 		p4dp++;
 		addr = next;
@@ -296,7 +296,7 @@ static int change_page_attr(unsigned long addr, unsigned long end,
 	do {
 		if (pgd_none(*pgdp))
 			break;
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgdp, addr, end);
 		rc = walk_p4d_level(pgdp, addr, next, flags);
 		if (rc)
 			break;

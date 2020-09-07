@@ -547,7 +547,7 @@ static void unmap_hyp_pmds(pud_t *pud, phys_addr_t addr, phys_addr_t end)
 
 	start_pmd = pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		/* Hyp doesn't use huge pmds */
 		if (!pmd_none(*pmd))
 			unmap_hyp_ptes(pmd, addr, next);
@@ -564,7 +564,7 @@ static void unmap_hyp_puds(p4d_t *p4d, phys_addr_t addr, phys_addr_t end)
 
 	start_pud = pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		/* Hyp doesn't use huge puds */
 		if (!pud_none(*pud))
 			unmap_hyp_pmds(pud, addr, next);
@@ -581,7 +581,7 @@ static void unmap_hyp_p4ds(pgd_t *pgd, phys_addr_t addr, phys_addr_t end)
 
 	start_p4d = p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		/* Hyp doesn't use huge p4ds */
 		if (!p4d_none(*p4d))
 			unmap_hyp_puds(p4d, addr, next);
@@ -609,7 +609,7 @@ static void __unmap_hyp_range(pgd_t *pgdp, unsigned long ptrs_per_pgd,
 	 */
 	pgd = pgdp + kvm_pgd_index(addr, ptrs_per_pgd);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (!pgd_none(*pgd))
 			unmap_hyp_p4ds(pgd, addr, next);
 	} while (pgd++, addr = next, addr != end);
@@ -712,7 +712,7 @@ static int create_hyp_pmd_mappings(pud_t *pud, unsigned long start,
 			get_page(virt_to_page(pmd));
 		}
 
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		create_hyp_pte_mappings(pmd, addr, next, pfn, prot);
 		pfn += (next - addr) >> PAGE_SHIFT;
@@ -744,7 +744,7 @@ static int create_hyp_pud_mappings(p4d_t *p4d, unsigned long start,
 			get_page(virt_to_page(pud));
 		}
 
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		ret = create_hyp_pmd_mappings(pud, addr, next, pfn, prot);
 		if (ret)
 			return ret;
@@ -777,7 +777,7 @@ static int create_hyp_p4d_mappings(pgd_t *pgd, unsigned long start,
 			get_page(virt_to_page(p4d));
 		}
 
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		ret = create_hyp_pud_mappings(p4d, addr, next, pfn, prot);
 		if (ret)
 			return ret;
@@ -813,7 +813,7 @@ static int __create_hyp_mappings(pgd_t *pgdp, unsigned long ptrs_per_pgd,
 			get_page(virt_to_page(pgd));
 		}
 
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		err = create_hyp_p4d_mappings(pgd, addr, next, pfn, prot);
 		if (err)
 			goto out;

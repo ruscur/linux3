@@ -233,7 +233,7 @@ static inline void free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 	start = addr;
 	pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (pmd_none_or_clear_bad(pmd))
 			continue;
 		free_pte_range(tlb, pmd, addr);
@@ -267,7 +267,7 @@ static inline void free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,
 	start = addr;
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (pud_none_or_clear_bad(pud))
 			continue;
 		free_pmd_range(tlb, pud, addr, next, floor, ceiling);
@@ -301,7 +301,7 @@ static inline void free_p4d_range(struct mmu_gather *tlb, pgd_t *pgd,
 	start = addr;
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (p4d_none_or_clear_bad(p4d))
 			continue;
 		free_pud_range(tlb, p4d, addr, next, floor, ceiling);
@@ -381,7 +381,7 @@ void free_pgd_range(struct mmu_gather *tlb,
 	tlb_change_page_size(tlb, PAGE_SIZE);
 	pgd = pgd_offset(tlb->mm, addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (pgd_none_or_clear_bad(pgd))
 			continue;
 		free_p4d_range(tlb, pgd, addr, next, floor, ceiling);
@@ -887,7 +887,7 @@ static inline int copy_pmd_range(struct mm_struct *dst_mm, struct mm_struct *src
 		return -ENOMEM;
 	src_pmd = pmd_offset(src_pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*src_pmd, addr, end);
 		if (is_swap_pmd(*src_pmd) || pmd_trans_huge(*src_pmd)
 			|| pmd_devmap(*src_pmd)) {
 			int err;
@@ -921,7 +921,7 @@ static inline int copy_pud_range(struct mm_struct *dst_mm, struct mm_struct *src
 		return -ENOMEM;
 	src_pud = pud_offset(src_p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*src_pud, addr, end);
 		if (pud_trans_huge(*src_pud) || pud_devmap(*src_pud)) {
 			int err;
 
@@ -955,7 +955,7 @@ static inline int copy_p4d_range(struct mm_struct *dst_mm, struct mm_struct *src
 		return -ENOMEM;
 	src_p4d = p4d_offset(src_pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*src_p4d, addr, end);
 		if (p4d_none_or_clear_bad(src_p4d))
 			continue;
 		if (copy_pud_range(dst_mm, src_mm, dst_p4d, src_p4d,
@@ -1017,7 +1017,7 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	dst_pgd = pgd_offset(dst_mm, addr);
 	src_pgd = pgd_offset(src_mm, addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*src_pgd, addr, end);
 		if (pgd_none_or_clear_bad(src_pgd))
 			continue;
 		if (unlikely(copy_p4d_range(dst_mm, src_mm, dst_pgd, src_pgd,
@@ -1177,7 +1177,7 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 
 	pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (is_swap_pmd(*pmd) || pmd_trans_huge(*pmd) || pmd_devmap(*pmd)) {
 			if (next - addr != HPAGE_PMD_SIZE)
 				__split_huge_pmd(vma, pmd, addr, false, NULL);
@@ -1212,7 +1212,7 @@ static inline unsigned long zap_pud_range(struct mmu_gather *tlb,
 
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (pud_trans_huge(*pud) || pud_devmap(*pud)) {
 			if (next - addr != HPAGE_PUD_SIZE) {
 				mmap_assert_locked(tlb->mm);
@@ -1241,7 +1241,7 @@ static inline unsigned long zap_p4d_range(struct mmu_gather *tlb,
 
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (p4d_none_or_clear_bad(p4d))
 			continue;
 		next = zap_pud_range(tlb, vma, p4d, addr, next, details);
@@ -1262,7 +1262,7 @@ void unmap_page_range(struct mmu_gather *tlb,
 	tlb_start_vma(tlb, vma);
 	pgd = pgd_offset(vma->vm_mm, addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (pgd_none_or_clear_bad(pgd))
 			continue;
 		next = zap_p4d_range(tlb, vma, pgd, addr, next, details);
@@ -2030,7 +2030,7 @@ static inline int remap_pmd_range(struct mm_struct *mm, pud_t *pud,
 		return -ENOMEM;
 	VM_BUG_ON(pmd_trans_huge(*pmd));
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		err = remap_pte_range(mm, pmd, addr, next,
 				pfn + (addr >> PAGE_SHIFT), prot);
 		if (err)
@@ -2052,7 +2052,7 @@ static inline int remap_pud_range(struct mm_struct *mm, p4d_t *p4d,
 	if (!pud)
 		return -ENOMEM;
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		err = remap_pmd_range(mm, pud, addr, next,
 				pfn + (addr >> PAGE_SHIFT), prot);
 		if (err)
@@ -2074,7 +2074,7 @@ static inline int remap_p4d_range(struct mm_struct *mm, pgd_t *pgd,
 	if (!p4d)
 		return -ENOMEM;
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		err = remap_pud_range(mm, p4d, addr, next,
 				pfn + (addr >> PAGE_SHIFT), prot);
 		if (err)
@@ -2143,7 +2143,7 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	pgd = pgd_offset(mm, addr);
 	flush_cache_range(vma, addr, end);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		err = remap_p4d_range(mm, pgd, addr, next,
 				pfn + (addr >> PAGE_SHIFT), prot);
 		if (err)
@@ -2266,7 +2266,7 @@ static int apply_to_pmd_range(struct mm_struct *mm, pud_t *pud,
 		pmd = pmd_offset(pud, addr);
 	}
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (create || !pmd_none_or_clear_bad(pmd)) {
 			err = apply_to_pte_range(mm, pmd, addr, next, fn, data,
 						 create, mask);
@@ -2294,7 +2294,7 @@ static int apply_to_pud_range(struct mm_struct *mm, p4d_t *p4d,
 		pud = pud_offset(p4d, addr);
 	}
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (create || !pud_none_or_clear_bad(pud)) {
 			err = apply_to_pmd_range(mm, pud, addr, next, fn, data,
 						 create, mask);
@@ -2322,7 +2322,7 @@ static int apply_to_p4d_range(struct mm_struct *mm, pgd_t *pgd,
 		p4d = p4d_offset(pgd, addr);
 	}
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (create || !p4d_none_or_clear_bad(p4d)) {
 			err = apply_to_pud_range(mm, p4d, addr, next, fn, data,
 						 create, mask);
@@ -2348,7 +2348,7 @@ static int __apply_to_page_range(struct mm_struct *mm, unsigned long addr,
 
 	pgd = pgd_offset(mm, addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (!create && pgd_none_or_clear_bad(pgd))
 			continue;
 		err = apply_to_p4d_range(mm, pgd, addr, next, fn, data, create, &mask);

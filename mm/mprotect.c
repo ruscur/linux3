@@ -225,7 +225,7 @@ static inline unsigned long change_pmd_range(struct vm_area_struct *vma,
 	do {
 		unsigned long this_pages;
 
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		/*
 		 * Automatic NUMA balancing walks the tables with mmap_lock
@@ -291,7 +291,7 @@ static inline unsigned long change_pud_range(struct vm_area_struct *vma,
 
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (pud_none_or_clear_bad(pud))
 			continue;
 		pages += change_pmd_range(vma, pud, addr, next, newprot,
@@ -311,7 +311,7 @@ static inline unsigned long change_p4d_range(struct vm_area_struct *vma,
 
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (p4d_none_or_clear_bad(p4d))
 			continue;
 		pages += change_pud_range(vma, p4d, addr, next, newprot,
@@ -336,7 +336,7 @@ static unsigned long change_protection_range(struct vm_area_struct *vma,
 	flush_cache_range(vma, addr, end);
 	inc_tlb_flush_pending(mm);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (pgd_none_or_clear_bad(pgd))
 			continue;
 		pages += change_p4d_range(vma, pgd, addr, next, newprot,

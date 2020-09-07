@@ -46,7 +46,7 @@ static void idmap_add_pmd(pud_t *pud, unsigned long addr, unsigned long end,
 		pmd = pmd_offset(pud, addr);
 
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		*pmd = __pmd((addr & PMD_MASK) | prot);
 		flush_pmd_entry(pmd);
 	} while (pmd++, addr = next, addr != end);
@@ -73,7 +73,7 @@ static void idmap_add_pud(pgd_t *pgd, unsigned long addr, unsigned long end,
 	unsigned long next;
 
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		idmap_add_pmd(pud, addr, next, prot);
 	} while (pud++, addr = next, addr != end);
 }
@@ -95,7 +95,7 @@ static void identity_mapping_add(pgd_t *pgd, const char *text_start,
 
 	pgd += pgd_index(addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		idmap_add_pud(pgd, addr, next, prot);
 	} while (pgd++, addr = next, addr != end);
 }

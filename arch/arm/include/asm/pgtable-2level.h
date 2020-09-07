@@ -209,7 +209,7 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long addr)
 	} while (0)
 
 /* we don't need complex calculations here as the pmd is folded into the pgd */
-#define pmd_addr_end(addr,end) (end)
+#define pmd_addr_end(pmd,addr,end) (end)
 
 #define set_pte_ext(ptep,pte,ext) cpu_set_pte_ext(ptep,pte,ext)
 

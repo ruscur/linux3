@@ -109,7 +109,7 @@ static void mark_kernel_pmd(pud_t *pud, unsigned long addr, unsigned long end)
 
 	pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (pmd_none(*pmd) || pmd_large(*pmd))
 			continue;
 		page = virt_to_page(pmd_val(*pmd));
@@ -126,7 +126,7 @@ static void mark_kernel_pud(p4d_t *p4d, unsigned long addr, unsigned long end)
 
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (pud_none(*pud) || pud_large(*pud))
 			continue;
 		if (!pud_folded(*pud)) {
@@ -147,7 +147,7 @@ static void mark_kernel_p4d(pgd_t *pgd, unsigned long addr, unsigned long end)
 
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (p4d_none(*p4d))
 			continue;
 		if (!p4d_folded(*p4d)) {
@@ -169,7 +169,7 @@ static void mark_kernel_pgd(void)
 	addr = 0;
 	pgd = pgd_offset_k(addr);
 	do {
-		next = pgd_addr_end(addr, MODULES_END);
+		next = pgd_addr_end(*pgd, addr, MODULES_END);
 		if (pgd_none(*pgd))
 			continue;
 		if (!pgd_folded(*pgd)) {

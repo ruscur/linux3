@@ -542,14 +542,14 @@ static inline unsigned long rste_addr_end_folded(unsigned long rste, unsigned lo
 	return (boundary - 1) < (end - 1) ? boundary : end;
 }
 
-#define pgd_addr_end_folded pgd_addr_end_folded
-static inline unsigned long pgd_addr_end_folded(pgd_t pgd, unsigned long addr, unsigned long end)
+#define pgd_addr_end pgd_addr_end
+static inline unsigned long pgd_addr_end(pgd_t pgd, unsigned long addr, unsigned long end)
 {
 	return rste_addr_end_folded(pgd_val(pgd), addr, end);
 }
 
-#define p4d_addr_end_folded p4d_addr_end_folded
-static inline unsigned long p4d_addr_end_folded(p4d_t p4d, unsigned long addr, unsigned long end)
+#define p4d_addr_end p4d_addr_end
+static inline unsigned long p4d_addr_end(p4d_t p4d, unsigned long addr, unsigned long end)
 {
 	return rste_addr_end_folded(p4d_val(p4d), addr, end);
 }

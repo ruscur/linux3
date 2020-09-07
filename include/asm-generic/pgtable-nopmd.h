@@ -64,7 +64,7 @@ static inline void pmd_free(struct mm_struct *mm, pmd_t *pmd)
 #define pmd_free_tlb(tlb, x, a)		do { } while (0)
 
 #undef  pmd_addr_end
-#define pmd_addr_end(addr, end)			(end)
+#define pmd_addr_end(pmd, addr, end)		(end)
 
 #endif /* __ASSEMBLY__ */
 

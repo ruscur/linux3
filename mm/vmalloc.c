@@ -93,7 +93,7 @@ static void vunmap_pmd_range(pud_t *pud, unsigned long addr, unsigned long end,
 
 	pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		cleared = pmd_clear_huge(pmd);
 		if (cleared || pmd_bad(*pmd))
@@ -118,7 +118,7 @@ static void vunmap_pud_range(p4d_t *p4d, unsigned long addr, unsigned long end,
 
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 
 		cleared = pud_clear_huge(pud);
 		if (cleared || pud_bad(*pud))
@@ -141,7 +141,7 @@ static void vunmap_p4d_range(pgd_t *pgd, unsigned long addr, unsigned long end,
 
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 
 		cleared = p4d_clear_huge(p4d);
 		if (cleared || p4d_bad(*p4d))
@@ -179,7 +179,7 @@ void unmap_kernel_range_noflush(unsigned long start, unsigned long size)
 	BUG_ON(addr >= end);
 	pgd = pgd_offset_k(addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (pgd_bad(*pgd))
 			mask |= PGTBL_PGD_MODIFIED;
 		if (pgd_none_or_clear_bad(pgd))
@@ -230,7 +230,7 @@ static int vmap_pmd_range(pud_t *pud, unsigned long addr,
 	if (!pmd)
 		return -ENOMEM;
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (vmap_pte_range(pmd, addr, next, prot, pages, nr, mask))
 			return -ENOMEM;
 	} while (pmd++, addr = next, addr != end);
@@ -248,7 +248,7 @@ static int vmap_pud_range(p4d_t *p4d, unsigned long addr,
 	if (!pud)
 		return -ENOMEM;
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (vmap_pmd_range(pud, addr, next, prot, pages, nr, mask))
 			return -ENOMEM;
 	} while (pud++, addr = next, addr != end);
@@ -266,7 +266,7 @@ static int vmap_p4d_range(pgd_t *pgd, unsigned long addr,
 	if (!p4d)
 		return -ENOMEM;
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (vmap_pud_range(p4d, addr, next, prot, pages, nr, mask))
 			return -ENOMEM;
 	} while (p4d++, addr = next, addr != end);
@@ -305,7 +305,7 @@ int map_kernel_range_noflush(unsigned long addr, unsigned long size,
 	BUG_ON(addr >= end);
 	pgd = pgd_offset_k(addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (pgd_bad(*pgd))
 			mask |= PGTBL_PGD_MODIFIED;
 		err = vmap_p4d_range(pgd, addr, next, prot, pages, &nr, &mask);

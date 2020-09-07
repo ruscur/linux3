@@ -264,7 +264,7 @@ static inline int update_pmd_range(pud_t *pud, unsigned long addr,
 
 	pmd = pmd_offset(pud, addr);
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (!pmd_present(*pmd)) {
 			if (hvc->force || pmd_newpage(*pmd)) {
 				ret = add_munmap(addr, next - addr, hvc);
@@ -286,7 +286,7 @@ static inline int update_pud_range(p4d_t *p4d, unsigned long addr,
 
 	pud = pud_offset(p4d, addr);
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (!pud_present(*pud)) {
 			if (hvc->force || pud_newpage(*pud)) {
 				ret = add_munmap(addr, next - addr, hvc);
@@ -308,7 +308,7 @@ static inline int update_p4d_range(pgd_t *pgd, unsigned long addr,
 
 	p4d = p4d_offset(pgd, addr);
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (!p4d_present(*p4d)) {
 			if (hvc->force || p4d_newpage(*p4d)) {
 				ret = add_munmap(addr, next - addr, hvc);
@@ -331,7 +331,7 @@ void fix_range_common(struct mm_struct *mm, unsigned long start_addr,
 	hvc = INIT_HVC(mm, force, userspace);
 	pgd = pgd_offset(mm, addr);
 	do {
-		next = pgd_addr_end(addr, end_addr);
+		next = pgd_addr_end(*pgd, addr, end_addr);
 		if (!pgd_present(*pgd)) {
 			if (force || pgd_newpage(*pgd)) {
 				ret = add_munmap(addr, next - addr, &hvc);

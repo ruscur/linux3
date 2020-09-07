@@ -60,7 +60,7 @@ static inline pud_t *pud_offset(p4d_t *p4d, unsigned long address)
 #define pud_free_tlb(tlb, x, a)		        do { } while (0)
 
 #undef  pud_addr_end
-#define pud_addr_end(addr, end)			(end)
+#define pud_addr_end(pud, addr, end)		(end)
 
 #endif /* __ASSEMBLY__ */
 #endif /* _PGTABLE_NOPUD_H */

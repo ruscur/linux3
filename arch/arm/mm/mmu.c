@@ -777,7 +777,7 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 * With LPAE, we must loop over to map
 		 * all the pmds for the given range.
 		 */
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		/*
 		 * Try a section mapping - addr, next and phys must all be
@@ -805,7 +805,7 @@ static void __init alloc_init_pud(p4d_t *p4d, unsigned long addr,
 	unsigned long next;
 
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		alloc_init_pmd(pud, addr, next, phys, type, alloc, ng);
 		phys += next - addr;
 	} while (pud++, addr = next, addr != end);
@@ -820,7 +820,7 @@ static void __init alloc_init_p4d(pgd_t *pgd, unsigned long addr,
 	unsigned long next;
 
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		alloc_init_pud(p4d, addr, next, phys, type, alloc, ng);
 		phys += next - addr;
 	} while (p4d++, addr = next, addr != end);
@@ -923,7 +923,7 @@ static void __init __create_mapping(struct mm_struct *mm, struct map_desc *md,
 	pgd = pgd_offset(mm, addr);
 	end = addr + length;
 	do {
-		unsigned long next = pgd_addr_end(addr, end);
+		unsigned long next = pgd_addr_end(*pgd, addr, end);
 
 		alloc_init_p4d(pgd, addr, next, phys, type, alloc, ng);
 

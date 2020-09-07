@@ -114,7 +114,7 @@ static inline int ioremap_pmd_range(pud_t *pud, unsigned long addr,
 	if (!pmd)
 		return -ENOMEM;
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		if (ioremap_try_huge_pmd(pmd, addr, next, phys_addr, prot)) {
 			*mask |= PGTBL_PMD_MODIFIED;
@@ -160,7 +160,7 @@ static inline int ioremap_pud_range(p4d_t *p4d, unsigned long addr,
 	if (!pud)
 		return -ENOMEM;
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 
 		if (ioremap_try_huge_pud(pud, addr, next, phys_addr, prot)) {
 			*mask |= PGTBL_PUD_MODIFIED;
@@ -206,7 +206,7 @@ static inline int ioremap_p4d_range(pgd_t *pgd, unsigned long addr,
 	if (!p4d)
 		return -ENOMEM;
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 
 		if (ioremap_try_huge_p4d(p4d, addr, next, phys_addr, prot)) {
 			*mask |= PGTBL_P4D_MODIFIED;
@@ -234,7 +234,7 @@ int ioremap_page_range(unsigned long addr,
 	start = addr;
 	pgd = pgd_offset_k(addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 		err = ioremap_p4d_range(pgd, addr, next, phys_addr, prot,
 					&mask);
 		if (err)

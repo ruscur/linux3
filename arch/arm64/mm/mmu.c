@@ -209,7 +209,7 @@ static void init_pmd(pud_t *pudp, unsigned long addr, unsigned long end,
 	do {
 		pmd_t old_pmd = READ_ONCE(*pmdp);
 
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(old_pmd, addr, end);
 
 		/* try section mapping first */
 		if (((addr | next | phys) & ~SECTION_MASK) == 0 &&
@@ -307,7 +307,7 @@ static void alloc_init_pud(pgd_t *pgdp, unsigned long addr, unsigned long end,
 	do {
 		pud_t old_pud = READ_ONCE(*pudp);
 
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(old_pud, addr, end);
 
 		/*
 		 * For 4K granule only, attempt to put down a 1GB block
@@ -356,7 +356,7 @@ static void __create_pgd_mapping(pgd_t *pgdir, phys_addr_t phys,
 	end = PAGE_ALIGN(virt + size);
 
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgdp, addr, end);
 		alloc_init_pud(pgdp, addr, next, phys, prot, pgtable_alloc,
 			       flags);
 		phys += next - addr;
@@ -825,9 +825,9 @@ static void unmap_hotplug_pmd_range(pud_t *pudp, unsigned long addr,
 	pmd_t *pmdp, pmd;
 
 	do {
-		next = pmd_addr_end(addr, end);
 		pmdp = pmd_offset(pudp, addr);
 		pmd = READ_ONCE(*pmdp);
+		next = pmd_addr_end(pmd, addr, end);
 		if (pmd_none(pmd))
 			continue;
 
@@ -858,9 +858,9 @@ static void unmap_hotplug_pud_range(p4d_t *p4dp, unsigned long addr,
 	pud_t *pudp, pud;
 
 	do {
-		next = pud_addr_end(addr, end);
 		pudp = pud_offset(p4dp, addr);
 		pud = READ_ONCE(*pudp);
+		next = pud_addr_end(pud, addr, end);
 		if (pud_none(pud))
 			continue;
 
@@ -891,9 +891,9 @@ static void unmap_hotplug_p4d_range(pgd_t *pgdp, unsigned long addr,
 	p4d_t *p4dp, p4d;
 
 	do {
-		next = p4d_addr_end(addr, end);
 		p4dp = p4d_offset(pgdp, addr);
 		p4d = READ_ONCE(*p4dp);
+		next = p4d_addr_end(p4d, addr, end);
 		if (p4d_none(p4d))
 			continue;
 
@@ -917,9 +917,9 @@ static void unmap_hotplug_range(unsigned long addr, unsigned long end,
 	WARN_ON(!free_mapped && altmap);
 
 	do {
-		next = pgd_addr_end(addr, end);
 		pgdp = pgd_offset_k(addr);
 		pgd = READ_ONCE(*pgdp);
+		next = pgd_addr_end(pgd, addr, end);
 		if (pgd_none(pgd))
 			continue;
 
@@ -973,9 +973,9 @@ static void free_empty_pmd_table(pud_t *pudp, unsigned long addr,
 	unsigned long i, next, start = addr;
 
 	do {
-		next = pmd_addr_end(addr, end);
 		pmdp = pmd_offset(pudp, addr);
 		pmd = READ_ONCE(*pmdp);
+		next = pmd_addr_end(pmd, addr, end);
 		if (pmd_none(pmd))
 			continue;
 
@@ -1013,9 +1013,9 @@ static void free_empty_pud_table(p4d_t *p4dp, unsigned long addr,
 	unsigned long i, next, start = addr;
 
 	do {
-		next = pud_addr_end(addr, end);
 		pudp = pud_offset(p4dp, addr);
 		pud = READ_ONCE(*pudp);
+		next = pud_addr_end(pud, addr, end);
 		if (pud_none(pud))
 			continue;
 
@@ -1053,9 +1053,9 @@ static void free_empty_p4d_table(pgd_t *pgdp, unsigned long addr,
 	p4d_t *p4dp, p4d;
 
 	do {
-		next = p4d_addr_end(addr, end);
 		p4dp = p4d_offset(pgdp, addr);
 		p4d = READ_ONCE(*p4dp);
+		next = p4d_addr_end(p4d, addr, end);
 		if (p4d_none(p4d))
 			continue;
 
@@ -1071,9 +1071,9 @@ static void free_empty_tables(unsigned long addr, unsigned long end,
 	pgd_t *pgdp, pgd;
 
 	do {
-		next = pgd_addr_end(addr, end);
 		pgdp = pgd_offset_k(addr);
 		pgd = READ_ONCE(*pgdp);
+		next = pgd_addr_end(pgd, addr, end);
 		if (pgd_none(pgd))
 			continue;
 
@@ -1102,8 +1102,6 @@ int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node,
 	pmd_t *pmdp;
 
 	do {
-		next = pmd_addr_end(addr, end);
-
 		pgdp = vmemmap_pgd_populate(addr, node);
 		if (!pgdp)
 			return -ENOMEM;
@@ -1117,6 +1115,7 @@ int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node,
 			return -ENOMEM;
 
 		pmdp = pmd_offset(pudp, addr);
+		next = pmd_addr_end(*pmdp, addr, end);
 		if (pmd_none(READ_ONCE(*pmdp))) {
 			void *p = NULL;
 

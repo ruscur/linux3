@@ -1043,7 +1043,7 @@ remove_pmd_table(pmd_t *pmd_start, unsigned long addr, unsigned long end,
 
 	pmd = pmd_start + pmd_index(addr);
 	for (; addr < end; addr = next, pmd++) {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		if (!pmd_present(*pmd))
 			continue;
@@ -1099,7 +1099,7 @@ remove_pud_table(pud_t *pud_start, unsigned long addr, unsigned long end,
 
 	pud = pud_start + pud_index(addr);
 	for (; addr < end; addr = next, pud++) {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 
 		if (!pud_present(*pud))
 			continue;
@@ -1153,7 +1153,7 @@ remove_p4d_table(p4d_t *p4d_start, unsigned long addr, unsigned long end,
 
 	p4d = p4d_start + p4d_index(addr);
 	for (; addr < end; addr = next, p4d++) {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 
 		if (!p4d_present(*p4d))
 			continue;
@@ -1186,9 +1186,8 @@ remove_pagetable(unsigned long start, unsigned long end, bool direct,
 	p4d_t *p4d;
 
 	for (addr = start; addr < end; addr = next) {
-		next = pgd_addr_end(addr, end);
-
 		pgd = pgd_offset_k(addr);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (!pgd_present(*pgd))
 			continue;
 
@@ -1500,8 +1499,6 @@ static int __meminit vmemmap_populate_hugepages(unsigned long start,
 	pmd_t *pmd;
 
 	for (addr = start; addr < end; addr = next) {
-		next = pmd_addr_end(addr, end);
-
 		pgd = vmemmap_pgd_populate(addr, node);
 		if (!pgd)
 			return -ENOMEM;
@@ -1515,6 +1512,7 @@ static int __meminit vmemmap_populate_hugepages(unsigned long start,
 			return -ENOMEM;
 
 		pmd = pmd_offset(pud, addr);
+		next = pmd_addr_end(*pmd, addr, end);
 		if (pmd_none(*pmd)) {
 			void *p;
 
@@ -1623,9 +1621,8 @@ void register_page_bootmem_memmap(unsigned long section_nr,
 			get_page_bootmem(section_nr, pte_page(*pte),
 					 SECTION_INFO);
 		} else {
-			next = pmd_addr_end(addr, end);
-
 			pmd = pmd_offset(pud, addr);
+			next = pmd_addr_end(*pmd, addr, end);
 			if (pmd_none(*pmd))
 				continue;
 

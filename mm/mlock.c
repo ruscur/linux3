@@ -374,8 +374,12 @@ static unsigned long __munlock_pagevec_fill(struct pagevec *pvec,
 			struct vm_area_struct *vma, struct zone *zone,
 			unsigned long start, unsigned long end)
 {
-	pte_t *pte;
 	spinlock_t *ptl;
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
 
 	/*
 	 * Initialize pte walk starting at the already pinned page where we
@@ -384,10 +388,14 @@ static unsigned long __munlock_pagevec_fill(struct pagevec *pvec,
 	 */
 	pte = get_locked_pte(vma->vm_mm, start,	&ptl);
 	/* Make sure we do not cross the page table boundary */
-	end = pgd_addr_end(start, end);
-	end = p4d_addr_end(start, end);
-	end = pud_addr_end(start, end);
-	end = pmd_addr_end(start, end);
+	pgd = pgd_offset(vma->vm_mm, start);
+	end = pgd_addr_end(*pgd, start, end);
+	p4d = p4d_offset(pgd, start);
+	end = p4d_addr_end(*p4d, start, end);
+	pud = pud_offset(p4d, start);
+	end = pud_addr_end(*pud, start, end);
+	pmd = pmd_offset(pud, start);
+	end = pmd_addr_end(*pmd, start, end);
 
 	/* The page next to the pinned page is the first we will try to get */
 	start += PAGE_SIZE;

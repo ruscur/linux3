@@ -120,7 +120,7 @@ static void __init kasan_pmd_populate(pud_t *pudp, unsigned long addr,
 	pmd_t *pmdp = kasan_pmd_offset(pudp, addr, node, early);
 
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmdp, addr, end);
 		kasan_pte_populate(pmdp, addr, next, node, early);
 	} while (pmdp++, addr = next, addr != end && pmd_none(READ_ONCE(*pmdp)));
 }
@@ -132,7 +132,7 @@ static void __init kasan_pud_populate(p4d_t *p4dp, unsigned long addr,
 	pud_t *pudp = kasan_pud_offset(p4dp, addr, node, early);
 
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pudp, addr, end);
 		kasan_pmd_populate(pudp, addr, next, node, early);
 	} while (pudp++, addr = next, addr != end && pud_none(READ_ONCE(*pudp)));
 }
@@ -144,7 +144,7 @@ static void __init kasan_p4d_populate(pgd_t *pgdp, unsigned long addr,
 	p4d_t *p4dp = p4d_offset(pgdp, addr);
 
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4dp, addr, end);
 		kasan_pud_populate(p4dp, addr, next, node, early);
 	} while (p4dp++, addr = next, addr != end);
 }
@@ -157,7 +157,7 @@ static void __init kasan_pgd_populate(unsigned long addr, unsigned long end,
 
 	pgdp = pgd_offset_k(addr);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgdp, addr, end);
 		kasan_p4d_populate(pgdp, addr, next, node, early);
 	} while (pgdp++, addr = next, addr != end);
 }

@@ -117,7 +117,7 @@ static int __ref zero_pmd_populate(pud_t *pud, unsigned long addr,
 	unsigned long next;
 
 	do {
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		if (IS_ALIGNED(addr, PMD_SIZE) && end - addr >= PMD_SIZE) {
 			pmd_populate_kernel(&init_mm, pmd,
@@ -150,7 +150,7 @@ static int __ref zero_pud_populate(p4d_t *p4d, unsigned long addr,
 	unsigned long next;
 
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 		if (IS_ALIGNED(addr, PUD_SIZE) && end - addr >= PUD_SIZE) {
 			pmd_t *pmd;
 
@@ -187,7 +187,7 @@ static int __ref zero_p4d_populate(pgd_t *pgd, unsigned long addr,
 	unsigned long next;
 
 	do {
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 		if (IS_ALIGNED(addr, P4D_SIZE) && end - addr >= P4D_SIZE) {
 			pud_t *pud;
 			pmd_t *pmd;
@@ -236,7 +236,7 @@ int __ref kasan_populate_early_shadow(const void *shadow_start,
 	unsigned long next;
 
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(*pgd, addr, end);
 
 		if (IS_ALIGNED(addr, PGDIR_SIZE) && end - addr >= PGDIR_SIZE) {
 			p4d_t *p4d;
@@ -370,7 +370,7 @@ static void kasan_remove_pmd_table(pmd_t *pmd, unsigned long addr,
 	for (; addr < end; addr = next, pmd++) {
 		pte_t *pte;
 
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(*pmd, addr, end);
 
 		if (!pmd_present(*pmd))
 			continue;
@@ -395,7 +395,7 @@ static void kasan_remove_pud_table(pud_t *pud, unsigned long addr,
 	for (; addr < end; addr = next, pud++) {
 		pmd_t *pmd, *pmd_base;
 
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(*pud, addr, end);
 
 		if (!pud_present(*pud))
 			continue;
@@ -421,7 +421,7 @@ static void kasan_remove_p4d_table(p4d_t *p4d, unsigned long addr,
 	for (; addr < end; addr = next, p4d++) {
 		pud_t *pud;
 
-		next = p4d_addr_end(addr, end);
+		next = p4d_addr_end(*p4d, addr, end);
 
 		if (!p4d_present(*p4d))
 			continue;
@@ -454,9 +454,8 @@ void kasan_remove_zero_shadow(void *start, unsigned long size)
 	for (; addr < end; addr = next) {
 		p4d_t *p4d;
 
-		next = pgd_addr_end(addr, end);
-
 		pgd = pgd_offset_k(addr);
+		next = pgd_addr_end(*pgd, addr, end);
 		if (!pgd_present(*pgd))
 			continue;
 
