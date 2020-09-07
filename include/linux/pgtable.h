@@ -656,31 +656,35 @@ static inline int arch_unmap_one(struct mm_struct *mm,
  */
 
 #ifndef pgd_addr_end
-#define pgd_addr_end(pgd, addr, end)					\
-({	unsigned long __boundary = ((addr) + PGDIR_SIZE) & PGDIR_MASK;	\
-	(__boundary - 1 < (end) - 1)? __boundary: (end);		\
-})
+#define pgd_addr_end pgd_addr_end
+static inline unsigned long pgd_addr_end(pgd_t pgd, unsigned long addr, unsigned long end)
+{	unsigned long __boundary = (addr + PGDIR_SIZE) & PGDIR_MASK;
+	return (__boundary - 1 < end - 1) ? __boundary : end;
+}
 #endif
 
 #ifndef p4d_addr_end
-#define p4d_addr_end(p4d, addr, end)					\
-({	unsigned long __boundary = ((addr) + P4D_SIZE) & P4D_MASK;	\
-	(__boundary - 1 < (end) - 1)? __boundary: (end);		\
-})
+#define p4d_addr_end p4d_addr_end
+static inline unsigned long p4d_addr_end(p4d_t p4d, unsigned long addr, unsigned long end)
+{	unsigned long __boundary = (addr + P4D_SIZE) & P4D_MASK;
+	return (__boundary - 1 < end - 1) ? __boundary : end;
+}
 #endif
 
 #ifndef pud_addr_end
-#define pud_addr_end(pud, addr, end)					\
-({	unsigned long __boundary = ((addr) + PUD_SIZE) & PUD_MASK;	\
-	(__boundary - 1 < (end) - 1)? __boundary: (end);		\
-})
+#define pud_addr_end pud_addr_end
+static inline unsigned long pud_addr_end(pud_t pud, unsigned long addr, unsigned long end)
+{	unsigned long __boundary = (addr + PUD_SIZE) & PUD_MASK;
+	return (__boundary - 1 < end - 1) ? __boundary : end;
+}
 #endif
 
 #ifndef pmd_addr_end
-#define pmd_addr_end(pmd, addr, end)					\
-({	unsigned long __boundary = ((addr) + PMD_SIZE) & PMD_MASK;	\
-	(__boundary - 1 < (end) - 1)? __boundary: (end);		\
-})
+#define pmd_addr_end pmd_addr_end
+static inline unsigned long pmd_addr_end(pmd_t pmd, unsigned long addr, unsigned long end)
+{	unsigned long __boundary = (addr + PMD_SIZE) & PMD_MASK;
+	return (__boundary - 1 < end - 1) ? __boundary : end;
+}
 #endif
 
 /*
