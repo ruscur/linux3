@@ -1051,7 +1051,7 @@ int ohci_restart(struct ohci_hcd *ohci)
 			ed->ed_next = ohci->ed_rm_list;
 			ed->ed_prev = NULL;
 			ohci->ed_rm_list = ed;
-			fallthrough;
+			break;
 		case ED_UNLINK:
 			break;
 		default:

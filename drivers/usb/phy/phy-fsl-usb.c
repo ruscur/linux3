@@ -914,7 +914,7 @@ int usb_otg_start(struct platform_device *pdev)
 		fallthrough;
 	case FSL_USB2_PHY_UTMI:
 		temp |= PORTSC_PTS_UTMI;
-		fallthrough;
+		break;
 	default:
 		break;
 	}

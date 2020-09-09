@@ -2019,7 +2019,7 @@ static int lanai_normalize_ci(struct lanai_dev *lanai,
 	switch (*vpip) {
 		case ATM_VPI_ANY:
 			*vpip = 0;
-			fallthrough;
+			break;
 		case 0:
 			break;
 		default:

@@ -540,7 +540,7 @@ static s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 		/* promisc introduced in 1.3 version */
 		if (xcast_mode == IXGBEVF_XCAST_MODE_PROMISC)
 			return -EOPNOTSUPP;
-		fallthrough;
+		break;
 	case ixgbe_mbox_api_14:
 	case ixgbe_mbox_api_13:
 		break;

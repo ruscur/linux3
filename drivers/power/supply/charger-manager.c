@@ -585,7 +585,7 @@ static int cm_get_target_status(struct charger_manager *cm)
 	case POWER_SUPPLY_STATUS_FULL:
 		if (is_full_charged(cm))
 			return POWER_SUPPLY_STATUS_FULL;
-		fallthrough;
+		break;
 	default:
 		break;
 	}

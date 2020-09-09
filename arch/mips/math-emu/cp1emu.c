@@ -1224,7 +1224,7 @@ emul:
 			case bctl_op:
 				if (cpu_has_mips_2_3_4_5_r)
 					likely = 1;
-				fallthrough;
+				break;
 			case bct_op:
 				break;
 			}

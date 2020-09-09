@@ -2464,7 +2464,7 @@ static int do_test(const char *alg, u32 type, u32 mask, int m, u32 num_mb)
 		test_hash_speed("streebog512", sec,
 				generic_hash_speed_template);
 		if (mode > 300 && mode < 400) break;
-		fallthrough;
+		break;
 	case 399:
 		break;
 
@@ -2587,7 +2587,7 @@ static int do_test(const char *alg, u32 type, u32 mask, int m, u32 num_mb)
 		test_mb_ahash_speed("streebog512", sec,
 				    generic_hash_speed_template, num_mb);
 		if (mode > 400 && mode < 500) break;
-		fallthrough;
+		break;
 	case 499:
 		break;
 

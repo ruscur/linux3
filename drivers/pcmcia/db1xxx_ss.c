@@ -258,7 +258,7 @@ static int db1x_pcmcia_configure(struct pcmcia_socket *skt,
 		fallthrough;
 	case 33:
 		++v;
-		fallthrough;
+		break;
 	case 0:
 		break;
 	default:
@@ -273,7 +273,7 @@ static int db1x_pcmcia_configure(struct pcmcia_socket *skt,
 	case 33:
 	case 50:
 		++p;
-		fallthrough;
+		break;
 	case 0:
 		break;
 	default:

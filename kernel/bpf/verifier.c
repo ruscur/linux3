@@ -5334,7 +5334,7 @@ static int adjust_ptr_min_max_vals(struct bpf_verifier_env *env,
 				off_reg == dst_reg ? dst : src);
 			return -EACCES;
 		}
-		fallthrough;
+		break;
 	default:
 		break;
 	}

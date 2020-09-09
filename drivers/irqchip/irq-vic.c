@@ -453,10 +453,10 @@ static void __init __vic_init(void __iomem *base, int parent_irq, int irq_start,
 	case AMBA_VENDOR_ST:
 		vic_init_st(base, irq_start, vic_sources, node);
 		return;
+	case AMBA_VENDOR_ARM:
+		break;
 	default:
 		printk(KERN_WARNING "VIC: unknown vendor, continuing anyways\n");
-		fallthrough;
-	case AMBA_VENDOR_ARM:
 		break;
 	}
 

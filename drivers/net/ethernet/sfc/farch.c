@@ -1038,7 +1038,7 @@ efx_farch_handle_rx_event(struct efx_channel *channel, const efx_qword_t *event)
 			fallthrough;
 		case FSE_CZ_RX_EV_HDR_TYPE_IPV4V6_UDP:
 			flags |= EFX_RX_PKT_CSUMMED;
-			fallthrough;
+			break;
 		case FSE_CZ_RX_EV_HDR_TYPE_IPV4V6_OTHER:
 		case FSE_AZ_RX_EV_HDR_TYPE_OTHER:
 			break;

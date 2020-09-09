@@ -457,7 +457,7 @@ static int ak4613_set_bias_level(struct snd_soc_component *component,
 		fallthrough;
 	case SND_SOC_BIAS_STANDBY:
 		mgmt1 |= PMVR;
-		fallthrough;
+		break;
 	case SND_SOC_BIAS_OFF:
 	default:
 		break;

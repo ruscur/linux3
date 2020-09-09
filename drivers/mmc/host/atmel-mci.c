@@ -2435,7 +2435,7 @@ static void atmci_get_cap(struct atmel_mci *host)
 	case 0x100:
 		host->caps.has_bad_data_ordering = 0;
 		host->caps.need_reset_after_xfer = 0;
-		fallthrough;
+		break;
 	case 0x0:
 		break;
 	default:

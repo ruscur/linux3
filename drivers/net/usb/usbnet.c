@@ -110,7 +110,7 @@ int usbnet_get_endpoints(struct usbnet *dev, struct usb_interface *intf)
 				if (!usb_endpoint_dir_in(&e->desc))
 					continue;
 				intr = 1;
-				fallthrough;
+				break;
 			case USB_ENDPOINT_XFER_BULK:
 				break;
 			default:

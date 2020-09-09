@@ -1751,7 +1751,7 @@ int cpia2_set_fps(struct camera_data *cam, int framerate)
 						    CPIA2_VP_SENSOR_FLAGS_500) {
 				return -EINVAL;
 			}
-			fallthrough;
+			break;
 		case CPIA2_VP_FRAMERATE_15:
 		case CPIA2_VP_FRAMERATE_12_5:
 		case CPIA2_VP_FRAMERATE_7_5:

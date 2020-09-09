@@ -1823,7 +1823,7 @@ static inline void cpu_probe_mips(struct cpuinfo_mips *c, unsigned int cpu)
 		fallthrough;
 	case CPU_I6400:
 		c->options |= MIPS_CPU_SHARED_FTLB_RAM;
-		fallthrough;
+		break;
 	default:
 		break;
 	}

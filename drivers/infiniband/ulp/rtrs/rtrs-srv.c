@@ -78,7 +78,7 @@ static bool __rtrs_srv_change_state(struct rtrs_srv_sess *sess,
 		switch (old_state) {
 		case RTRS_SRV_CONNECTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -88,7 +88,7 @@ static bool __rtrs_srv_change_state(struct rtrs_srv_sess *sess,
 		case RTRS_SRV_CONNECTING:
 		case RTRS_SRV_CONNECTED:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -97,7 +97,7 @@ static bool __rtrs_srv_change_state(struct rtrs_srv_sess *sess,
 		switch (old_state) {
 		case RTRS_SRV_CLOSING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}

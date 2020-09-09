@@ -2795,7 +2795,7 @@ static struct smiapp_hwconfig *smiapp_get_hwconfig(struct device *dev)
 		case 180:
 			hwcfg->module_board_orient =
 				SMIAPP_MODULE_BOARD_ORIENT_180;
-			fallthrough;
+			break;
 		case 0:
 			break;
 		default:

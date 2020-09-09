@@ -2105,7 +2105,7 @@ static void zfcp_fsf_open_lun_handler(struct zfcp_fsf_req *req)
 
 	case FSF_PORT_HANDLE_NOT_VALID:
 		zfcp_erp_adapter_reopen(adapter, 0, "fsouh_1");
-		fallthrough;
+		break;
 	case FSF_LUN_ALREADY_OPEN:
 		break;
 	case FSF_PORT_BOXED:

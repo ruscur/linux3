@@ -8525,7 +8525,7 @@ static int nft_verdict_init(const struct nft_ctx *ctx, struct nft_data *data,
 		default:
 			return -EINVAL;
 		}
-		fallthrough;
+		break;
 	case NFT_CONTINUE:
 	case NFT_BREAK:
 	case NFT_RETURN:

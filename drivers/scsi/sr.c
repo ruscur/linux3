@@ -880,7 +880,7 @@ static void get_sectorsize(struct scsi_cd *cd)
 			fallthrough;
 		case 2048:
 			cd->capacity *= 4;
-			fallthrough;
+			break;
 		case 512:
 			break;
 		default:

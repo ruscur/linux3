@@ -1589,7 +1589,7 @@ s32 ixgbe_fdir_set_input_mask_82599(struct ixgbe_hw *hw,
 	case 0x0000:
 		/* Mask Flex Bytes */
 		fdirm |= IXGBE_FDIRM_FLEX;
-		fallthrough;
+		break;
 	case 0xFFFF:
 		break;
 	default:

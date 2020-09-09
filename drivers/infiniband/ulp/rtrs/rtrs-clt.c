@@ -209,7 +209,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		switch (old_state) {
 		case RTRS_CLT_RECONNECTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -220,7 +220,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		case RTRS_CLT_CONNECTING_ERR:
 		case RTRS_CLT_CLOSED:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -229,7 +229,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		switch (old_state) {
 		case RTRS_CLT_CONNECTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -238,7 +238,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		switch (old_state) {
 		case RTRS_CLT_CONNECTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -250,7 +250,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		case RTRS_CLT_RECONNECTING:
 		case RTRS_CLT_CONNECTED:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -259,7 +259,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		switch (old_state) {
 		case RTRS_CLT_CLOSING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -268,7 +268,7 @@ static bool __rtrs_clt_change_state(struct rtrs_clt_sess *sess,
 		switch (old_state) {
 		case RTRS_CLT_CLOSED:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}

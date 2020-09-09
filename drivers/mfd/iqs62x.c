@@ -490,8 +490,7 @@ static irqreturn_t iqs62x_irq(int irq, void *context)
 
 		case IQS62X_EVENT_HYST:
 			event_map[i] <<= iqs62x->dev_desc->hyst_shift;
-
-			fallthrough;
+			break;
 
 		case IQS62X_EVENT_WHEEL:
 		case IQS62X_EVENT_HALL:

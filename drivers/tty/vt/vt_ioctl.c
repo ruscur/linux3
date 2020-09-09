@@ -255,7 +255,7 @@ static int vt_kdsetmode(struct vc_data *vc, unsigned long mode)
 	case KD_TEXT0:
 	case KD_TEXT1:
 		mode = KD_TEXT;
-		fallthrough;
+		break;
 	case KD_TEXT:
 		break;
 	default:

@@ -3833,7 +3833,7 @@ int wacom_setup_touch_input_capabilities(struct input_dev *input_dev,
 	case MTTPC_B:
 	case TABLETPC2FG:
 		input_mt_init_slots(input_dev, features->touch_max, INPUT_MT_DIRECT);
-		fallthrough;
+		break;
 
 	case TABLETPC:
 	case TABLETPCE:

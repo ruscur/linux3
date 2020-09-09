@@ -1419,7 +1419,7 @@ static void abx500_chargalg_algorithm(struct abx500_chargalg *di)
 		abx500_chargalg_stop_charging(di);
 		di->charge_status = POWER_SUPPLY_STATUS_DISCHARGING;
 		abx500_chargalg_state_to(di, STATE_HANDHELD);
-		fallthrough;
+		break;
 
 	case STATE_HANDHELD:
 		break;

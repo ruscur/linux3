@@ -1336,7 +1336,7 @@ static void dvb_input_detach(struct ddb_input *input)
 		fallthrough;
 	case 0x10:
 		dvb_dmx_release(&dvb->demux);
-		fallthrough;
+		break;
 	case 0x01:
 		break;
 	}

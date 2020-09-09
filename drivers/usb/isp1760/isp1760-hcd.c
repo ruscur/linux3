@@ -792,7 +792,7 @@ static void collect_qtds(struct usb_hcd *hcd, struct isp1760_qh *qh,
 				case OUT_PID:
 					qtd->urb->actual_length +=
 							qtd->actual_length;
-					fallthrough;
+					break;
 				case SETUP_PID:
 					break;
 				}

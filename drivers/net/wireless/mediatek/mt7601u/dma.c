@@ -193,11 +193,11 @@ static void mt7601u_complete_rx(struct urb *urb)
 	case -ESHUTDOWN:
 	case -ENOENT:
 		return;
+	case 0:
+		break;
 	default:
 		dev_err_ratelimited(dev->dev, "rx urb failed: %d\n",
 				    urb->status);
-		fallthrough;
-	case 0:
 		break;
 	}
 
@@ -238,11 +238,11 @@ static void mt7601u_complete_tx(struct urb *urb)
 	case -ESHUTDOWN:
 	case -ENOENT:
 		return;
+	case 0:
+		break;
 	default:
 		dev_err_ratelimited(dev->dev, "tx urb failed: %d\n",
 				    urb->status);
-		fallthrough;
-	case 0:
 		break;
 	}
 

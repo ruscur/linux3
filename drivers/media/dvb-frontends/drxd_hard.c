@@ -1519,7 +1519,7 @@ static int SetDeviceTypeId(struct drxd_state *state)
 				break;
 			case 6:
 				state->diversity = 1;
-				fallthrough;
+				break;
 			case 5:
 			case 8:
 				break;

@@ -646,7 +646,7 @@ static int dwc3_phy_setup(struct dwc3 *dwc)
 			if (!(reg & DWC3_GUSB2PHYCFG_ULPI_UTMI))
 				break;
 		}
-		fallthrough;
+		break;
 	case DWC3_GHWPARAMS3_HSPHY_IFC_ULPI:
 	default:
 		break;

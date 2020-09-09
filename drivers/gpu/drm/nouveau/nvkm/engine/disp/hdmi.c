@@ -71,7 +71,7 @@ void pack_hdmi_infoframe(struct packed_hdmi_infoframe *packed_frame,
 		fallthrough;
 	case 1:
 		header |= raw_frame[0];
-		fallthrough;
+		break;
 	case 0:
 		break;
 	}

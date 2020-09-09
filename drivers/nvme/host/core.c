@@ -365,7 +365,7 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 		case NVME_CTRL_RESETTING:
 		case NVME_CTRL_CONNECTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -375,7 +375,7 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 		case NVME_CTRL_NEW:
 		case NVME_CTRL_LIVE:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -385,7 +385,7 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 		case NVME_CTRL_NEW:
 		case NVME_CTRL_RESETTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -396,7 +396,7 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 		case NVME_CTRL_RESETTING:
 		case NVME_CTRL_CONNECTING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -406,7 +406,7 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 		case NVME_CTRL_DELETING:
 		case NVME_CTRL_DEAD:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}
@@ -415,7 +415,7 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 		switch (old_state) {
 		case NVME_CTRL_DELETING:
 			changed = true;
-			fallthrough;
+			break;
 		default:
 			break;
 		}

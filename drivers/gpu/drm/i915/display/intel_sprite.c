@@ -2861,7 +2861,7 @@ static bool gen12_plane_format_mod_supported(struct drm_plane *_plane,
 	case I915_FORMAT_MOD_Y_TILED_GEN12_MC_CCS:
 		if (!gen12_plane_supports_mc_ccs(dev_priv, plane->id))
 			return false;
-		fallthrough;
+		break;
 	case DRM_FORMAT_MOD_LINEAR:
 	case I915_FORMAT_MOD_X_TILED:
 	case I915_FORMAT_MOD_Y_TILED:

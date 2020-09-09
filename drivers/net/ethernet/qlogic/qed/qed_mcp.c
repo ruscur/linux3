@@ -3546,7 +3546,7 @@ qed_mcp_resc_allocation_msg(struct qed_hwfn *p_hwfn,
 	switch (p_in_params->cmd) {
 	case DRV_MSG_SET_RESOURCE_VALUE_MSG:
 		mfw_resc_info.size = p_in_params->resc_max_val;
-		fallthrough;
+		break;
 	case DRV_MSG_GET_RESOURCE_ALLOC_MSG:
 		break;
 	default:

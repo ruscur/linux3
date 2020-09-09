@@ -9339,7 +9339,7 @@ __lpfc_sli_issue_iocb_s3(struct lpfc_hba *phba, uint32_t ring_number,
 			 */
 			if (piocb->iocb_cmpl)
 				piocb->iocb_cmpl = NULL;
-			fallthrough;
+			break;
 		case CMD_CREATE_XRI_CR:
 		case CMD_CLOSE_XRI_CN:
 		case CMD_CLOSE_XRI_CX:

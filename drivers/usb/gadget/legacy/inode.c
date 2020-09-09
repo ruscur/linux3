@@ -1717,7 +1717,7 @@ gadgetfs_suspend (struct usb_gadget *gadget)
 	case STATE_DEV_UNCONNECTED:
 		next_event (dev, GADGETFS_SUSPEND);
 		ep0_readable (dev);
-		fallthrough;
+		break;
 	default:
 		break;
 	}

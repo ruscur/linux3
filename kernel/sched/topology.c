@@ -1233,7 +1233,7 @@ static void __free_domain_allocs(struct s_data *d, enum s_alloc what,
 		fallthrough;
 	case sa_sd_storage:
 		__sdt_free(cpu_map);
-		fallthrough;
+		break;
 	case sa_none:
 		break;
 	}

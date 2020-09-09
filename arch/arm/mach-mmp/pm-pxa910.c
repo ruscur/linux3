@@ -161,7 +161,7 @@ void pxa910_pm_enter_lowpower_mode(int state)
 		idle_cfg |= APMU_MOH_IDLE_CFG_MOH_PWRDWN;
 		idle_cfg |= APMU_MOH_IDLE_CFG_MOH_PWR_SW(3)
 			| APMU_MOH_IDLE_CFG_MOH_L2_PWR_SW(3);
-		fallthrough;
+		break;
 	case POWER_MODE_CORE_INTIDLE:
 		break;
 	}

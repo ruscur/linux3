@@ -1273,7 +1273,7 @@ static int parse_pred(const char *str, void *data,
 		switch (op) {
 		case OP_NE:
 			pred->not = 1;
-			fallthrough;
+			break;
 		case OP_GLOB:
 		case OP_EQ:
 			break;

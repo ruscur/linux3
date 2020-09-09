@@ -627,10 +627,10 @@ static void write_bulk_callback(struct urb *urb)
 	case -ESHUTDOWN:
 		netif_dbg(pegasus, ifdown, net, "tx unlink, %d\n", status);
 		return;
+	case 0:
+		break;
 	default:
 		netif_info(pegasus, tx_err, net, "TX status %d\n", status);
-		fallthrough;
-	case 0:
 		break;
 	}
 

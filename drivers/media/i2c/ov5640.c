@@ -3010,7 +3010,7 @@ static int ov5640_probe(struct i2c_client *client)
 		switch (rotation) {
 		case 180:
 			sensor->upside_down = true;
-			fallthrough;
+			break;
 		case 0:
 			break;
 		default:

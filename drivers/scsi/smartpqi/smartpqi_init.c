@@ -2937,7 +2937,7 @@ static int pqi_process_io_intr(struct pqi_ctrl_info *ctrl_info, struct pqi_queue
 		case PQI_RESPONSE_IU_AIO_PATH_IO_SUCCESS:
 			if (io_request->scmd)
 				io_request->scmd->result = 0;
-			fallthrough;
+			break;
 		case PQI_RESPONSE_IU_GENERAL_MANAGEMENT:
 			break;
 		case PQI_RESPONSE_IU_VENDOR_GENERAL:

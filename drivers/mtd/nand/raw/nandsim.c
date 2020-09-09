@@ -2286,7 +2286,7 @@ static int __init ns_init_module(void)
 		fallthrough;
 	case 1:
 		chip->bbt_options |= NAND_BBT_USE_FLASH;
-		fallthrough;
+		break;
 	case 0:
 		break;
 	default:

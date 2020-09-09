@@ -8175,7 +8175,7 @@ ahd_search_qinfifo(struct ahd_softc *ahd, int target, char channel,
 				if ((scb->flags & SCB_ACTIVE) == 0)
 					printk("Inactive SCB in qinfifo\n");
 				ahd_done_with_status(ahd, scb, status);
-				fallthrough;
+				break;
 			case SEARCH_REMOVE:
 				break;
 			case SEARCH_PRINT:
@@ -8295,7 +8295,7 @@ ahd_search_qinfifo(struct ahd_softc *ahd, int target, char channel,
 			}
 			case SEARCH_PRINT:
 				printk(" 0x%x", SCB_GET_TAG(scb));
-				fallthrough;
+				break;
 			case SEARCH_COUNT:
 				break;
 			}

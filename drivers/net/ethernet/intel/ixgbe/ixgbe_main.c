@@ -5901,7 +5901,7 @@ dma_engine_disable:
 		IXGBE_WRITE_REG(hw, IXGBE_DMATXCTL,
 				(IXGBE_READ_REG(hw, IXGBE_DMATXCTL) &
 				 ~IXGBE_DMATXCTL_TE));
-		fallthrough;
+		break;
 	default:
 		break;
 	}

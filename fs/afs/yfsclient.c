@@ -461,7 +461,7 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)
 		req->file_size = vp->scb.status.size;
 
 		call->unmarshall++;
-		fallthrough;
+		break;
 
 	case 5:
 		break;
@@ -1363,7 +1363,7 @@ static int yfs_deliver_fs_get_volume_status(struct afs_call *call)
 		_debug("motd '%s'", p);
 
 		call->unmarshall++;
-		fallthrough;
+		break;
 
 	case 8:
 		break;
@@ -1727,7 +1727,7 @@ static int yfs_deliver_fs_inline_bulk_status(struct afs_call *call)
 		xdr_decode_YFSVolSync(&bp, &op->volsync);
 
 		call->unmarshall++;
-		fallthrough;
+		break;
 
 	case 6:
 		break;
@@ -1886,7 +1886,7 @@ static int yfs_deliver_fs_fetch_opaque_acl(struct afs_call *call)
 		xdr_decode_YFSVolSync(&bp, &op->volsync);
 
 		call->unmarshall++;
-		fallthrough;
+		break;
 
 	case 6:
 		break;

@@ -743,7 +743,7 @@ void zpci_release_device(struct kref *kref)
 		zpci_cleanup_bus_resources(zdev);
 		zpci_bus_device_unregister(zdev);
 		zpci_destroy_iommu(zdev);
-		fallthrough;
+		break;
 	default:
 		break;
 	}

@@ -62,7 +62,7 @@ static int dccp_transmit_skb(struct sock *sk, struct sk_buff *skb)
 		switch (dcb->dccpd_type) {
 		case DCCP_PKT_DATA:
 			set_ack = 0;
-			fallthrough;
+			break;
 		case DCCP_PKT_DATAACK:
 		case DCCP_PKT_RESET:
 			break;

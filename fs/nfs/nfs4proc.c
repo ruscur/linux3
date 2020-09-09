@@ -9444,7 +9444,7 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 		fallthrough;
 	default:
 		task->tk_status = 0;
-		fallthrough;
+		break;
 	case 0:
 		break;
 	case -NFS4ERR_DELAY:

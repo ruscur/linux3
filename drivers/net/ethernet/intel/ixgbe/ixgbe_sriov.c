@@ -1141,7 +1141,7 @@ static int ixgbe_update_vf_xcast_mode(struct ixgbe_adapter *adapter,
 		/* promisc introduced in 1.3 version */
 		if (xcast_mode == IXGBEVF_XCAST_MODE_PROMISC)
 			return -EOPNOTSUPP;
-		fallthrough;
+		break;
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_14:
 		break;
