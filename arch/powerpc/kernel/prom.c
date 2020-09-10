@@ -622,11 +622,6 @@ static void __init early_reserve_mem_dt(void)
 
 static void __init early_reserve_mem(void)
 {
-	__be64 *reserve_map;
-
-	reserve_map = (__be64 *)(((unsigned long)initial_boot_params) +
-			fdt_off_mem_rsvmap(initial_boot_params));
-
 	/* Look for the new "reserved-regions" property in the DT */
 	early_reserve_mem_dt();
 
@@ -639,28 +634,34 @@ static void __init early_reserve_mem(void)
 	}
 #endif /* CONFIG_BLK_DEV_INITRD */
 
-#ifdef CONFIG_PPC32
-	/* 
-	 * Handle the case where we might be booting from an old kexec
-	 * image that setup the mem_rsvmap as pairs of 32-bit values
-	 */
-	if (be64_to_cpup(reserve_map) > 0xffffffffull) {
-		u32 base_32, size_32;
-		__be32 *reserve_map_32 = (__be32 *)reserve_map;
+	if (IS_ENABLED(CONFIG_PPC32)) {
+		__be64 *reserve_map;
 
-		DBG("Found old 32-bit reserve map\n");
+		reserve_map = (__be64 *)(((unsigned long)initial_boot_params) +
+				 fdt_off_mem_rsvmap(initial_boot_params));
 
-		while (1) {
-			base_32 = be32_to_cpup(reserve_map_32++);
-			size_32 = be32_to_cpup(reserve_map_32++);
-			if (size_32 == 0)
-				break;
-			DBG("reserving: %x -> %x\n", base_32, size_32);
-			memblock_reserve(base_32, size_32);
+		/*
+		 * Handle the case where we might be booting from an
+		 * old kexec image that setup the mem_rsvmap as pairs
+		 * of 32-bit values
+		 */
+		if (be64_to_cpup(reserve_map) > 0xffffffffull) {
+			u32 base_32, size_32;
+			__be32 *reserve_map_32 = (__be32 *)reserve_map;
+
+			DBG("Found old 32-bit reserve map\n");
+
+			while (1) {
+				base_32 = be32_to_cpup(reserve_map_32++);
+				size_32 = be32_to_cpup(reserve_map_32++);
+				if (size_32 == 0)
+					break;
+				DBG("reserving: %x -> %x\n", base_32, size_32);
+				memblock_reserve(base_32, size_32);
+			}
+			return;
 		}
-		return;
 	}
-#endif
 }
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
