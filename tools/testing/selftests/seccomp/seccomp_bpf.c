@@ -1837,15 +1837,24 @@ void change_syscall(struct __test_metadata *_metadata,
 #endif
 
 	/* If syscall is skipped, change return value. */
-	if (syscall == -1)
+	if (syscall == -1) {
 #ifdef SYSCALL_NUM_RET_SHARE_REG
 		TH_LOG("Can't modify syscall return on this architecture");
-
 #elif defined(__xtensa__)
 		regs.SYSCALL_RET(regs) = result;
+#elif defined(__powerpc__)
+		/* Error is signaled by CR0 SO bit and error code is positive. */
+		if (result < 0) {
+			regs.SYSCALL_RET = -result;
+			regs.ccr |= 0x10000000;
+		} else {
+			regs.SYSCALL_RET = result;
+			regs.ccr &= ~0x10000000;
+		}
 #else
 		regs.SYSCALL_RET = result;
 #endif
+	}
 
 #ifdef HAVE_GETREGS
 	ret = ptrace(PTRACE_SETREGS, tracee, 0, &regs);
@@ -1897,38 +1906,6 @@ void tracer_seccomp(struct __test_metadata *_metadata, pid_t tracee,
 
 }
 
-void tracer_ptrace(struct __test_metadata *_metadata, pid_t tracee,
-		   int status, void *args)
-{
-	int ret, nr;
-	unsigned long msg;
-	static bool entry;
-
-	/*
-	 * The traditional way to tell PTRACE_SYSCALL entry/exit
-	 * is by counting.
-	 */
-	entry = !entry;
-
-	/* Make sure we got an appropriate message. */
-	ret = ptrace(PTRACE_GETEVENTMSG, tracee, NULL, &msg);
-	EXPECT_EQ(0, ret);
-	EXPECT_EQ(entry ? PTRACE_EVENTMSG_SYSCALL_ENTRY
-			: PTRACE_EVENTMSG_SYSCALL_EXIT, msg);
-
-	if (!entry)
-		return;
-
-	nr = get_syscall(_metadata, tracee);
-
-	if (nr == __NR_getpid)
-		change_syscall(_metadata, tracee, __NR_getppid, 0);
-	if (nr == __NR_gettid)
-		change_syscall(_metadata, tracee, -1, 45000);
-	if (nr == __NR_openat)
-		change_syscall(_metadata, tracee, -1, -ESRCH);
-}
-
 FIXTURE(TRACE_syscall) {
 	struct sock_fprog prog;
 	pid_t tracer, mytid, mypid, parent;
@@ -1942,6 +1919,14 @@ FIXTURE_VARIANT(TRACE_syscall) {
 	 * ptrace (true).
 	 */
 	bool use_ptrace;
+
+	/*
+	 * Some archs (like ppc) only support changing the return code during
+	 * syscall exit when ptrace is used.  As the syscall number might not
+	 * be available anymore during syscall exit, it needs to be saved
+	 * during syscall enter.
+	 */
+	int syscall_nr;
 };
 
 FIXTURE_VARIANT_ADD(TRACE_syscall, ptrace) {
@@ -1951,6 +1936,44 @@ FIXTURE_VARIANT_ADD(TRACE_syscall, ptrace) {
 FIXTURE_VARIANT_ADD(TRACE_syscall, seccomp) {
 	.use_ptrace = false,
 };
+
+void tracer_ptrace(struct __test_metadata *_metadata, pid_t tracee,
+		   int status, void *args)
+{
+	int ret, nr;
+	unsigned long msg;
+	static bool entry;
+	FIXTURE_VARIANT(TRACE_syscall) * variant = args;
+
+	/*
+	 * The traditional way to tell PTRACE_SYSCALL entry/exit
+	 * is by counting.
+	 */
+	entry = !entry;
+
+	/* Make sure we got an appropriate message. */
+	ret = ptrace(PTRACE_GETEVENTMSG, tracee, NULL, &msg);
+	EXPECT_EQ(0, ret);
+	EXPECT_EQ(entry ? PTRACE_EVENTMSG_SYSCALL_ENTRY
+			: PTRACE_EVENTMSG_SYSCALL_EXIT, msg);
+
+	if (!entry && !variant)
+		return;
+
+	if (entry)
+		nr = get_syscall(_metadata, tracee);
+	else if (variant)
+		nr = variant->syscall_nr;
+	if (variant)
+		variant->syscall_nr = nr;
+
+	if (nr == __NR_getpid)
+		change_syscall(_metadata, tracee, __NR_getppid, 0);
+	if (nr == __NR_gettid)
+		change_syscall(_metadata, tracee, -1, 45000);
+	if (nr == __NR_openat)
+		change_syscall(_metadata, tracee, -1, -ESRCH);
+}
 
 FIXTURE_SETUP(TRACE_syscall)
 {
@@ -1992,7 +2015,9 @@ FIXTURE_SETUP(TRACE_syscall)
 	self->tracer = setup_trace_fixture(_metadata,
 					   variant->use_ptrace ? tracer_ptrace
 							       : tracer_seccomp,
-					   NULL, variant->use_ptrace);
+					   variant->use_ptrace ? (void *) variant
+							       : NULL,
+					   variant->use_ptrace);
 
 	ret = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
 	ASSERT_EQ(0, ret);
