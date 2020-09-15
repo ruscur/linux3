@@ -2,10 +2,12 @@
 //
 // rcpm.c - Freescale QorIQ RCPM driver
 //
-// Copyright 2019 NXP
+// Copyright 2019-2020 NXP
+// Copyright 2020 Puresoftware Ltd.
 //
 // Author: Ran Wang <ran.wang_1@nxp.com>
 
+#include <linux/acpi.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -57,8 +59,13 @@ static int rcpm_pm_prepare(struct device *dev)
 				rcpm->wakeup_cells + 1);
 
 		/*  Wakeup source should refer to current rcpm device */
-		if (ret || (np->phandle != value[0]))
-			continue;
+		if (is_acpi_node(dev->fwnode)) {
+			if (ret)
+				continue;
+		} else {
+			if (ret || (np->phandle != value[0]))
+				continue;
+		}
 
 		/* Property "#fsl,rcpm-wakeup-cells" of rcpm node defines the
 		 * number of IPPDEXPCR register cells, and "fsl,rcpm-wakeup"
@@ -139,10 +146,19 @@ static const struct of_device_id rcpm_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, rcpm_of_match);
 
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id rcpm_acpi_match[] = {
+	{ "NXP0015", },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, rcpm_acpi_match);
+#endif
+
 static struct platform_driver rcpm_driver = {
 	.driver = {
 		.name = "rcpm",
 		.of_match_table = rcpm_of_match,
+		.acpi_match_table = ACPI_PTR(rcpm_acpi_match),
 		.pm	= &rcpm_pm_ops,
 	},
 	.probe = rcpm_probe,
