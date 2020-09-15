@@ -405,7 +405,10 @@ static int __do_page_fault(struct pt_regs *regs, unsigned long address,
 	if (unlikely(debugger_fault_handler(regs) || kprobe_fault))
 		return 0;
 
-	if (unlikely(page_fault_is_bad(error_code))) {
+	if (unlikely(page_fault_is_bad(error_code) || (error_code & DSISR_DABRMATCH))) {
+		if (error_code & DSISR_DABRMATCH)
+			return -1;
+
 		if (is_user) {
 			_exception(SIGBUS, regs, BUS_OBJERR, address);
 			return 0;
@@ -548,11 +551,57 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 		  unsigned long error_code)
 {
 	enum ctx_state prev_state = exception_enter();
-	int rc = __do_page_fault(regs, address, error_code);
+	int err;
+
+	err = __do_page_fault(regs, address, error_code);
+
+#ifdef CONFIG_PPC_BOOK3S_64
+	/* 32 and 64e handle errors in their asm code */
+	if (unlikely(err)) {
+		if (err > 0) {
+			bad_page_fault(regs, address, err);
+			err = 0;
+		} else {
+			/*
+			 * do_break() may change NV GPRS while handling the
+			 * breakpoint. Return -ve to caller to do that.
+			 */
+			do_break(regs, address, error_code);
+		}
+	}
+#endif
+
 	exception_exit(prev_state);
-	return rc;
+
+	return err;
 }
 NOKPROBE_SYMBOL(do_page_fault);
+
+#ifdef CONFIG_PPC_BOOK3S_64
+/* Same as do_page_fault but interrupt entry has already run in do_hash_fault */
+int hash__do_page_fault(struct pt_regs *regs, unsigned long address,
+		  unsigned long error_code)
+{
+	int err;
+
+	err = __do_page_fault(regs, address, error_code);
+	if (unlikely(err)) {
+		if (err > 0) {
+			bad_page_fault(regs, address, err);
+			err = 0;
+		} else {
+			/*
+			 * do_break() may change NV GPRS while handling the
+			 * breakpoint. Return -ve to caller to do that.
+			 */
+			do_break(regs, address, error_code);
+		}
+	}
+
+	return err;
+}
+NOKPROBE_SYMBOL(hash__do_page_fault);
+#endif
 
 /*
  * bad_page_fault is called when we have a bad access from the kernel.
