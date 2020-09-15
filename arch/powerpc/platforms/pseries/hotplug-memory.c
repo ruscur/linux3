@@ -388,108 +388,87 @@ static int dlpar_remove_lmb(struct drmem_lmb *lmb)
 static int dlpar_memory_remove_by_count(u32 lmbs_to_remove)
 {
 	struct drmem_lmb *lmb;
-	int lmbs_removed = 0;
-	int lmbs_available = 0;
+	u32 lmbs_available, lmbs_removed;
 	int rc;
+	boolean readd;
 
-	pr_info("Attempting to hot-remove %d LMB(s)\n", lmbs_to_remove);
+	lmbs_available = lmbs_removed = 0;
+	readd = false;
 
-	if (lmbs_to_remove == 0)
-		return -EINVAL;
+	pr_info("attempting to hot-remove %u LMB(s)\n", lmbs_to_remove);
 
 	/* Validate that there are enough LMBs to satisfy the request */
 	for_each_drmem_lmb(lmb) {
-		if (lmb_is_removable(lmb))
-			lmbs_available++;
-
 		if (lmbs_available == lmbs_to_remove)
 			break;
+		if (lmb_is_removable(lmb))
+			lmbs_available++;
 	}
 
 	if (lmbs_available < lmbs_to_remove) {
-		pr_info("Not enough LMBs available (%d of %d) to satisfy request\n",
+		pr_info("hot-remove failed: insufficient LMB(s): have %u/%u\n",
 			lmbs_available, lmbs_to_remove);
 		return -EINVAL;
 	}
 
 	for_each_drmem_lmb(lmb) {
-		rc = dlpar_remove_lmb(lmb);
-		if (rc)
-			continue;
-
-		/* Mark this lmb so we can add it later if all of the
-		 * requested LMBs cannot be removed.
-		 */
-		drmem_mark_lmb_reserved(lmb);
-
-		lmbs_removed++;
 		if (lmbs_removed == lmbs_to_remove)
 			break;
+		if (dlpar_remove_lmb(lmb))
+			continue;
+
+		/*
+		 * Success!  Mark the LMB so we can readd it later if
+		 * the request fails.
+		 */
+		drmem_mark_lmb_reserved(lmb);
+		lmbs_removed++;
+		pr_debug("hot-removed LMB %u\n", lmb->drc_index);
 	}
 
 	if (lmbs_removed != lmbs_to_remove) {
-		pr_err("Memory hot-remove failed, adding LMB's back\n");
-
-		for_each_drmem_lmb(lmb) {
-			if (!drmem_lmb_reserved(lmb))
-				continue;
-
-			rc = dlpar_add_lmb(lmb);
-			if (rc)
-				pr_err("Failed to add LMB back, drc index %x\n",
-				       lmb->drc_index);
-
-			drmem_remove_lmb_reservation(lmb);
-		}
-
-		rc = -EINVAL;
-	} else {
-		for_each_drmem_lmb(lmb) {
-			if (!drmem_lmb_reserved(lmb))
-				continue;
-
-			dlpar_release_drc(lmb->drc_index);
-			pr_info("Memory at %llx was hot-removed\n",
-				lmb->base_addr);
-
-			drmem_remove_lmb_reservation(lmb);
-		}
-		rc = 0;
+		pr_err("hot-remove failed: readding LMB(s)\n");
+		readd = true;
 	}
 
-	return rc;
+	for_each_drmem_lmb(lmb) {
+		if (!drmem_lmb_reserved(lmb))
+			continue;
+		if (readd) {
+			if (dlpar_add_lmb(lmb)) {
+				pr_err("failed to readd LMB %u\n",
+				       lmb->drc_index);
+			}
+		} else
+			dlpar_release_drc(lmb->drc_index);
+		drmem_remove_lmb_reservation(lmb);
+	}
+
+	return (readd) ? -EINVAL : 0;
 }
 
 static int dlpar_memory_remove_by_index(u32 drc_index)
 {
 	struct drmem_lmb *lmb;
-	int lmb_found;
 	int rc;
-
-	pr_info("Attempting to hot-remove LMB, drc index %x\n", drc_index);
 
 	lmb_found = 0;
 	for_each_drmem_lmb(lmb) {
 		if (lmb->drc_index == drc_index) {
-			lmb_found = 1;
 			rc = dlpar_remove_lmb(lmb);
-			if (!rc)
+			if (!rc) {
 				dlpar_release_drc(lmb->drc_index);
-
-			break;
+				pr_info("hot-removed LMB %u\n", drc_index);
+			} else {
+				pr_err("failed to hot-remove LMB %u\n",
+				       drc_index);
+			}
+			return rc;
 		}
 	}
 
-	if (!lmb_found)
-		rc = -EINVAL;
-
-	if (rc)
-		pr_info("Failed to hot-remove memory at %llx\n",
-			lmb->base_addr);
-	else
-		pr_info("Memory at %llx was hot-removed\n", lmb->base_addr);
-
-	return rc;
+	pr_err("failed to hot-remove LMB %u: no such LMB\n", drc_index);
+	return -EINVAL;
 }
 
 static int dlpar_memory_remove_by_ic(u32 lmbs_to_remove, u32 drc_index)
@@ -611,8 +590,10 @@ static int dlpar_add_lmb(struct drmem_lmb *lmb)
 
 	block_sz = memory_block_size_bytes();
 
-	/* Find the node id for this address. */
-	nid = memory_add_physaddr_to_nid(lmb->base_addr);
+	/* Find the node id for this LMB.  Fake one if necessary. */
+	nid = of_drconf_to_nid_single(lmb);
+	if (nid < 0 || !node_possible(nid))
+		nid = first_online_node;
 
 	/* Add the memory */
 	rc = __add_memory(nid, lmb->base_addr, block_sz);

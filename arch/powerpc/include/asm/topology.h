@@ -96,6 +96,8 @@ static inline int find_and_online_cpu_nid(int cpu)
 
 #endif /* CONFIG_NUMA && CONFIG_PPC_SPLPAR */
 
+extern int of_drconf_to_nid_single(struct drmem_lmb *);
+
 #include <asm-generic/topology.h>
 
 #ifdef CONFIG_SMP
