@@ -52,3 +52,5 @@ obj-$(CONFIG_PPC_XICS)		+= xics/
 obj-$(CONFIG_PPC_XIVE)		+= xive/
 
 obj-$(CONFIG_GE_FPGA)		+= ge/
+
+obj-$(CONFIG_MCE_ERROR_INJECT)	+= mce_error_inject.o

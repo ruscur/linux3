@@ -398,3 +398,12 @@ config KASAN_SHADOW_OFFSET
 	hex
 	depends on KASAN
 	default 0xe0000000
+
+config MCE_ERROR_INJECT
+	bool "Enable MCE error injection through debugfs"
+	depends on DEBUG_FS
+	default y
+	help
+	  This option creates an mce_error_inject directory in the
+	  powerpc debugfs directory that allows limited injection of
+	  Machine Check Errors (MCEs).
