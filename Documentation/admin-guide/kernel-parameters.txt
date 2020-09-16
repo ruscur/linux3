@@ -599,6 +599,15 @@
 			altogether. For more information, see
 			include/linux/dma-contiguous.h
 
+        kvm_cma_resv_ratio=n
+                        [PPC]
+                        Reserves given percentage from system memory area for
+                        contiguous memory allocation for KVM hash pagetable
+                        allocation.
+                        Bydefault it reserves 5% of total system memory.
+                        Format: <integer>
+                        Default: 5
+
 	cmo_free_hint=	[PPC] Format: { yes | no }
 			Specify whether pages are marked as being inactive
 			when they are freed.  This is used in CMO environments
