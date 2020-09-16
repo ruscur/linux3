@@ -225,7 +225,7 @@ struct mdma_timings_t {
 	int	cycleTime;
 };
 
-struct mdma_timings_t mdma_timings_33[] =
+static struct mdma_timings_t mdma_timings_33[] =
 {
     { 240, 240, 480 },
     { 180, 180, 360 },
@@ -238,7 +238,7 @@ struct mdma_timings_t mdma_timings_33[] =
     {   0,   0,   0 }
 };
 
-struct mdma_timings_t mdma_timings_33k[] =
+static struct mdma_timings_t mdma_timings_33k[] =
 {
     { 240, 240, 480 },
     { 180, 180, 360 },
@@ -251,7 +251,7 @@ struct mdma_timings_t mdma_timings_33k[] =
     {   0,   0,   0 }
 };
 
-struct mdma_timings_t mdma_timings_66[] =
+static struct mdma_timings_t mdma_timings_66[] =
 {
     { 240, 240, 480 },
     { 180, 180, 360 },
@@ -265,7 +265,7 @@ struct mdma_timings_t mdma_timings_66[] =
 };
 
 /* KeyLargo ATA-4 Ultra DMA timings (rounded) */
-struct {
+static struct {
 	int	addrSetup; /* ??? */
 	int	rdy2pause;
 	int	wrDataSetup;
@@ -1415,7 +1415,7 @@ static struct pci_driver pmac_ide_pci_driver = {
 };
 MODULE_DEVICE_TABLE(pci, pmac_ide_pci_match);
 
-int __init pmac_ide_probe(void)
+static int __init pmac_ide_probe(void)
 {
 	int error;
 
