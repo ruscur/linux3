@@ -591,10 +591,15 @@ EXPORT_SYMBOL_GPL(machine_check_print_event_info);
 long notrace machine_check_early(struct pt_regs *regs)
 {
 	long handled = 0;
-	bool nested = in_nmi();
+	bool nested;
+	bool is_pseries_hpt_guest;
 	u8 ftrace_enabled = this_cpu_get_ftrace_enabled();
 
 	this_cpu_set_ftrace_enabled(0);
+	is_pseries_hpt_guest = machine_is(pseries) &&
+			       mmu_has_feature(MMU_FTR_HPTE_TABLE);
+	/* Do not use nmi_enter/exit for pseries hpte guest */
+	nested = is_pseries_hpt_guest ? true : in_nmi();
 
 	if (!nested)
 		nmi_enter();
