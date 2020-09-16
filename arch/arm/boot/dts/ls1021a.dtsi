@@ -1007,6 +1007,7 @@
 			compatible = "fsl,ls1021a-rcpm", "fsl,qoriq-rcpm-2.1+";
 			reg = <0x0 0x1ee2140 0x0 0x8>;
 			#fsl,rcpm-wakeup-cells = <2>;
+			fsl,ippdexpcr1-alt-addr = <&scfg 0x51c>;
 		};
 
 		ftm_alarm0: timer0@29d0000 {
