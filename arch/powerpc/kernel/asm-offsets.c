@@ -170,12 +170,14 @@ int main(void)
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
 	OFFSET(PACATMSCRATCH, paca_struct, tm_scratch);
+	OFFSET(PACATMAMR, paca_struct, tm_amr);
 	OFFSET(THREAD_TM_TFHAR, thread_struct, tm_tfhar);
 	OFFSET(THREAD_TM_TEXASR, thread_struct, tm_texasr);
 	OFFSET(THREAD_TM_TFIAR, thread_struct, tm_tfiar);
 	OFFSET(THREAD_TM_TAR, thread_struct, tm_tar);
 	OFFSET(THREAD_TM_PPR, thread_struct, tm_ppr);
 	OFFSET(THREAD_TM_DSCR, thread_struct, tm_dscr);
+	OFFSET(THREAD_TM_AMR, thread_struct, tm_amr);
 	OFFSET(PT_CKPT_REGS, thread_struct, ckpt_regs);
 	OFFSET(THREAD_CKVRSTATE, thread_struct, ckvr_state.vr);
 	OFFSET(THREAD_CKVRSAVE, thread_struct, ckvrsave);

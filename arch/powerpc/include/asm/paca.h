@@ -179,6 +179,7 @@ struct paca_struct {
 	u64 sprg_vdso;			/* Saved user-visible sprg */
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
 	u64 tm_scratch;                 /* TM scratch area for reclaim */
+	u64 tm_amr;			/* Saved Kernel AMR for treclaim/trechkpt */
 #endif
 
 #ifdef CONFIG_PPC_POWERNV
