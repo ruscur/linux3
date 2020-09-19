@@ -13,11 +13,23 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
-void __iomem *iomap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot);
+void __iomem *iomap_temporary_pfn_prot(unsigned long pfn, pgprot_t prot);
+
+static inline void __iomem *iomap_atomic_pfn_prot(unsigned long pfn,
+						  pgprot_t prot)
+{
+	preempt_disable();
+	return iomap_temporary_pfn_prot(pfn, prot);
+}
+
+static inline void iounmap_temporary(void __iomem *vaddr)
+{
+	kunmap_temporary_indexed((void __force *)vaddr);
+}
 
 static inline void iounmap_atomic(void __iomem *vaddr)
 {
-	kunmap_atomic_indexed((void __force *)vaddr);
+	iounmap_temporary(vaddr);
 	preempt_enable();
 }
 

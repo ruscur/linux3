@@ -432,7 +432,7 @@ static pte_t *kmap_get_pte(void)
 	return __kmap_pte;
 }
 
-static void *__kmap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot)
+static void *do_kmap_temporary_pfn_prot(unsigned long pfn, pgprot_t prot)
 {
 	pte_t pteval, *kmap_pte = kmap_get_pte();
 	unsigned long vaddr;
@@ -451,14 +451,14 @@ static void *__kmap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot)
 	return (void *)vaddr;
 }
 
-void *kmap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot)
+void *__kmap_temporary_pfn_prot(unsigned long pfn, pgprot_t prot)
 {
 	pagefault_disable();
-	return __kmap_atomic_pfn_prot(pfn, prot);
+	return do_kmap_temporary_pfn_prot(pfn, prot);
 }
-EXPORT_SYMBOL(kmap_atomic_pfn_prot);
+EXPORT_SYMBOL(__kmap_temporary_pfn_prot);
 
-void *kmap_atomic_page_prot(struct page *page, pgprot_t prot)
+void *__kmap_temporary_page_prot(struct page *page, pgprot_t prot)
 {
 	void *kmap;
 
@@ -471,11 +471,11 @@ void *kmap_atomic_page_prot(struct page *page, pgprot_t prot)
 	if (kmap)
 		return kmap;
 
-	return __kmap_atomic_pfn_prot(page_to_pfn(page), prot);
+	return do_kmap_temporary_pfn_prot(page_to_pfn(page), prot);
 }
-EXPORT_SYMBOL(kmap_atomic_page_prot);
+EXPORT_SYMBOL(__kmap_temporary_page_prot);
 
-void kunmap_atomic_indexed(void *vaddr)
+void kunmap_temporary_indexed(void *vaddr)
 {
 	unsigned long addr = (unsigned long) vaddr & PAGE_MASK;
 	pte_t *kmap_pte = kmap_get_pte();
@@ -503,7 +503,7 @@ void kunmap_atomic_indexed(void *vaddr)
 	preempt_enable();
 	pagefault_enable();
 }
-EXPORT_SYMBOL(kunmap_atomic_indexed);
+EXPORT_SYMBOL(kunmap_temporary_indexed);
 
 void kmap_switch_temporary(struct task_struct *prev, struct task_struct *next)
 {

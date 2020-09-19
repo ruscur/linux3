@@ -35,9 +35,9 @@ static inline void invalidate_kernel_vmap_range(void *vaddr, int size)
  * Outside of CONFIG_HIGHMEM to support X86 32bit iomap_atomic() cruft.
  */
 #ifdef CONFIG_KMAP_ATOMIC_GENERIC
-void *kmap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot);
-void *kmap_atomic_page_prot(struct page *page, pgprot_t prot);
-void kunmap_atomic_indexed(void *vaddr);
+void *__kmap_temporary_pfn_prot(unsigned long pfn, pgprot_t prot);
+void *__kmap_temporary_page_prot(struct page *page, pgprot_t prot);
+void kunmap_temporary_indexed(void *vaddr);
 void kmap_switch_temporary(struct task_struct *prev, struct task_struct *next);
 # ifndef ARCH_NEEDS_KMAP_HIGH_GET
 static inline void *arch_kmap_temporary_high_get(struct page *page)
@@ -95,16 +95,35 @@ static inline void kunmap(struct page *page)
  * be used in IRQ contexts, so in some (very limited) cases we need
  * it.
  */
+static inline void *kmap_temporary_page_prot(struct page *page, pgprot_t prot)
+{
+	return __kmap_temporary_page_prot(page, prot);
+}
+
+static inline void *kmap_temporary_page(struct page *page)
+{
+	return kmap_temporary_page_prot(page, kmap_prot);
+}
+
+static inline void *kmap_temporary_pfn_prot(unsigned long pfn, pgprot_t prot)
+{
+	return __kmap_temporary_pfn_prot(pfn, prot);
+}
+
+static inline void *kmap_temporary_pfn(unsigned long pfn)
+{
+	return kmap_temporary_pfn_prot(pfn, kmap_prot);
+}
+
+static inline void __kunmap_temporary(void *vaddr)
+{
+	kunmap_temporary_indexed(vaddr);
+}
+
 static inline void *kmap_atomic_prot(struct page *page, pgprot_t prot)
 {
 	preempt_disable();
-	return kmap_atomic_page_prot(page, prot);
-}
-
-static inline void *kmap_atomic_pfn(unsigned long pfn)
-{
-	preempt_disable();
-	return kmap_atomic_pfn_prot(pfn, kmap_prot);
+	return kmap_temporary_page_prot(page, prot);
 }
 
 static inline void *kmap_atomic(struct page *page)
@@ -112,9 +131,10 @@ static inline void *kmap_atomic(struct page *page)
 	return kmap_atomic_prot(page, kmap_prot);
 }
 
-static inline void __kunmap_atomic(void *addr)
+static inline void *kmap_atomic_pfn(unsigned long pfn)
 {
-	kumap_atomic_indexed(addr);
+	preempt_disable();
+	return kmap_temporary_pfn_prot(pfn, kmap_prot);
 }
 
 /* declarations for linux/mm/highmem.c */
@@ -177,6 +197,22 @@ static inline void kunmap(struct page *page)
 #endif
 }
 
+static inline void *kmap_temporary_page(struct page *page)
+{
+	pagefault_disable();
+	return page_address(page);
+}
+
+static inline void *kmap_temporary_page_prot(struct page *page, pgprot_t prot)
+{
+	return kmap_temporary_page(page);
+}
+
+static inline void *kmap_temporary_pfn(unsigned long pfn)
+{
+	return kmap_temporary_page(pfn_to_page(pfn));
+}
+
 static inline void *kmap_atomic(struct page *page)
 {
 	preempt_disable();
@@ -194,12 +230,8 @@ static inline void *kmap_atomic_pfn(unsigned long pfn)
 	return kmap_atomic(pfn_to_page(pfn));
 }
 
-static inline void __kunmap_atomic(void *addr)
+static inline void __kunmap_temporary(void *addr)
 {
-	/*
-	 * Mostly nothing to do in the CONFIG_HIGHMEM=n case as kunmap_atomic()
-	 * handles preemption
-	 */
 #ifdef ARCH_HAS_FLUSH_ON_KUNMAP
 	kunmap_flush_on_unmap(addr);
 #endif
@@ -217,8 +249,14 @@ static inline void __kunmap_atomic(void *addr)
 #define kunmap_atomic(addr)						\
 	do {								\
 		BUILD_BUG_ON(__same_type((addr), struct page *));	\
-		__kunmap_atomic(addr);					\
+		__kunmap_temporary(addr);				\
 		preempt_enable();					\
+	} while (0)
+
+#define kunmap_temporary(addr)						\
+	do {								\
+		BUILD_BUG_ON(__same_type((addr), struct page *));	\
+		__kunmap_temporary(addr);				\
 	} while (0)
 
 /* when CONFIG_HIGHMEM is not set these will be plain clear/copy_page */

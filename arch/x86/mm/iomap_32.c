@@ -44,7 +44,7 @@ void iomap_free(resource_size_t base, unsigned long size)
 }
 EXPORT_SYMBOL_GPL(iomap_free);
 
-void __iomem *iomap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot)
+void __iomem *iomap_temporary_pfn_prot(unsigned long pfn, pgprot_t prot)
 {
 	/*
 	 * For non-PAT systems, translate non-WB request to UC- just in
@@ -60,7 +60,6 @@ void __iomem *iomap_atomic_pfn_prot(unsigned long pfn, pgprot_t prot)
 	/* Filter out unsupported __PAGE_KERNEL* bits: */
 	pgprot_val(prot) &= __default_kernel_pte_mask;
 
-	preempt_disable();
-	return (void __force __iomem *)kmap_atomic_pfn_prot(pfn, prot);
+	return (void __force __iomem *)__kmap_temporary_pfn_prot(pfn, prot);
 }
-EXPORT_SYMBOL_GPL(iomap_atomic_pfn_prot);
+EXPORT_SYMBOL_GPL(iomap_temporary_pfn_prot);
