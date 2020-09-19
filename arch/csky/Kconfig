@@ -285,6 +285,7 @@ config NR_CPUS
 config HIGHMEM
 	bool "High Memory Support"
 	depends on !CPU_CK610
+	select KMAP_ATOMIC_GENERIC
 	default y
 
 config FORCE_MAX_ZONEORDER
