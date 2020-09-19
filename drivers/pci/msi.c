@@ -875,13 +875,13 @@ static int pci_msi_supported(struct pci_dev *dev, int nvec)
 
 	/*
 	 * Any bridge which does NOT route MSI transactions from its
-	 * secondary bus to its primary bus must set NO_MSI flag on
-	 * the secondary pci_bus.
+	 * secondary bus to its primary bus must enable "no_msi" on
+	 * the secondary bus (pci_bus).
 	 * We expect only arch-specific PCI host bus controller driver
-	 * or quirks for specific PCI bridges to be setting NO_MSI.
+	 * or quirks for specific PCI bridges to enable "no_msi".
 	 */
 	for (bus = dev->bus; bus; bus = bus->parent)
-		if (bus->bus_flags & PCI_BUS_FLAGS_NO_MSI)
+		if (bus->no_msi)
 			return 0;
 
 	return 1;

@@ -357,9 +357,7 @@ static ssize_t msi_bus_show(struct device *dev, struct device_attribute *attr,
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct pci_bus *subordinate = pdev->subordinate;
 
-	return sprintf(buf, "%u\n", subordinate ?
-		       !(subordinate->bus_flags & PCI_BUS_FLAGS_NO_MSI)
-			   : !pdev->no_msi);
+	return sprintf(buf, "%u\n", subordinate ? !subordinate->no_msi : !pdev->no_msi);
 }
 
 static ssize_t msi_bus_store(struct device *dev, struct device_attribute *attr,
@@ -376,9 +374,9 @@ static ssize_t msi_bus_store(struct device *dev, struct device_attribute *attr,
 		return -EPERM;
 
 	/*
-	 * "no_msi" and "bus_flags" only affect what happens when a driver
-	 * requests MSI or MSI-X.  They don't affect any drivers that have
-	 * already requested MSI or MSI-X.
+	 * "no_msi" enabled for device and bus only affect what happens
+	 * when a driver requests MSI or MSI-X.  They don't affect any
+	 * drivers that have already requested MSI or MSI-X.
 	 */
 	if (!subordinate) {
 		pdev->no_msi = !val;
@@ -388,9 +386,9 @@ static ssize_t msi_bus_store(struct device *dev, struct device_attribute *attr,
 	}
 
 	if (val)
-		subordinate->bus_flags &= ~PCI_BUS_FLAGS_NO_MSI;
+		subordinate->no_msi = 0;
 	else
-		subordinate->bus_flags |= PCI_BUS_FLAGS_NO_MSI;
+		subordinate->no_msi = 1;
 
 	dev_info(&subordinate->dev, "MSI/MSI-X %s for future drivers of devices on this bus\n",
 		 val ? "allowed" : "disallowed");

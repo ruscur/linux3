@@ -1052,7 +1052,7 @@ static void quirk_amd_8131_mmrbc(struct pci_dev *dev)
 	if (dev->subordinate && dev->revision <= 0x12) {
 		pci_info(dev, "AMD8131 rev %x detected; disabling PCI-X MMRBC\n",
 			 dev->revision);
-		dev->subordinate->bus_flags |= PCI_BUS_FLAGS_NO_MMRBC;
+		dev->subordinate->no_mmrbc = 1;
 	}
 }
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_AMD, PCI_DEVICE_ID_AMD_8131_BRIDGE, quirk_amd_8131_mmrbc);
@@ -2503,10 +2503,10 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82875_HB,
 
 #ifdef CONFIG_PCI_MSI
 /*
- * Some chipsets do not support MSI. We cannot easily rely on setting
- * PCI_BUS_FLAGS_NO_MSI in its bus flags because there are actually some
- * other buses controlled by the chipset even if Linux is not aware of it.
- * Instead of setting the flag on all buses in the machine, simply disable
+ * Some chipsets do not support MSI. We cannot easily rely on enabling
+ * "no_msi" for its bus because there are actually some other buses
+ * controlled by the chipset even if Linux is not aware of it. Instead
+ * of enabling "no_msi" on all buses in the machine, simply disable
  * MSI globally.
  */
 static void quirk_disable_all_msi(struct pci_dev *dev)
@@ -2528,7 +2528,7 @@ static void quirk_disable_msi(struct pci_dev *dev)
 {
 	if (dev->subordinate) {
 		pci_warn(dev, "MSI quirk detected; subordinate MSI disabled\n");
-		dev->subordinate->bus_flags |= PCI_BUS_FLAGS_NO_MSI;
+		dev->subordinate->no_msi = 1;
 	}
 }
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_AMD, PCI_DEVICE_ID_AMD_8131_BRIDGE, quirk_disable_msi);
@@ -2586,7 +2586,7 @@ static void quirk_msi_ht_cap(struct pci_dev *dev)
 {
 	if (dev->subordinate && !msi_ht_cap_enabled(dev)) {
 		pci_warn(dev, "MSI quirk detected; subordinate MSI disabled\n");
-		dev->subordinate->bus_flags |= PCI_BUS_FLAGS_NO_MSI;
+		dev->subordinate->no_msi = 1;
 	}
 }
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_SERVERWORKS, PCI_DEVICE_ID_SERVERWORKS_HT2000_PCIE,
@@ -2612,7 +2612,7 @@ static void quirk_nvidia_ck804_msi_ht_cap(struct pci_dev *dev)
 		return;
 	if (!msi_ht_cap_enabled(dev) && !msi_ht_cap_enabled(pdev)) {
 		pci_warn(dev, "MSI quirk detected; subordinate MSI disabled\n");
-		dev->subordinate->bus_flags |= PCI_BUS_FLAGS_NO_MSI;
+		dev->subordinate->no_msi = 1;
 	}
 	pci_dev_put(pdev);
 }

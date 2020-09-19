@@ -1002,7 +1002,7 @@ static bool pci_bridge_child_ext_cfg_accessible(struct pci_dev *bridge)
 	 * If extended config space isn't accessible on a bridge's primary
 	 * bus, we certainly can't access it on the secondary bus.
 	 */
-	if (bridge->bus->bus_flags & PCI_BUS_FLAGS_NO_EXTCFG)
+	if (bridge->bus->no_ext_cfg)
 		return false;
 
 	/*
@@ -1048,7 +1048,12 @@ static struct pci_bus *pci_alloc_child_bus(struct pci_bus *parent,
 	child->ops = parent->ops;
 	child->msi = parent->msi;
 	child->sysdata = parent->sysdata;
-	child->bus_flags = parent->bus_flags;
+
+	/* PCI bus flags */
+	child->no_msi = parent->no_msi;
+	child->no_mmrbc = parent->no_mmrbc;
+	child->no_aer_sid = parent->no_aer_sid;
+	child->no_ext_cfg = parent->no_ext_cfg;
 
 	/*
 	 * Initialize some portions of the bus device, but don't register
@@ -1079,7 +1084,7 @@ static struct pci_bus *pci_alloc_child_bus(struct pci_bus *parent,
 	 * the root bus.
 	 */
 	if (!pci_bridge_child_ext_cfg_accessible(bridge)) {
-		child->bus_flags |= PCI_BUS_FLAGS_NO_EXTCFG;
+		child->no_ext_cfg = 1;
 		pci_info(child, "extended config space not accessible\n");
 	}
 
@@ -1644,7 +1649,7 @@ int pci_cfg_space_size(struct pci_dev *dev)
 		return PCI_CFG_SPACE_EXP_SIZE;
 #endif
 
-	if (dev->bus->bus_flags & PCI_BUS_FLAGS_NO_EXTCFG)
+	if (dev->bus->no_ext_cfg)
 		return PCI_CFG_SPACE_SIZE;
 
 	class = dev->class >> 8;

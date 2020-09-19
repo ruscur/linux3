@@ -234,14 +234,6 @@ enum pci_irq_reroute_variant {
 	MAX_IRQ_REROUTE_VARIANTS = 3
 };
 
-typedef unsigned short __bitwise pci_bus_flags_t;
-enum pci_bus_flags {
-	PCI_BUS_FLAGS_NO_MSI	= (__force pci_bus_flags_t) 1,
-	PCI_BUS_FLAGS_NO_MMRBC	= (__force pci_bus_flags_t) 2,
-	PCI_BUS_FLAGS_NO_AERSID	= (__force pci_bus_flags_t) 4,
-	PCI_BUS_FLAGS_NO_EXTCFG	= (__force pci_bus_flags_t) 8,
-};
-
 /* Values from Link Status register, PCIe r3.1, sec 7.8.8 */
 enum pcie_link_width {
 	PCIE_LNK_WIDTH_RESRV	= 0x00,
@@ -627,12 +619,20 @@ struct pci_bus {
 	char		name[48];
 
 	unsigned short	bridge_ctl;	/* Manage NO_ISA/FBB/et al behaviors */
-	pci_bus_flags_t bus_flags;	/* Inherited by child buses */
 	struct device		*bridge;
 	struct device		dev;
 	struct bin_attribute	*legacy_io;	/* Legacy I/O for this bus */
 	struct bin_attribute	*legacy_mem;	/* Legacy mem */
-	unsigned int		is_added:1;
+	unsigned int		is_added:1;	/* This bus has already been registered */
+
+	/* PCI bus flags are inherited by child buses */
+	unsigned int		no_msi:1;	/* Don't use MSI/MSI-X for devices behind a bridge that does not route
+						   MSI transactions from its secondary bus to its primary bus */
+	unsigned int		no_mmrbc:1;	/* Disallow setting PCI-X Maximum Memory Read Byte Count on this bus */
+	unsigned int		no_aer_sid:1;	/* Allow Root Port buses to skip the AER source ID matching when finding
+						   the faulting device */
+	unsigned int		no_ext_cfg:1;	/* Don't use PCIe/PCI-X Mode 2 Extended Configuration Space
+						   when it isn't available on bridge's primary bus */
 };
 
 #define to_pci_bus(n)	container_of(n, struct pci_bus, dev)
