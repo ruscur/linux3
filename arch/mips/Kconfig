@@ -2653,6 +2653,7 @@ config MIPS_CRC_SUPPORT
 config HIGHMEM
 	bool "High Memory Support"
 	depends on 32BIT && CPU_SUPPORTS_HIGHMEM && SYS_SUPPORTS_HIGHMEM && !CPU_MIPS32_3_5_EVA
+	select KMAP_ATOMIC_GENERIC
 
 config CPU_SUPPORTS_HIGHMEM
 	bool
