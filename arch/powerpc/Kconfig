@@ -407,6 +407,7 @@ menu "Kernel options"
 config HIGHMEM
 	bool "High memory support"
 	depends on PPC32
+        select KMAP_ATOMIC_GENERIC
 
 source "kernel/Kconfig.hz"
 
