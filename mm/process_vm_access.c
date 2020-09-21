@@ -14,10 +14,6 @@
 #include <linux/slab.h>
 #include <linux/syscalls.h>
 
-#ifdef CONFIG_COMPAT
-#include <linux/compat.h>
-#endif
-
 /**
  * process_vm_rw_pages - read/write pages from task specified
  * @pages: array of pointers to pages we want to copy
@@ -309,70 +305,3 @@ SYSCALL_DEFINE6(process_vm_writev, pid_t, pid,
 {
 	return process_vm_rw(pid, lvec, liovcnt, rvec, riovcnt, flags, 1);
 }
-
-#ifdef CONFIG_COMPAT
-
-static ssize_t
-compat_process_vm_rw(compat_pid_t pid,
-		     const struct compat_iovec __user *lvec,
-		     unsigned long liovcnt,
-		     const struct compat_iovec __user *rvec,
-		     unsigned long riovcnt,
-		     unsigned long flags, int vm_write)
-{
-	struct iovec iovstack_l[UIO_FASTIOV];
-	struct iovec iovstack_r[UIO_FASTIOV];
-	struct iovec *iov_l = iovstack_l;
-	struct iovec *iov_r = iovstack_r;
-	struct iov_iter iter_l, iter_r;
-	ssize_t rc = -EFAULT;
-	int dir = vm_write ? WRITE : READ;
-
-	if (flags != 0)
-		return -EINVAL;
-
-	rc = import_iovec(dir, (const struct iovec __user *)iov_l, liovcnt,
-			  UIO_FASTIOV, &iov_l, &iter_l);
-	if (rc < 0)
-		return rc;
-	if (!iov_iter_count(&iter_l))
-		goto free_iovecs;
-	rc = import_iovec(CHECK_IOVEC_ONLY, iov_r, riovcnt, UIO_FASTIOV, &iov_r,
-			  &iter_r);
-	if (rc <= 0)
-		goto free_iovecs;
-
-	rc = process_vm_rw_core(pid, &iter_l, iter_r.iov, iter_r.nr_segs,
-				flags, vm_write);
-
-free_iovecs:
-	if (iov_r != iovstack_r)
-		kfree(iov_r);
-	if (iov_l != iovstack_l)
-		kfree(iov_l);
-	return rc;
-}
-
-COMPAT_SYSCALL_DEFINE6(process_vm_readv, compat_pid_t, pid,
-		       const struct compat_iovec __user *, lvec,
-		       compat_ulong_t, liovcnt,
-		       const struct compat_iovec __user *, rvec,
-		       compat_ulong_t, riovcnt,
-		       compat_ulong_t, flags)
-{
-	return compat_process_vm_rw(pid, lvec, liovcnt, rvec,
-				    riovcnt, flags, 0);
-}
-
-COMPAT_SYSCALL_DEFINE6(process_vm_writev, compat_pid_t, pid,
-		       const struct compat_iovec __user *, lvec,
-		       compat_ulong_t, liovcnt,
-		       const struct compat_iovec __user *, rvec,
-		       compat_ulong_t, riovcnt,
-		       compat_ulong_t, flags)
-{
-	return compat_process_vm_rw(pid, lvec, liovcnt, rvec,
-				    riovcnt, flags, 1);
-}
-
-#endif
