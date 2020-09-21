@@ -443,7 +443,7 @@ void iov_iter_init(struct iov_iter *i, unsigned int direction,
 			const struct iovec *iov, unsigned long nr_segs,
 			size_t count)
 {
-	WARN_ON(direction & ~(READ | WRITE));
+	WARN_ON(direction & ~(READ | WRITE | CHECK_IOVEC_ONLY));
 	direction &= READ | WRITE;
 
 	/* It will get better.  Eventually... */

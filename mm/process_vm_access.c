@@ -264,7 +264,7 @@ static ssize_t process_vm_rw(pid_t pid,
 	struct iovec iovstack_r[UIO_FASTIOV];
 	struct iovec *iov_l = iovstack_l;
 	struct iovec *iov_r = iovstack_r;
-	struct iov_iter iter;
+	struct iov_iter iter_l, iter_r;
 	ssize_t rc;
 	int dir = vm_write ? WRITE : READ;
 
@@ -272,23 +272,25 @@ static ssize_t process_vm_rw(pid_t pid,
 		return -EINVAL;
 
 	/* Check iovecs */
-	rc = import_iovec(dir, lvec, liovcnt, UIO_FASTIOV, &iov_l, &iter);
+	rc = import_iovec(dir, lvec, liovcnt, UIO_FASTIOV, &iov_l, &iter_l);
 	if (rc < 0)
 		return rc;
-	if (!iov_iter_count(&iter))
+	if (!iov_iter_count(&iter_l))
 		goto free_iovecs;
 
-	rc = rw_copy_check_uvector(CHECK_IOVEC_ONLY, rvec, riovcnt, UIO_FASTIOV,
-				   iovstack_r, &iov_r);
+	rc = import_iovec(CHECK_IOVEC_ONLY, rvec, riovcnt, UIO_FASTIOV, &iov_r,
+			  &iter_r);
 	if (rc <= 0)
 		goto free_iovecs;
 
-	rc = process_vm_rw_core(pid, &iter, iov_r, riovcnt, flags, vm_write);
+	rc = process_vm_rw_core(pid, &iter_l, iter_r.iov, iter_r.nr_segs,
+				flags, vm_write);
 
 free_iovecs:
 	if (iov_r != iovstack_r)
 		kfree(iov_r);
-	kfree(iov_l);
+	if (iov_l != iovstack_l)
+		kfree(iov_l);
 
 	return rc;
 }
@@ -322,30 +324,31 @@ compat_process_vm_rw(compat_pid_t pid,
 	struct iovec iovstack_r[UIO_FASTIOV];
 	struct iovec *iov_l = iovstack_l;
 	struct iovec *iov_r = iovstack_r;
-	struct iov_iter iter;
+	struct iov_iter iter_l, iter_r;
 	ssize_t rc = -EFAULT;
 	int dir = vm_write ? WRITE : READ;
 
 	if (flags != 0)
 		return -EINVAL;
 
-	rc = compat_import_iovec(dir, lvec, liovcnt, UIO_FASTIOV, &iov_l, &iter);
+	rc = compat_import_iovec(dir, lvec, liovcnt, UIO_FASTIOV, &iov_l, &iter_l);
 	if (rc < 0)
 		return rc;
-	if (!iov_iter_count(&iter))
+	if (!iov_iter_count(&iter_l))
 		goto free_iovecs;
-	rc = compat_rw_copy_check_uvector(CHECK_IOVEC_ONLY, rvec, riovcnt,
-					  UIO_FASTIOV, iovstack_r,
-					  &iov_r);
+	rc = compat_import_iovec(CHECK_IOVEC_ONLY, rvec, riovcnt, UIO_FASTIOV,
+				 &iov_r, &iter_r);
 	if (rc <= 0)
 		goto free_iovecs;
 
-	rc = process_vm_rw_core(pid, &iter, iov_r, riovcnt, flags, vm_write);
+	rc = process_vm_rw_core(pid, &iter_l, iter_r.iov, iter_r.nr_segs,
+				flags, vm_write);
 
 free_iovecs:
 	if (iov_r != iovstack_r)
 		kfree(iov_r);
-	kfree(iov_l);
+	if (iov_l != iovstack_l)
+		kfree(iov_l);
 	return rc;
 }
 
