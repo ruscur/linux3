@@ -331,13 +331,14 @@ compat_process_vm_rw(compat_pid_t pid,
 	if (flags != 0)
 		return -EINVAL;
 
-	rc = compat_import_iovec(dir, lvec, liovcnt, UIO_FASTIOV, &iov_l, &iter_l);
+	rc = import_iovec(dir, (const struct iovec __user *)iov_l, liovcnt,
+			  UIO_FASTIOV, &iov_l, &iter_l);
 	if (rc < 0)
 		return rc;
 	if (!iov_iter_count(&iter_l))
 		goto free_iovecs;
-	rc = compat_import_iovec(CHECK_IOVEC_ONLY, rvec, riovcnt, UIO_FASTIOV,
-				 &iov_r, &iter_r);
+	rc = import_iovec(CHECK_IOVEC_ONLY, iov_r, riovcnt, UIO_FASTIOV, &iov_r,
+			  &iter_r);
 	if (rc <= 0)
 		goto free_iovecs;
 

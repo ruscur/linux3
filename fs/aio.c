@@ -1478,8 +1478,7 @@ static int aio_prep_rw(struct kiocb *req, const struct iocb *iocb)
 }
 
 static ssize_t aio_setup_rw(int rw, const struct iocb *iocb,
-		struct iovec **iovec, bool vectored, bool compat,
-		struct iov_iter *iter)
+		struct iovec **iovec, bool vectored, struct iov_iter *iter)
 {
 	void __user *buf = (void __user *)(uintptr_t)iocb->aio_buf;
 	size_t len = iocb->aio_nbytes;
@@ -1489,11 +1488,6 @@ static ssize_t aio_setup_rw(int rw, const struct iocb *iocb,
 		*iovec = NULL;
 		return ret;
 	}
-#ifdef CONFIG_COMPAT
-	if (compat)
-		return compat_import_iovec(rw, buf, len, UIO_FASTIOV, iovec,
-				iter);
-#endif
 	return import_iovec(rw, buf, len, UIO_FASTIOV, iovec, iter);
 }
 
@@ -1517,8 +1511,7 @@ static inline void aio_rw_done(struct kiocb *req, ssize_t ret)
 	}
 }
 
-static int aio_read(struct kiocb *req, const struct iocb *iocb,
-			bool vectored, bool compat)
+static int aio_read(struct kiocb *req, const struct iocb *iocb, bool vectored)
 {
 	struct iovec inline_vecs[UIO_FASTIOV], *iovec = inline_vecs;
 	struct iov_iter iter;
@@ -1535,7 +1528,7 @@ static int aio_read(struct kiocb *req, const struct iocb *iocb,
 	if (unlikely(!file->f_op->read_iter))
 		return -EINVAL;
 
-	ret = aio_setup_rw(READ, iocb, &iovec, vectored, compat, &iter);
+	ret = aio_setup_rw(READ, iocb, &iovec, vectored, &iter);
 	if (ret < 0)
 		return ret;
 	ret = rw_verify_area(READ, file, &req->ki_pos, iov_iter_count(&iter));
@@ -1545,8 +1538,7 @@ static int aio_read(struct kiocb *req, const struct iocb *iocb,
 	return ret;
 }
 
-static int aio_write(struct kiocb *req, const struct iocb *iocb,
-			 bool vectored, bool compat)
+static int aio_write(struct kiocb *req, const struct iocb *iocb, bool vectored)
 {
 	struct iovec inline_vecs[UIO_FASTIOV], *iovec = inline_vecs;
 	struct iov_iter iter;
@@ -1563,7 +1555,7 @@ static int aio_write(struct kiocb *req, const struct iocb *iocb,
 	if (unlikely(!file->f_op->write_iter))
 		return -EINVAL;
 
-	ret = aio_setup_rw(WRITE, iocb, &iovec, vectored, compat, &iter);
+	ret = aio_setup_rw(WRITE, iocb, &iovec, vectored, &iter);
 	if (ret < 0)
 		return ret;
 	ret = rw_verify_area(WRITE, file, &req->ki_pos, iov_iter_count(&iter));
@@ -1799,8 +1791,7 @@ static int aio_poll(struct aio_kiocb *aiocb, const struct iocb *iocb)
 }
 
 static int __io_submit_one(struct kioctx *ctx, const struct iocb *iocb,
-			   struct iocb __user *user_iocb, struct aio_kiocb *req,
-			   bool compat)
+			   struct iocb __user *user_iocb, struct aio_kiocb *req)
 {
 	req->ki_filp = fget(iocb->aio_fildes);
 	if (unlikely(!req->ki_filp))
@@ -1833,13 +1824,13 @@ static int __io_submit_one(struct kioctx *ctx, const struct iocb *iocb,
 
 	switch (iocb->aio_lio_opcode) {
 	case IOCB_CMD_PREAD:
-		return aio_read(&req->rw, iocb, false, compat);
+		return aio_read(&req->rw, iocb, false);
 	case IOCB_CMD_PWRITE:
-		return aio_write(&req->rw, iocb, false, compat);
+		return aio_write(&req->rw, iocb, false);
 	case IOCB_CMD_PREADV:
-		return aio_read(&req->rw, iocb, true, compat);
+		return aio_read(&req->rw, iocb, true);
 	case IOCB_CMD_PWRITEV:
-		return aio_write(&req->rw, iocb, true, compat);
+		return aio_write(&req->rw, iocb, true);
 	case IOCB_CMD_FSYNC:
 		return aio_fsync(&req->fsync, iocb, false);
 	case IOCB_CMD_FDSYNC:
@@ -1852,8 +1843,7 @@ static int __io_submit_one(struct kioctx *ctx, const struct iocb *iocb,
 	}
 }
 
-static int io_submit_one(struct kioctx *ctx, struct iocb __user *user_iocb,
-			 bool compat)
+static int io_submit_one(struct kioctx *ctx, struct iocb __user *user_iocb)
 {
 	struct aio_kiocb *req;
 	struct iocb iocb;
@@ -1882,7 +1872,7 @@ static int io_submit_one(struct kioctx *ctx, struct iocb __user *user_iocb,
 	if (unlikely(!req))
 		return -EAGAIN;
 
-	err = __io_submit_one(ctx, &iocb, user_iocb, req, compat);
+	err = __io_submit_one(ctx, &iocb, user_iocb, req);
 
 	/* Done with the synchronous reference */
 	iocb_put(req);
@@ -1941,7 +1931,7 @@ SYSCALL_DEFINE3(io_submit, aio_context_t, ctx_id, long, nr,
 			break;
 		}
 
-		ret = io_submit_one(ctx, user_iocb, false);
+		ret = io_submit_one(ctx, user_iocb);
 		if (ret)
 			break;
 	}
@@ -1983,7 +1973,7 @@ COMPAT_SYSCALL_DEFINE3(io_submit, compat_aio_context_t, ctx_id,
 			break;
 		}
 
-		ret = io_submit_one(ctx, compat_ptr(user_iocb), true);
+		ret = io_submit_one(ctx, compat_ptr(user_iocb));
 		if (ret)
 			break;
 	}
