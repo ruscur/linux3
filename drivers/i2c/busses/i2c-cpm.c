@@ -64,7 +64,8 @@ struct i2c_ram {
 	uint    txtmp;		/* Internal */
 	char    res1[4];	/* Reserved */
 	ushort  rpbase;		/* Relocation pointer */
-	char    res2[2];	/* Reserved */
+	char    res2[6];	/* Reserved */
+	uint    sdmatmp;	/* Internal */
 };
 
 #define I2COM_START	0x80
