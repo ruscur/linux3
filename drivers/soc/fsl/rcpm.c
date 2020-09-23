@@ -2,7 +2,7 @@
 //
 // rcpm.c - Freescale QorIQ RCPM driver
 //
-// Copyright 2019 NXP
+// Copyright 2019-2020 NXP
 //
 // Author: Ran Wang <ran.wang_1@nxp.com>
 
@@ -13,6 +13,9 @@
 #include <linux/slab.h>
 #include <linux/suspend.h>
 #include <linux/kernel.h>
+#include <linux/acpi.h>
+#include <linux/mfd/syscon.h>
+#include <linux/regmap.h>
 
 #define RCPM_WAKEUP_CELL_MAX_SIZE	7
 
@@ -37,6 +40,9 @@ static int rcpm_pm_prepare(struct device *dev)
 	struct device_node	*np = dev->of_node;
 	u32 value[RCPM_WAKEUP_CELL_MAX_SIZE + 1];
 	u32 setting[RCPM_WAKEUP_CELL_MAX_SIZE] = {0};
+	struct regmap *scfg_addr_regmap = NULL;
+	u32 reg_offset = 0;
+	u32 reg_value = 0;
 
 	rcpm = dev_get_drvdata(dev);
 	if (!rcpm)
@@ -89,6 +95,29 @@ static int rcpm_pm_prepare(struct device *dev)
 		} else {
 			tmp |= ioread32be(address);
 			iowrite32be(tmp, address);
+		}
+		/*
+		 * Workaround of errata A-008646 on SoC LS1021A:
+		 * There is a bug of register ippdexpcr1.
+		 * Reading configuration register RCPM_IPPDEXPCR1
+		 * always return zero. So save ippdexpcr1's value
+		 * to register SCFG_SPARECR8.And the value of
+		 * ippdexpcr1 will be read from SCFG_SPARECR8.
+		 */
+		if (dev_of_node(dev) && (i == 1)) {
+			scfg_addr_regmap = syscon_regmap_lookup_by_phandle_args(np,
+					"fsl,ippdexpcr1-alt-addr",
+					1,
+					&reg_offset);
+			if (!IS_ERR_OR_NULL(scfg_addr_regmap)) {
+				/* Update value on register SCFG_SPARECR8 */
+				regmap_read(scfg_addr_regmap,
+						reg_offset,
+						&reg_value);
+				regmap_write(scfg_addr_regmap,
+						reg_offset,
+						tmp | reg_value);
+			}
 		}
 	}
 
