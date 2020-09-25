@@ -11,6 +11,10 @@ lkdtm-$(CONFIG_LKDTM)		+= usercopy.o
 lkdtm-$(CONFIG_LKDTM)		+= stackleak.o
 lkdtm-$(CONFIG_LKDTM)		+= cfi.o
 
+ifeq ($(CONFIG_PPC64),y)
+lkdtm-$(CONFIG_LKDTM)		+= powerpc.o
+endif
+
 KASAN_SANITIZE_stackleak.o	:= n
 KCOV_INSTRUMENT_rodata.o	:= n
 
