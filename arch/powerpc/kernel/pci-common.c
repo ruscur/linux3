@@ -143,6 +143,8 @@ void pcibios_free_controller(struct pci_controller *phb)
 	list_del(&phb->list_node);
 	spin_unlock(&hose_spinlock);
 
+	kfree(phb->irq_map);
+
 	if (phb->is_dynamic)
 		kfree(phb);
 }
@@ -450,10 +452,10 @@ static void pci_irq_map_dispose(struct pci_bus *bus)
 
 	pr_debug("PCI: Clearing interrupt mappings for PHB %04x:%02x...\n",
 		 pci_domain_nr(bus), bus->number);
-	for (i = 0; i < phb->irq_count; i++)
+	for (i = 0; i < phb->irq_count; i++) {
 		irq_dispose_mapping(phb->irq_map[i]);
-
-	kfree(phb->irq_map);
+		phb->irq_map[i] = 0;
+	}
 }
 
 void pcibios_remove_bus(struct pci_bus *bus)
