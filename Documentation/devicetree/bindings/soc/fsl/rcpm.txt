@@ -34,6 +34,9 @@ Chassis Version		Example Chips
 Optional properties:
  - little-endian : RCPM register block is Little Endian. Without it RCPM
    will be Big Endian (default case).
+ - fsl,ippdexpcr1-alt-reg : The property is trying to workaround a
+   hardware issue (found on SoC LS1021A only), if pressent, RCPM driver
+   will use SCFG_SPARECR8 as a shadow register for RCPM_IPPDEXPCR1.
 
 Example:
 The RCPM node for T4240:
@@ -42,6 +45,15 @@ The RCPM node for T4240:
 		reg = <0xe2000 0x1000>;
 		#fsl,rcpm-wakeup-cells = <2>;
 	};
+
+The RCPM node for LS1021A:
+	rcpm: rcpm@1ee2140 {
+		compatible = "fsl,ls1021a-rcpm", "fsl,qoriq-rcpm-2.1+";
+		reg = <0x0 0x1ee2140 0x0 0x8>;
+		#fsl,rcpm-wakeup-cells = <2>;
+		fsl,ippdexpcr1-alt-reg;
+	};
+
 
 * Freescale RCPM Wakeup Source Device Tree Bindings
 -------------------------------------------
