@@ -178,6 +178,9 @@ static const struct crashtype crashtypes[] = {
 #ifdef CONFIG_X86_32
 	CRASHTYPE(DOUBLE_FAULT),
 #endif
+#ifdef CONFIG_PPC64
+	CRASHTYPE(PPC_SLB_MULTIHIT),
+#endif
 };
 
 
