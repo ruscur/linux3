@@ -75,15 +75,12 @@ static inline u64 get_vtb(void)
 	return 0;
 }
 
-#ifdef CONFIG_PPC64
-static inline u64 get_tb(void)
-{
-	return mftb();
-}
-#else /* CONFIG_PPC64 */
 static inline u64 get_tb(void)
 {
 	unsigned int tbhi, tblo, tbhi2;
+
+	if (IS_ENABLED(CONFIG_PPC64))
+		return mftb();
 
 	do {
 		tbhi = mftbu();
@@ -93,7 +90,6 @@ static inline u64 get_tb(void)
 
 	return ((u64)tbhi << 32) | tblo;
 }
-#endif /* !CONFIG_PPC64 */
 
 static inline u64 get_tb_or_rtc(void)
 {
