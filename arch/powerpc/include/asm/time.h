@@ -41,18 +41,11 @@ struct div_result {
 /* Accessor functions for the timebase (RTC on 601) registers. */
 #define __USE_RTC()	(IS_ENABLED(CONFIG_PPC_BOOK3S_601))
 
-#ifdef CONFIG_PPC64
-
 /* For compatibility, get_tbl() is defined as get_tb() on ppc64 */
-#define get_tbl		get_tb
-
-#else
-
 static inline unsigned long get_tbl(void)
 {
 	return mftb();
 }
-#endif /* !CONFIG_PPC64 */
 
 static inline unsigned int get_rtcl(void)
 {
