@@ -80,10 +80,9 @@ static inline u64 get_rtc(void)
 
 static inline u64 get_vtb(void)
 {
-#ifdef CONFIG_PPC_BOOK3S_64
 	if (cpu_has_feature(CPU_FTR_ARCH_207S))
 		return mfspr(SPRN_VTB);
-#endif
+
 	return 0;
 }
 
