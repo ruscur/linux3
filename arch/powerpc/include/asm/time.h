@@ -98,9 +98,9 @@ static inline u64 get_tb(void)
 	unsigned int tbhi, tblo, tbhi2;
 
 	do {
-		tbhi = get_tbu();
-		tblo = get_tbl();
-		tbhi2 = get_tbu();
+		tbhi = mftbu();
+		tblo = mftb();
+		tbhi2 = mftbu();
 	} while (tbhi != tbhi2);
 
 	return ((u64)tbhi << 32) | tblo;
@@ -157,7 +157,7 @@ static inline unsigned long tb_ticks_since(unsigned long tstamp)
 		int delta = get_rtcl() - (unsigned int) tstamp;
 		return delta < 0 ? delta + 1000000000 : delta;
 	}
-	return get_tbl() - tstamp;
+	return mftb() - tstamp;
 }
 
 #define mulhwu(x,y) \
