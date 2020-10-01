@@ -50,7 +50,7 @@ struct div_result {
 
 static inline unsigned long get_tbl(void)
 {
-	return mftbl();
+	return mftb();
 }
 
 static inline unsigned int get_tbu(void)
