@@ -24,6 +24,7 @@ struct elog_obj {
 	uint64_t type;
 	size_t size;
 	char *buffer;
+	struct mutex elog_mutex;
 };
 #define to_elog_obj(x) container_of(x, struct elog_obj, kobj)
 
@@ -73,7 +74,11 @@ static ssize_t elog_ack_store(struct elog_obj *elog_obj,
 			      size_t count)
 {
 	opal_send_ack_elog(elog_obj->id);
+
+	/* Wait until kobject_uevent() is called */
+	mutex_lock(&elog_obj->elog_mutex);
 	sysfs_remove_file_self(&elog_obj->kobj, &attr->attr);
+	mutex_unlock(&elog_obj->elog_mutex);
 	kobject_put(&elog_obj->kobj);
 	return count;
 }
@@ -193,6 +198,7 @@ static struct elog_obj *create_elog_obj(uint64_t id, size_t size, uint64_t type)
 	kobject_init(&elog->kobj, &elog_ktype);
 
 	sysfs_bin_attr_init(&elog->raw_attr);
+	mutex_init(&elog->elog_mutex);
 
 	elog->raw_attr.attr.name = "raw";
 	elog->raw_attr.attr.mode = 0400;
@@ -222,13 +228,24 @@ static struct elog_obj *create_elog_obj(uint64_t id, size_t size, uint64_t type)
 		return NULL;
 	}
 
+	/*
+	 * As soon as sysfs file for this elog is created/activated there is
+	 * chance opal_errd daemon might read and acknowledge this elog before
+	 * kobject_uevent() is called. If that happens then we have a potential
+	 * race between elog_ack_store->kobject_put() and kobject_uevent which
+	 * leads to use-after-free issue of a kernfs object resulting into
+	 * kernel crash. Take a mutex lock to avoid this race.
+	 */
+	mutex_lock(&elog->elog_mutex);
 	rc = sysfs_create_bin_file(&elog->kobj, &elog->raw_attr);
 	if (rc) {
 		kobject_put(&elog->kobj);
+		mutex_unlock(&elog->elog_mutex);
 		return NULL;
 	}
 
 	kobject_uevent(&elog->kobj, KOBJ_ADD);
+	mutex_unlock(&elog->elog_mutex);
 
 	return elog;
 }
