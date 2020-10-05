@@ -10,6 +10,30 @@
 #include <linux/platform_device.h>
 
 /*
+ * Memory address shift values for the byte-level address that
+ * can be used when accessing the PCI Express Configuration Space.
+ */
+
+/*
+ * Enhanced Configuration Access Mechanism (ECAM)
+ *
+ * See PCI Express Base Specification, Revision 5.0, Version 1.0,
+ * Section 7.2.2, Table 7-1, p. 677.
+ */
+#define PCIE_ECAM_BUS_SHIFT	20 /* Bus Number */
+#define PCIE_ECAM_DEV_SHIFT	15 /* Device Number */
+#define PCIE_ECAM_FUN_SHIFT	12 /* Function Number */
+
+#define PCIE_ECAM_BUS(x)	(((x) & 0xff) << PCIE_ECAM_BUS_SHIFT)
+#define PCIE_ECAM_DEVFN(x)	(((x) & 0xff) << PCIE_ECAM_FUN_SHIFT)
+#define PCIE_ECAM_REG(x)	((x) & 0xfff)
+
+#define PCIE_ECAM_OFFSET(bus, devfn, where) \
+    (PCIE_ECAM_BUS(bus->number) | \
+     PCIE_ECAM_DEVFN(devfn) | \
+     PCIE_ECAM_REG(where))
+
+/*
  * struct to hold pci ops and bus shift of the config window
  * for a PCI controller.
  */

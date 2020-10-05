@@ -76,7 +76,7 @@ static int al_pcie_init(struct pci_config_window *cfg)
 }
 
 const struct pci_ecam_ops al_pcie_ops = {
-	.bus_shift    = 20,
+	.bus_shift    = PCIE_ECAM_BUS_SHIFT,
 	.init         =  al_pcie_init,
 	.pci_ops      = {
 		.map_bus    = al_pcie_map_bus,
@@ -137,8 +137,6 @@ struct al_pcie {
 	struct al_pcie_reg_offsets reg_offsets;
 	struct al_pcie_target_bus_cfg target_bus_cfg;
 };
-
-#define PCIE_ECAM_DEVFN(x)		(((x) & 0xff) << 12)
 
 #define to_al_pcie(x)		dev_get_drvdata((x)->dev)
 
@@ -228,7 +226,7 @@ static void __iomem *al_pcie_conf_addr_map(struct al_pcie *pcie,
 	void __iomem *pci_base_addr;
 
 	pci_base_addr = (void __iomem *)((uintptr_t)pp->va_cfg0_base +
-					 (busnr_ecam << 20) +
+					 PCIE_ECAM_BUS(busnr_ecam) +
 					 PCIE_ECAM_DEVFN(devfn));
 
 	if (busnr_reg != target_bus_cfg->reg_val) {
@@ -300,7 +298,7 @@ static void al_pcie_config_prepare(struct al_pcie *pcie)
 
 	target_bus_cfg = &pcie->target_bus_cfg;
 
-	ecam_bus_mask = (pcie->ecam_size >> 20) - 1;
+	ecam_bus_mask = (pcie->ecam_size >> PCIE_ECAM_BUS_SHIFT) - 1;
 	if (ecam_bus_mask > 255) {
 		dev_warn(pcie->dev, "ECAM window size is larger than 256MB. Cutting off at 256\n");
 		ecam_bus_mask = 255;

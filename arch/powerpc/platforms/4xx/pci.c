@@ -20,6 +20,7 @@
 
 #include <linux/kernel.h>
 #include <linux/pci.h>
+#include <linux/pci-ecam.h>
 #include <linux/init.h>
 #include <linux/of.h>
 #include <linux/delay.h>
@@ -1585,17 +1586,15 @@ static void __iomem *ppc4xx_pciex_get_config_base(struct ppc4xx_pciex_port *port
 						  struct pci_bus *bus,
 						  unsigned int devfn)
 {
-	int relbus;
-
 	/* Remove the casts when we finally remove the stupid volatile
 	 * in struct pci_controller
 	 */
 	if (bus->number == port->hose->first_busno)
 		return (void __iomem *)port->hose->cfg_addr;
 
-	relbus = bus->number - (port->hose->first_busno + 1);
 	return (void __iomem *)port->hose->cfg_data +
-		((relbus  << 20) | (devfn << 12));
+		PCIE_ECAM_BUS(bus->number - (port->hose->first_busno + 1)) |
+		PCIE_ECAM_DEVFN(devfn);
 }
 
 static int ppc4xx_pciex_read_config(struct pci_bus *bus, unsigned int devfn,
