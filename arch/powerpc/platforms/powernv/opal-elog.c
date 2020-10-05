@@ -222,13 +222,28 @@ static struct elog_obj *create_elog_obj(uint64_t id, size_t size, uint64_t type)
 		return NULL;
 	}
 
+	/*
+	 * As soon as sysfs file for this elog is created/activated there is
+	 * chance opal_errd daemon might read and acknowledge this elog before
+	 * kobject_uevent() is called. If that happens then we have a potential
+	 * race between elog_ack_store->kobject_put() and kobject_uevent which
+	 * leads to use-after-free issue of a kernfs object resulting into
+	 * kernel crash. To avoid this race take an additional reference count
+	 * on kobject until we safely send kobject_uevent().
+	 */
+
+	kobject_get(&elog->kobj);  /* extra reference count */
 	rc = sysfs_create_bin_file(&elog->kobj, &elog->raw_attr);
 	if (rc) {
+		kobject_put(&elog->kobj);
+		/* Drop the extra reference count  */
 		kobject_put(&elog->kobj);
 		return NULL;
 	}
 
 	kobject_uevent(&elog->kobj, KOBJ_ADD);
+	/* Drop the extra reference count  */
+	kobject_put(&elog->kobj);
 
 	return elog;
 }
