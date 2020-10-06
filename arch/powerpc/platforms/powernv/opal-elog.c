@@ -179,14 +179,14 @@ static ssize_t raw_attr_read(struct file *filep, struct kobject *kobj,
 	return count;
 }
 
-static struct elog_obj *create_elog_obj(uint64_t id, size_t size, uint64_t type)
+static void create_elog_obj(uint64_t id, size_t size, uint64_t type)
 {
 	struct elog_obj *elog;
 	int rc;
 
 	elog = kzalloc(sizeof(*elog), GFP_KERNEL);
 	if (!elog)
-		return NULL;
+		return;
 
 	elog->kobj.kset = elog_kset;
 
@@ -219,18 +219,42 @@ static struct elog_obj *create_elog_obj(uint64_t id, size_t size, uint64_t type)
 	rc = kobject_add(&elog->kobj, NULL, "0x%llx", id);
 	if (rc) {
 		kobject_put(&elog->kobj);
-		return NULL;
+		return;
 	}
 
+	/*
+	 * As soon as sysfs file for this elog is created/activated there is
+	 * chance opal_errd daemon might read and acknowledge this elog before
+	 * kobject_uevent() is called. If that happens then we have a potential
+	 * race between elog_ack_store->kobject_put() and kobject_uevent which
+	 * leads to use-after-free issue of a kernfs object resulting into
+	 * kernel crash.
+	 *
+	 * We already have one reference count on kobject and is been used for
+	 * sysfs_create_bin_file() function. This initial one reference count
+	 * is valid until it is dropped by elog_ack_store() function.
+	 *
+	 * However if userspace acknowledges the elog before this code reaches
+	 * to kobject_uevent(), the reference count on kobject drops to zero
+	 * and no longer stay valid for kobject_uevent() invocation. To avoid
+	 * this race take reference count on kobject for bin file creation and
+	 * drop it after kobject_uevent() is sent.
+	 */
+
+	kobject_get(&elog->kobj);  /* take a reference for the bin file. */
 	rc = sysfs_create_bin_file(&elog->kobj, &elog->raw_attr);
 	if (rc) {
 		kobject_put(&elog->kobj);
-		return NULL;
+		/* Drop reference count taken for bin file.  */
+		kobject_put(&elog->kobj);
+		return;
 	}
 
 	kobject_uevent(&elog->kobj, KOBJ_ADD);
+	/* Drop reference count taken for bin file.  */
+	kobject_put(&elog->kobj);
 
-	return elog;
+	return;
 }
 
 static irqreturn_t elog_event(int irq, void *data)
