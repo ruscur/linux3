@@ -129,6 +129,7 @@
 #define POWER8_TLB_SETS		512	/* # sets in POWER8 TLB */
 #define POWER9_TLB_SETS_HASH	256	/* # sets in POWER9 TLB Hash mode */
 #define POWER9_TLB_SETS_RADIX	128	/* # sets in POWER9 TLB Radix mode */
+#define POWER10_TLB_SETS	1	/* # sets in POWER10 TLB */
 
 #ifndef __ASSEMBLY__
 

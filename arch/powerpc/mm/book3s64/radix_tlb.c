@@ -83,7 +83,9 @@ void radix__tlbiel_all(unsigned int action)
 		BUG();
 	}
 
-	if (early_cpu_has_feature(CPU_FTR_ARCH_300))
+	if (early_cpu_has_feature(CPU_FTR_ARCH_31))
+		tlbiel_all_isa300(POWER10_TLB_SETS, is);
+	else if (early_cpu_has_feature(CPU_FTR_ARCH_300))
 		tlbiel_all_isa300(POWER9_TLB_SETS_RADIX, is);
 	else
 		WARN(1, "%s called on pre-POWER9 CPU\n", __func__);
@@ -284,7 +286,7 @@ static inline void fixup_tlbie_lpid(unsigned long lpid)
  */
 static __always_inline void _tlbiel_pid(unsigned long pid, unsigned long ric)
 {
-	int set;
+	int set, num_sets;
 
 	asm volatile("ptesync": : :"memory");
 
@@ -300,8 +302,13 @@ static __always_inline void _tlbiel_pid(unsigned long pid, unsigned long ric)
 		return;
 	}
 
+	if (cpu_has_feature(CPU_FTR_ARCH_31))
+		num_sets = POWER10_TLB_SETS;
+	else
+		num_sets = POWER9_TLB_SETS_RADIX;
+
 	/* For the remaining sets, just flush the TLB */
-	for (set = 1; set < POWER9_TLB_SETS_RADIX ; set++)
+	for (set = 1; set < num_sets; set++)
 		__tlbiel_pid(pid, set, RIC_FLUSH_TLB);
 
 	asm volatile("ptesync": : :"memory");

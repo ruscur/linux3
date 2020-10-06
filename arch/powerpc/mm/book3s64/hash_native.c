@@ -130,7 +130,9 @@ void hash__tlbiel_all(unsigned int action)
 		BUG();
 	}
 
-	if (early_cpu_has_feature(CPU_FTR_ARCH_300))
+	if (early_cpu_has_feature(CPU_FTR_ARCH_31))
+		tlbiel_all_isa300(POWER10_TLB_SETS, is);
+	else if (early_cpu_has_feature(CPU_FTR_ARCH_300))
 		tlbiel_all_isa300(POWER9_TLB_SETS_HASH, is);
 	else if (early_cpu_has_feature(CPU_FTR_ARCH_207S))
 		tlbiel_all_isa206(POWER8_TLB_SETS, is);
