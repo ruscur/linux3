@@ -23,7 +23,7 @@ static inline pgprot_t arch_vm_get_page_prot(unsigned long vm_flags)
 #define arch_vm_get_page_prot(vm_flags) arch_vm_get_page_prot(vm_flags)
 
 static inline bool arch_validate_prot(unsigned long prot,
-	unsigned long addr __always_unused)
+	unsigned long addr __always_unused, unsigned long len __always_unused)
 {
 	unsigned long supported = PROT_READ | PROT_WRITE | PROT_EXEC | PROT_SEM;
 
@@ -32,6 +32,6 @@ static inline bool arch_validate_prot(unsigned long prot,
 
 	return (prot & ~supported) == 0;
 }
-#define arch_validate_prot(prot, addr) arch_validate_prot(prot, addr)
+#define arch_validate_prot(prot, addr, len) arch_validate_prot(prot, addr, len)
 
 #endif /* ! __ASM_MMAN_H__ */

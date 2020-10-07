@@ -43,7 +43,7 @@ static inline long do_mmap2(unsigned long addr, size_t len,
 {
 	long ret = -EINVAL;
 
-	if (!arch_validate_prot(prot, addr))
+	if (!arch_validate_prot(prot, addr, len))
 		goto out;
 
 	if (shift) {

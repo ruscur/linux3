@@ -533,13 +533,15 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	end = start + len;
 	if (end <= start)
 		return -ENOMEM;
-	if (!arch_validate_prot(prot, start))
-		return -EINVAL;
 
 	reqprot = prot;
 
 	if (mmap_write_lock_killable(current->mm))
 		return -EINTR;
+
+	error = -EINVAL;
+	if (!arch_validate_prot(prot, start, len))
+		goto out;
 
 	/*
 	 * If userspace did not allocate the pkey, do not let

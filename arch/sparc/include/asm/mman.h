@@ -52,9 +52,11 @@ static inline pgprot_t sparc_vm_get_page_prot(unsigned long vm_flags)
 	return (vm_flags & VM_SPARC_ADI) ? __pgprot(_PAGE_MCD_4V) : __pgprot(0);
 }
 
-#define arch_validate_prot(prot, addr) sparc_validate_prot(prot, addr)
-static inline int sparc_validate_prot(unsigned long prot, unsigned long addr)
+#define arch_validate_prot(prot, addr, len) sparc_validate_prot(prot, addr, len)
+static inline int sparc_validate_prot(unsigned long prot, unsigned long addr,
+				      unsigned long len)
 {
+	mmap_assert_write_locked(current->mm);
 	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_SEM | PROT_ADI))
 		return 0;
 	if (prot & PROT_ADI) {
