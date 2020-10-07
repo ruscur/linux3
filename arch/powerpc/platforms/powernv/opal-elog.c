@@ -247,7 +247,7 @@ static irqreturn_t elog_event(int irq, void *data)
 
 	rc = opal_get_elog_size(&id, &size, &type);
 	if (rc != OPAL_SUCCESS) {
-		pr_err("ELOG: OPAL log info read failed\n");
+		pr_debug("ELOG: OPAL log info read failed\n");
 		return IRQ_HANDLED;
 	}
 
