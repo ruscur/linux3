@@ -848,6 +848,9 @@ copy_present_page(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	if (likely(!page_maybe_dma_pinned(page)))
 		return 1;
 
+	if (pte_dirty(*src_pte))
+		pte = pte_mkdirty(pte);
+
 	/*
 	 * Uhhuh. It looks like the page might be a pinned page,
 	 * and we actually need to copy it. Now we can set the
@@ -904,6 +907,11 @@ copy_present_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		if (retval <= 0)
 			return retval;
 
+		/*
+		 * Fetch the src pte value again, copy_present_page
+		 * could modify it.
+		 */
+		pte = *src_pte;
 		get_page(page);
 		page_dup_rmap(page, false);
 		rss[mm_counter(page)]++;
