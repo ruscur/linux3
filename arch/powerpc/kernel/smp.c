@@ -1264,7 +1264,8 @@ static bool update_mask_by_l2(int cpu)
 		return false;
 	}
 
-	alloc_cpumask_var_node(&mask, GFP_KERNEL, cpu_to_node(cpu));
+	/* In CPU-hotplug path, hence use GFP_ATOMIC */
+	WARN_ON_ONCE(!alloc_cpumask_var_node(&mask, GFP_ATOMIC, cpu_to_node(cpu)));
 	cpumask_and(mask, cpu_online_mask, cpu_cpu_mask(cpu));
 
 	if (has_big_cores)
@@ -1344,7 +1345,8 @@ static void update_coregroup_mask(int cpu)
 	int coregroup_id = cpu_to_coregroup_id(cpu);
 	int i;
 
-	alloc_cpumask_var_node(&mask, GFP_KERNEL, cpu_to_node(cpu));
+	/* In CPU-hotplug path, hence use GFP_ATOMIC */
+	WARN_ON_ONCE(!alloc_cpumask_var_node(&mask, GFP_ATOMIC, cpu_to_node(cpu)));
 	cpumask_and(mask, cpu_online_mask, cpu_cpu_mask(cpu));
 
 	if (shared_caches)
