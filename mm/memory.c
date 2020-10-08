@@ -854,7 +854,7 @@ copy_present_page(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	 * source pte back to being writable.
 	 */
 	if (pte_write(pte))
-		set_pte_at(src_mm, addr, src_pte, pte);
+		ptep_set_access_flags(vma, addr, src_pte, pte, 1);
 
 	new_page = *prealloc;
 	if (!new_page)
