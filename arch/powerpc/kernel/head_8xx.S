@@ -239,7 +239,7 @@ InstructionTLBMiss:
 	mtspr	SPRN_MI_TWC, r11
 #endif
 #ifdef CONFIG_SWAP
-	rlwinm	r11, r10, 32-5, _PAGE_PRESENT
+	rlwinm	r11, r10, 32-7, _PAGE_PRESENT
 	and	r11, r11, r10
 	rlwimi	r10, r11, 0, _PAGE_PRESENT
 #endif
@@ -317,7 +317,7 @@ DataStoreTLBMiss:
 	 * r10 = (r10 & ~PRESENT) | r11;
 	 */
 #ifdef CONFIG_SWAP
-	rlwinm	r11, r10, 32-5, _PAGE_PRESENT
+	rlwinm	r11, r10, 32-7, _PAGE_PRESENT
 	and	r11, r11, r10
 	rlwimi	r10, r11, 0, _PAGE_PRESENT
 #endif
