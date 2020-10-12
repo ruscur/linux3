@@ -72,7 +72,7 @@
 #include <asm/xics.h>
 #include <asm/xive.h>
 #include <asm/hw_breakpoint.h>
-#include <asm/kvm_book3s_uvmem.h>
+#include <asm/kvmppc_svm_backend.h>
 #include <asm/ultravisor.h>
 #include <asm/dtl.h>
 
@@ -80,6 +80,8 @@
 
 #define CREATE_TRACE_POINTS
 #include "trace_hv.h"
+
+const struct kvmppc_hmm_backend *kvmppc_svm_backend;
 
 /* #define EXIT_DEBUG */
 /* #define EXIT_DEBUG_SIMPLE */
@@ -1079,7 +1081,7 @@ int kvmppc_pseries_do_hcall(struct kvm_vcpu *vcpu)
 	case H_SVM_PAGE_IN:
 		ret = H_UNSUPPORTED;
 		if (kvmppc_get_srr1(vcpu) & MSR_S)
-			ret = kvmppc_h_svm_page_in(vcpu->kvm,
+			ret = kvmppc_svm_page_in(vcpu->kvm,
 						   kvmppc_get_gpr(vcpu, 4),
 						   kvmppc_get_gpr(vcpu, 5),
 						   kvmppc_get_gpr(vcpu, 6));
@@ -1087,7 +1089,7 @@ int kvmppc_pseries_do_hcall(struct kvm_vcpu *vcpu)
 	case H_SVM_PAGE_OUT:
 		ret = H_UNSUPPORTED;
 		if (kvmppc_get_srr1(vcpu) & MSR_S)
-			ret = kvmppc_h_svm_page_out(vcpu->kvm,
+			ret = kvmppc_svm_page_out(vcpu->kvm,
 						    kvmppc_get_gpr(vcpu, 4),
 						    kvmppc_get_gpr(vcpu, 5),
 						    kvmppc_get_gpr(vcpu, 6));
@@ -1095,12 +1097,12 @@ int kvmppc_pseries_do_hcall(struct kvm_vcpu *vcpu)
 	case H_SVM_INIT_START:
 		ret = H_UNSUPPORTED;
 		if (kvmppc_get_srr1(vcpu) & MSR_S)
-			ret = kvmppc_h_svm_init_start(vcpu->kvm);
+			ret = kvmppc_svm_init_start(vcpu->kvm);
 		break;
 	case H_SVM_INIT_DONE:
 		ret = H_UNSUPPORTED;
 		if (kvmppc_get_srr1(vcpu) & MSR_S)
-			ret = kvmppc_h_svm_init_done(vcpu->kvm);
+			ret = kvmppc_svm_init_done(vcpu->kvm);
 		break;
 	case H_SVM_INIT_ABORT:
 		/*
@@ -1110,7 +1112,7 @@ int kvmppc_pseries_do_hcall(struct kvm_vcpu *vcpu)
 		 * Instead the kvm->arch.secure_guest flag is checked inside
 		 * kvmppc_h_svm_init_abort().
 		 */
-		ret = kvmppc_h_svm_init_abort(vcpu->kvm);
+		ret = kvmppc_svm_init_abort(vcpu->kvm);
 		break;
 
 	default:
@@ -4571,10 +4573,10 @@ static void kvmppc_core_commit_memory_region_hv(struct kvm *kvm,
 		 * @TODO kvmppc_uvmem_memslot_create() can fail and
 		 * return error. Fix this.
 		 */
-		kvmppc_uvmem_memslot_create(kvm, new);
+		kvmppc_svm_memslot_create(kvm, new);
 		break;
 	case KVM_MR_DELETE:
-		kvmppc_uvmem_memslot_delete(kvm, old);
+		kvmppc_svm_memslot_delete(kvm, old);
 		break;
 	default:
 		/* TODO: Handle KVM_MR_MOVE */
@@ -5480,7 +5482,7 @@ static void unpin_vpa_reset(struct kvm *kvm, struct kvmppc_vpa *vpa)
  */
 static int kvmhv_enable_svm(struct kvm *kvm)
 {
-	if (!kvmppc_uvmem_available())
+	if (!kvmppc_secmem_available())
 		return -EINVAL;
 	if (kvm)
 		kvm->arch.svm_enabled = 1;
@@ -5528,7 +5530,7 @@ static int kvmhv_svm_off(struct kvm *kvm)
 			continue;
 
 		kvm_for_each_memslot(memslot, slots) {
-			kvmppc_uvmem_drop_pages(memslot, kvm, true);
+			kvmppc_svm_drop_pages(memslot, kvm, true);
 			uv_unregister_mem_slot(kvm->arch.lpid, memslot->id);
 		}
 	}
@@ -5717,16 +5719,16 @@ static int kvmppc_book3s_init_hv(void)
 			no_mixing_hpt_and_radix = true;
 	}
 
-	r = kvmppc_uvmem_init();
+	r = kvmppc_secmem_init();
 	if (r < 0)
-		pr_err("KVM-HV: kvmppc_uvmem_init failed %d\n", r);
+		pr_err("KVM-HV: kvmppc_secmem_init failed %d\n", r);
 
 	return r;
 }
 
 static void kvmppc_book3s_exit_hv(void)
 {
-	kvmppc_uvmem_free();
+	kvmppc_secmem_free();
 	kvmppc_free_host_rm_ops();
 	if (kvmppc_radix_possible())
 		kvmppc_radix_exit();

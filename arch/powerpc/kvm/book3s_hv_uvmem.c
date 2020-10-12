@@ -93,7 +93,7 @@
 #include <asm/ultravisor.h>
 #include <asm/mman.h>
 #include <asm/kvm_ppc.h>
-#include <asm/kvm_book3s_uvmem.h>
+#include <asm/kvmppc_svm_backend.h>
 
 static struct dev_pagemap uvmem_pgmap;
 static unsigned long *uvmem_bitmap;
@@ -234,7 +234,7 @@ struct uvmem_page_pvt {
 	bool remove_gfn;
 };
 
-bool kvmppc_uvmem_available(void)
+static bool uvmem_available(void)
 {
 	/*
 	 * If uvmem_bitmap != NULL, then there is an ultravisor
@@ -453,7 +453,7 @@ out1:
 	return ret;
 }
 
-unsigned long kvmppc_h_svm_init_start(struct kvm *kvm)
+static unsigned long uvmem_h_svm_init_start(struct kvm *kvm)
 {
 	struct kvm_memslots *slots;
 	struct kvm_memory_slot *memslot, *m;
@@ -595,7 +595,7 @@ static inline int uvmem_svm_page_out(struct vm_area_struct *vma,
  * fault on them, do fault time migration to replace the device PTEs in
  * QEMU page table with normal PTEs from newly allocated pages.
  */
-void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *slot,
+static void uvmem_drop_pages(const struct kvm_memory_slot *slot,
 			     struct kvm *kvm, bool skip_page_out)
 {
 	int i;
@@ -644,7 +644,7 @@ void kvmppc_uvmem_drop_pages(const struct kvm_memory_slot *slot,
 	mmap_read_unlock(kvm->mm);
 }
 
-unsigned long kvmppc_h_svm_init_abort(struct kvm *kvm)
+static unsigned long uvmem_h_svm_init_abort(struct kvm *kvm)
 {
 	int srcu_idx;
 	struct kvm_memory_slot *memslot;
@@ -662,7 +662,7 @@ unsigned long kvmppc_h_svm_init_abort(struct kvm *kvm)
 	srcu_idx = srcu_read_lock(&kvm->srcu);
 
 	kvm_for_each_memslot(memslot, kvm_memslots(kvm))
-		kvmppc_uvmem_drop_pages(memslot, kvm, false);
+		uvmem_drop_pages(memslot, kvm, false);
 
 	srcu_read_unlock(&kvm->srcu, srcu_idx);
 
@@ -816,7 +816,7 @@ static int uvmem_uv_migrate_mem_slot(struct kvm *kvm,
 	return ret;
 }
 
-unsigned long kvmppc_h_svm_init_done(struct kvm *kvm)
+static unsigned long uvmem_h_svm_init_done(struct kvm *kvm)
 {
 	struct kvm_memslots *slots;
 	struct kvm_memory_slot *memslot;
@@ -922,7 +922,7 @@ out:
  * H_PAGE_IN_SHARED flag makes the page shared which means that the same
  * memory in is visible from both UV and HV.
  */
-unsigned long kvmppc_h_svm_page_in(struct kvm *kvm, unsigned long gpa,
+static unsigned long uvmem_h_svm_page_in(struct kvm *kvm, unsigned long gpa,
 		unsigned long flags,
 		unsigned long page_shift)
 {
@@ -985,7 +985,7 @@ out:
  * This eventually results in dropping of device PFN and the newly
  * provisioned page/PFN gets populated in QEMU page tables.
  */
-static vm_fault_t kvmppc_uvmem_migrate_to_ram(struct vm_fault *vmf)
+static vm_fault_t uvmem_migrate_to_ram(struct vm_fault *vmf)
 {
 	struct uvmem_page_pvt *pvt = vmf->page->zone_device_data;
 
@@ -1004,7 +1004,7 @@ static vm_fault_t kvmppc_uvmem_migrate_to_ram(struct vm_fault *vmf)
  * to a normal PFN during H_SVM_PAGE_OUT.
  * Gets called with kvm->arch.uvmem_lock held.
  */
-static void kvmppc_uvmem_page_free(struct page *page)
+static void uvmem_page_free(struct page *page)
 {
 	unsigned long pfn = page_to_pfn(page) -
 			(uvmem_pgmap.res.start >> PAGE_SHIFT);
@@ -1024,15 +1024,15 @@ static void kvmppc_uvmem_page_free(struct page *page)
 }
 
 static const struct dev_pagemap_ops uvmem_ops = {
-	.page_free = kvmppc_uvmem_page_free,
-	.migrate_to_ram	= kvmppc_uvmem_migrate_to_ram,
+	.page_free = uvmem_page_free,
+	.migrate_to_ram	= uvmem_migrate_to_ram,
 };
 
 /*
  * H_SVM_PAGE_OUT: Move page from secure memory to normal memory.
  */
-unsigned long
-kvmppc_h_svm_page_out(struct kvm *kvm, unsigned long gpa,
+static unsigned long
+uvmem_h_svm_page_out(struct kvm *kvm, unsigned long gpa,
 		      unsigned long flags, unsigned long page_shift)
 {
 	unsigned long gfn = gpa >> page_shift;
@@ -1070,7 +1070,7 @@ out:
 	return ret;
 }
 
-int kvmppc_send_page_to_uv(struct kvm *kvm, unsigned long gfn)
+static int uvmem_send_page_to_uv(struct kvm *kvm, unsigned long gfn)
 {
 	unsigned long pfn;
 	int ret = U_SUCCESS;
@@ -1091,7 +1091,8 @@ out:
 	return (ret == U_SUCCESS) ? RESUME_GUEST : -EFAULT;
 }
 
-int kvmppc_uvmem_memslot_create(struct kvm *kvm, const struct kvm_memory_slot *new)
+static int uvmem_memslot_create(struct kvm *kvm,
+		const struct kvm_memory_slot *new)
 {
 	int ret = __uvmem_memslot_create(kvm, new);
 
@@ -1101,7 +1102,8 @@ int kvmppc_uvmem_memslot_create(struct kvm *kvm, const struct kvm_memory_slot *n
 	return ret;
 }
 
-void kvmppc_uvmem_memslot_delete(struct kvm *kvm, const struct kvm_memory_slot *old)
+static void uvmem_memslot_delete(struct kvm *kvm,
+		const struct kvm_memory_slot *old)
 {
 	__uvmem_memslot_delete(kvm, old);
 }
@@ -1144,7 +1146,7 @@ out:
 	return size;
 }
 
-int kvmppc_uvmem_init(void)
+static int uvmem_init(void)
 {
 	int ret = 0;
 	unsigned long size;
@@ -1199,7 +1201,7 @@ out:
 	return ret;
 }
 
-void kvmppc_uvmem_free(void)
+static void uvmem_free(void)
 {
 	if (!uvmem_bitmap)
 		return;
@@ -1209,3 +1211,41 @@ void kvmppc_uvmem_free(void)
 			   resource_size(&uvmem_pgmap.res));
 	kfree(uvmem_bitmap);
 }
+
+const struct kvmppc_hmm_backend kvmppc_uvmem_backend = {
+	/* initialize */
+	.kvmppc_secmem_init = uvmem_init,
+
+	/* cleanup */
+	.kvmppc_secmem_free = uvmem_free,
+
+	/* is memory available */
+	.kvmppc_secmem_available = uvmem_available,
+
+	/* allocate a protected/secure page for the secure VM */
+	.kvmppc_svm_page_in = uvmem_h_svm_page_in,
+
+	/* recover the protected/secure page from the secure VM */
+	.kvmppc_svm_page_out = uvmem_h_svm_page_out,
+
+	/* initiate the transition of a VM to secure VM */
+	.kvmppc_svm_init_start = uvmem_h_svm_init_start,
+
+	/* finalize the transition of a secure VM */
+	.kvmppc_svm_init_done = uvmem_h_svm_init_done,
+
+	/* send a page to uv on page fault */
+	.kvmppc_svm_page_share = uvmem_send_page_to_uv,
+
+	/* abort the transition to a secure VM */
+	.kvmppc_svm_init_abort = uvmem_h_svm_init_abort,
+
+	/* add a memory slot */
+	.kvmppc_svm_memslot_create = uvmem_memslot_create,
+
+	/* free a memory slot */
+	.kvmppc_svm_memslot_delete = uvmem_memslot_delete,
+
+	/* drop pages allocated to the secure VM */
+	.kvmppc_svm_drop_pages = uvmem_drop_pages,
+};

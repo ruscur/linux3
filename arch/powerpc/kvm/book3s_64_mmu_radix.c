@@ -20,7 +20,7 @@
 #include <asm/pgalloc.h>
 #include <asm/pte-walk.h>
 #include <asm/ultravisor.h>
-#include <asm/kvm_book3s_uvmem.h>
+#include <asm/kvmppc_svm_backend.h>
 
 /*
  * Supported radix tree geometry.
@@ -941,7 +941,7 @@ int kvmppc_book3s_radix_page_fault(struct kvm_vcpu *vcpu,
 		gpa |= ea & 0xfff;
 
 	if (kvm->arch.secure_guest & KVMPPC_SECURE_INIT_DONE)
-		return kvmppc_send_page_to_uv(kvm, gfn);
+		return kvmppc_svm_page_share(kvm, gfn);
 
 	/* Get the corresponding memslot */
 	memslot = gfn_to_memslot(kvm, gfn);
@@ -1148,7 +1148,7 @@ void kvmppc_radix_flush_memslot(struct kvm *kvm,
 	unsigned int shift;
 
 	if (kvm->arch.secure_guest & KVMPPC_SECURE_INIT_START)
-		kvmppc_uvmem_drop_pages(memslot, kvm, true);
+		kvmppc_svm_drop_pages(memslot, kvm, true);
 
 	if (kvm->arch.secure_guest & KVMPPC_SECURE_INIT_DONE)
 		return;
