@@ -201,8 +201,30 @@ enum {
 		0,
 };
 
+enum {
+	MMU_FTRS_ALWAYS =
+#ifdef CONFIG_PPC_8xx
+		MMU_FTR_TYPE_8xx &
+#endif
+#ifdef CONFIG_40x
+		MMU_FTR_TYPE_40x &
+#endif
+#ifdef CONFIG_PPC_47x
+		MMU_FTR_TYPE_47x &
+#elif defined(CONFIG_44x)
+		MMU_FTR_TYPE_44x &
+#endif
+#if defined(CONFIG_E200) || defined(CONFIG_E500)
+		MMU_FTR_TYPE_FSL_E &
+#endif
+		MMU_FTRS_POSSIBLE,
+};
+
 static inline bool early_mmu_has_feature(unsigned long feature)
 {
+	if (MMU_FTRS_ALWAYS & feature)
+		return true;
+
 	return !!(MMU_FTRS_POSSIBLE & cur_cpu_spec->mmu_features & feature);
 }
 
@@ -230,6 +252,9 @@ static __always_inline bool mmu_has_feature(unsigned long feature)
 		return early_mmu_has_feature(feature);
 	}
 #endif
+
+	if (MMU_FTRS_ALWAYS & feature)
+		return true;
 
 	if (!(MMU_FTRS_POSSIBLE & feature))
 		return false;
