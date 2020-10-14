@@ -110,10 +110,48 @@ static void mmcra_sdar_mode(u64 event, unsigned long *mmcra)
 
 static u64 thresh_cmp_val(u64 value)
 {
-	if (cpu_has_feature(CPU_FTR_ARCH_300))
-		return value << p9_MMCRA_THR_CMP_SHIFT;
+	int exp = 0;
+	u64 result = value;
 
-	return value << MMCRA_THR_CMP_SHIFT;
+	if (!value)
+		return value;
+
+	/*
+	 * Incase of P10, thresh_cmp value is not part of raw event code
+	 * and provided via attr.config1 parameter. To program threshold in MMCRA,
+	 * take a 18 bit number N and shift right 2 places and increment
+	 * the exponent E by 1 until the upper 10 bits of N are zero.
+	 * Write E to the threshold exponent and write the lower 8 bits of N
+	 * to the threshold mantissa.
+	 * The max threshold that can be written is 261120.
+	 */
+	if (cpu_has_feature(CPU_FTR_ARCH_31)) {
+		if (value > 261120)
+			value = 261120;
+		while ((64 - __builtin_clzl(value)) > 8) {
+			exp++;
+			value >>= 2;
+		}
+
+		/*
+		 * Note that it is invalid to write a mantissa with the
+		 * upper 2 bits of mantissa being zero, unless the
+		 * exponent is also zero.
+		 */
+		if (!(value & 0xC0) && exp)
+			result = 0;
+		else
+			result = (exp << 8) | value;
+	}
+
+	/*
+	 * Since location of threshold compare bits in MMCRA
+	 * is different for p8, using different shift value.
+	 */
+	if (cpu_has_feature(CPU_FTR_ARCH_300))
+		return result << p9_MMCRA_THR_CMP_SHIFT;
+	else
+		return result << MMCRA_THR_CMP_SHIFT;
 }
 
 static unsigned long combine_from_event(u64 event)
@@ -144,7 +182,9 @@ static bool is_thresh_cmp_valid(u64 event)
 	/*
 	 * Check the mantissa upper two bits are not zero, unless the
 	 * exponent is also zero. See the THRESH_CMP_MANTISSA doc.
-	 * Power10: thresh_cmp is replaced by l2_l3 event select.
+	 * Power10: thresh_cmp bits are not part of raw event code.
+	 * attr.config1 is used to get thresh_cmp value from user.
+	 * And hence thresh_cmp is not part of group constraint.
 	 */
 	if (cpu_has_feature(CPU_FTR_ARCH_31))
 		return false;
@@ -396,7 +436,7 @@ ebb_bhrb:
 
 int isa207_compute_mmcr(u64 event[], int n_ev,
 			       unsigned int hwc[], struct mmcr_regs *mmcr,
-			       struct perf_event *pevents[])
+			       struct perf_event *pevents[], u32 flags)
 {
 	unsigned long mmcra, mmcr1, mmcr2, unit, combine, psel, cache, val;
 	unsigned long mmcr3;
@@ -481,6 +521,10 @@ int isa207_compute_mmcr(u64 event[], int n_ev,
 			if (!cpu_has_feature(CPU_FTR_ARCH_31)) {
 				val = (event[i] >> EVENT_THR_CMP_SHIFT) &
 					EVENT_THR_CMP_MASK;
+				mmcra |= thresh_cmp_val(val);
+			} else if (flags & PPMU_HAS_ATTR_CONFIG1) {
+				val = (pevents[i]->attr.config1 >> p10_EVENT_THR_CMP_SHIFT) &
+					p10_EVENT_THR_CMP_MASK;
 				mmcra |= thresh_cmp_val(val);
 			}
 		}

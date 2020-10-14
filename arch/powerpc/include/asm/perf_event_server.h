@@ -34,9 +34,10 @@ struct power_pmu {
 	int		max_alternatives;
 	unsigned long	add_fields;
 	unsigned long	test_adder;
+	/* TODO: parameter list is growing and should consider folding all this to a struct */
 	int		(*compute_mmcr)(u64 events[], int n_ev,
 				unsigned int hwc[], struct mmcr_regs *mmcr,
-				struct perf_event *pevents[]);
+				struct perf_event *pevents[], u32 flags);
 	int		(*get_constraint)(u64 event_id, unsigned long *mskp,
 				unsigned long *valp);
 	int		(*get_alternatives)(u64 event_id, unsigned int flags,
@@ -82,6 +83,7 @@ struct power_pmu {
 #define PPMU_ARCH_207S		0x00000080 /* PMC is architecture v2.07S */
 #define PPMU_NO_SIAR		0x00000100 /* Do not use SIAR */
 #define PPMU_ARCH_31		0x00000200 /* Has MMCR3, SIER2 and SIER3 */
+#define PPMU_HAS_ATTR_CONFIG1	0x00000400 /* Using config1 attribute */
 
 /*
  * Values for flags to get_alternatives()

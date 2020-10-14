@@ -102,6 +102,10 @@
 #define p10_EVENT_MMCR3_MASK		0x7fffull
 #define p10_EVENT_MMCR3_SHIFT		45
 
+/* Event Threshold Compare bit constant for power10 in config1 attribute */
+#define p10_EVENT_THR_CMP_SHIFT	0
+#define p10_EVENT_THR_CMP_MASK	0x3FFFFull
+
 #define p10_EVENT_VALID_MASK		\
 	((p10_SDAR_MODE_MASK   << p10_SDAR_MODE_SHIFT		|	\
 	(p10_EVENT_THRESH_MASK  << EVENT_THRESH_SHIFT)		|	\
@@ -251,7 +255,7 @@
 int isa207_get_constraint(u64 event, unsigned long *maskp, unsigned long *valp);
 int isa207_compute_mmcr(u64 event[], int n_ev,
 				unsigned int hwc[], struct mmcr_regs *mmcr,
-				struct perf_event *pevents[]);
+				struct perf_event *pevents[], u32 flags);
 void isa207_disable_pmc(unsigned int pmc, struct mmcr_regs *mmcr);
 int isa207_get_alternatives(u64 event, u64 alt[], int size, unsigned int flags,
 					const unsigned int ev_alt[][MAX_ALT]);
