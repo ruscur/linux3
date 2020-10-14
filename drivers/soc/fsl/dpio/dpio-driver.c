@@ -31,6 +31,7 @@ struct dpio_priv {
 	struct dpaa2_io *io;
 };
 
+static cpumask_t mask;
 static cpumask_var_t cpus_unused_mask;
 
 static const struct soc_device_attribute ls1088a_soc[] = {
@@ -95,7 +96,6 @@ static int register_dpio_irq_handlers(struct fsl_mc_device *dpio_dev, int cpu)
 {
 	int error;
 	struct fsl_mc_device_irq *irq;
-	cpumask_t mask;
 
 	irq = dpio_dev->irqs[0];
 	error = devm_request_irq(&dpio_dev->dev,
