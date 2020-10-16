@@ -151,6 +151,7 @@ struct fsl_mc_obj_desc {
 /**
  * struct fsl_mc_device - MC object device object
  * @dev: Linux driver model device object
+ * @mask: cpu mask for affinity_hint
  * @dma_mask: Default DMA mask
  * @flags: MC object device flags
  * @icid: Isolation context ID for the device
@@ -184,6 +185,7 @@ struct fsl_mc_obj_desc {
  */
 struct fsl_mc_device {
 	struct device dev;
+	cpumask_t mask;
 	u64 dma_mask;
 	u16 flags;
 	u16 icid;

@@ -95,7 +95,7 @@ static int register_dpio_irq_handlers(struct fsl_mc_device *dpio_dev, int cpu)
 {
 	int error;
 	struct fsl_mc_device_irq *irq;
-	cpumask_t mask;
+	cpumask_t *cpu_mask;
 
 	irq = dpio_dev->irqs[0];
 	error = devm_request_irq(&dpio_dev->dev,
@@ -112,9 +112,10 @@ static int register_dpio_irq_handlers(struct fsl_mc_device *dpio_dev, int cpu)
 	}
 
 	/* set the affinity hint */
-	cpumask_clear(&mask);
-	cpumask_set_cpu(cpu, &mask);
-	if (irq_set_affinity_hint(irq->msi_desc->irq, &mask))
+	cpu_mask = &dpio_dev->mask;
+	cpumask_clear(cpu_mask);
+	cpumask_set_cpu(cpu, cpu_mask);
+	if (irq_set_affinity_hint(irq->msi_desc->irq, cpu_mask))
 		dev_err(&dpio_dev->dev,
 			"irq_set_affinity failed irq %d cpu %d\n",
 			irq->msi_desc->irq, cpu);
