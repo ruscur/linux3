@@ -803,6 +803,20 @@ END_FTR_SECTION_NESTED(CPU_FTR_CELL_TB_BUG, CPU_FTR_CELL_TB_BUG, 96)
 
 #endif /* !CONFIG_PPC_BOOK3E */
 
+#else /* __ASSEMBLY */
+
+/*
+ * Inline assembly memory constraint
+ *
+ * GCC 4.9 doesn't properly handle pre update memory constraint "m<>"
+ *
+ */
+#if defined(GCC_VERSION) && GCC_VERSION < 50000
+#define UPD_CONSTR ""
+#else
+#define UPD_CONSTR "<>"
+#endif
+
 #endif /*  __ASSEMBLY__ */
 
 /*
