@@ -33,6 +33,7 @@
 #include <linux/slab.h>
 
 #include <asm/byteorder.h>
+#include <asm/switch-to.h>
 
 #include <drm/drm_print.h>
 
