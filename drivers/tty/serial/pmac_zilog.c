@@ -1867,6 +1867,12 @@ static struct platform_driver pmz_driver = {
 static int __init init_pmz(void)
 {
 	int rc, i;
+
+#ifdef CONFIG_MAC
+	if (!MACH_IS_MAC)
+		return -ENODEV;
+#endif
+
 	printk(KERN_INFO "%s\n", version);
 
 	/* 
@@ -2034,6 +2040,11 @@ static int __init pmz_console_setup(struct console *co, char *options)
 
 static int __init pmz_console_init(void)
 {
+#ifdef CONFIG_MAC
+	if (!MACH_IS_MAC)
+		return -ENODEV;
+#endif
+
 	/* Probe ports */
 	pmz_probe();
 
