@@ -2143,6 +2143,18 @@ static void record_and_restart(struct perf_event *event, unsigned long val,
 	perf_event_update_userpage(event);
 
 	/*
+	 * Setting exclude_kernel will only freeze the
+	 * Performance Monitor counters and we may have
+	 * kernel address captured in SIAR. Hence drop
+	 * the kernel sample captured during user space
+	 * profiling. Setting `record` to zero will also
+	 * make sure event throlling is handled.
+	 */
+	if (event->attr.exclude_kernel && record)
+		if (is_kernel_addr(mfspr(SPRN_SIAR)))
+			record = 0;
+
+	/*
 	 * Finally record data if requested.
 	 */
 	if (record) {
