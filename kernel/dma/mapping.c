@@ -7,6 +7,7 @@
  */
 #include <linux/memblock.h> /* for max_pfn */
 #include <linux/acpi.h>
+#include <linux/dma-direct.h>
 #include <linux/dma-map-ops.h>
 #include <linux/export.h>
 #include <linux/gfp.h>
@@ -14,7 +15,6 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include "debug.h"
-#include "direct.h"
 
 /*
  * Managed DMA API
