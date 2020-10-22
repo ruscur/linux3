@@ -155,9 +155,7 @@ __after_mmu_off:
 
 	bl	initial_bats
 	bl	load_segment_registers
-BEGIN_MMU_FTR_SECTION
 	bl	early_hash_table
-END_MMU_FTR_SECTION_IFSET(MMU_FTR_HPTE_TABLE)
 #if defined(CONFIG_BOOTX_TEXT)
 	bl	setup_disp_bat
 #endif
@@ -931,9 +929,6 @@ early_hash_table:
 	lis	r6, early_hash - PAGE_OFFSET@h
 	ori	r6, r6, 3	/* 256kB table */
 	mtspr	SPRN_SDR1, r6
-	lis	r6, early_hash@h
-	lis	r3, Hash@ha
-	stw	r6, Hash@l(r3)
 	blr
 
 load_up_mmu:
