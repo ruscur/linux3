@@ -811,6 +811,9 @@ static __init void cpufeatures_cpu_quirks(void)
 	}
 
 	update_tlbie_feature_flag(version);
+
+	if ((version & 0xffffffff) == 0x00800100)
+		cur_cpu_spec->cpu_features |= CPU_FTR_POWER10_DD1;
 }
 
 static void __init cpufeatures_setup_finished(void)

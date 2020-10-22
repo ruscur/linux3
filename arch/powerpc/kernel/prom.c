@@ -305,6 +305,14 @@ static void __init check_cpu_feature_properties(unsigned long node)
 	}
 }
 
+static void __init fixup_cpu_features(void)
+{
+	unsigned long version = mfspr(SPRN_PVR);
+
+	if ((version & 0xffffffff) == 0x00800100)
+		cur_cpu_spec->cpu_features |= CPU_FTR_POWER10_DD1;
+}
+
 static int __init early_init_dt_scan_cpus(unsigned long node,
 					  const char *uname, int depth,
 					  void *data)
@@ -378,6 +386,7 @@ static int __init early_init_dt_scan_cpus(unsigned long node,
 
 		check_cpu_feature_properties(node);
 		check_cpu_pa_features(node);
+		fixup_cpu_features();
 	}
 
 	identical_pvr_fixup(node);
