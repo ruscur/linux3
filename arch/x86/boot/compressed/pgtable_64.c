@@ -23,7 +23,7 @@ static char trampoline_save[TRAMPOLINE_32BIT_SIZE];
  * Avoid putting the pointer into .bss as it will be cleared between
  * paging_prepare() and extract_kernel().
  */
-unsigned long *trampoline_32bit __section(.data);
+unsigned long *trampoline_32bit __section(".data");
 
 extern struct boot_params *boot_params;
 int cmdline_find_option_bool(const char *option);
