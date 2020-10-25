@@ -76,6 +76,17 @@ static inline void hibernate_restore_protect_page(void *page_address) {}
 static inline void hibernate_restore_unprotect_page(void *page_address) {}
 #endif /* CONFIG_STRICT_KERNEL_RWX  && CONFIG_ARCH_HAS_SET_MEMORY */
 
+#if defined(CONFIG_DEBUG_PAGEALLOC) || defined(CONFIG_ARCH_HAS_SET_DIRECT_MAP)
+static inline void
+kernel_map_pages(struct page *page, int numpages, int enable)
+{
+	__kernel_map_pages(page, numpages, enable);
+}
+#else
+static inline void
+kernel_map_pages(struct page *page, int numpages, int enable) {}
+#endif
+
 static int swsusp_page_is_free(struct page *);
 static void swsusp_set_page_forbidden(struct page *);
 static void swsusp_unset_page_forbidden(struct page *);
