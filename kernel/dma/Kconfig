@@ -20,6 +20,10 @@ config DMA_OPS
 config DMA_OPS_BYPASS
 	bool
 
+# IOMMU driver limited by a DMA window size may switch between bypass and window
+config DMA_OPS_BYPASS_BUS_LIMIT
+	bool
+
 config NEED_SG_DMA_LENGTH
 	bool
 
