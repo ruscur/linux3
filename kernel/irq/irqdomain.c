@@ -487,6 +487,7 @@ static void irq_domain_set_mapping(struct irq_domain *domain,
 
 void irq_domain_disassociate(struct irq_domain *domain, unsigned int irq)
 {
+	struct irq_desc *desc = irq_to_desc(irq);
 	struct irq_data *irq_data = irq_get_irq_data(irq);
 	irq_hw_number_t hwirq;
 
@@ -514,11 +515,14 @@ void irq_domain_disassociate(struct irq_domain *domain, unsigned int irq)
 
 	/* Clear reverse map for this hwirq */
 	irq_domain_clear_mapping(domain, hwirq);
+
+	kobject_put(&desc->kobj);
 }
 
 int irq_domain_associate(struct irq_domain *domain, unsigned int virq,
 			 irq_hw_number_t hwirq)
 {
+	struct irq_desc *desc = irq_to_desc(virq);
 	struct irq_data *irq_data = irq_get_irq_data(virq);
 	int ret;
 
@@ -529,6 +533,8 @@ int irq_domain_associate(struct irq_domain *domain, unsigned int virq,
 		return -EINVAL;
 	if (WARN(irq_data->domain, "error: virq%i is already associated", virq))
 		return -EINVAL;
+
+	kobject_get(&desc->kobj);
 
 	mutex_lock(&irq_domain_mutex);
 	irq_data->hwirq = hwirq;
@@ -548,6 +554,7 @@ int irq_domain_associate(struct irq_domain *domain, unsigned int virq,
 			irq_data->domain = NULL;
 			irq_data->hwirq = 0;
 			mutex_unlock(&irq_domain_mutex);
+			kobject_put(&desc->kobj);
 			return ret;
 		}
 
@@ -638,6 +645,7 @@ unsigned int irq_create_mapping(struct irq_domain *domain,
 {
 	struct device_node *of_node;
 	int virq;
+	struct irq_desc *desc;
 
 	pr_debug("irq_create_mapping(0x%p, 0x%lx)\n", domain, hwirq);
 
@@ -655,7 +663,9 @@ unsigned int irq_create_mapping(struct irq_domain *domain,
 	/* Check if mapping already exists */
 	virq = irq_find_mapping(domain, hwirq);
 	if (virq) {
+		desc = irq_to_desc(virq);
 		pr_debug("-> existing mapping on virq %d\n", virq);
+		kobject_get(&desc->kobj);
 		return virq;
 	}
 
@@ -674,6 +684,7 @@ unsigned int irq_create_mapping(struct irq_domain *domain,
 	pr_debug("irq %lu on domain %s mapped to virtual irq %u\n",
 		hwirq, of_node_full_name(of_node), virq);
 
+	desc = irq_to_desc(virq);
 	return virq;
 }
 EXPORT_SYMBOL_GPL(irq_create_mapping);
@@ -751,6 +762,7 @@ unsigned int irq_create_fwspec_mapping(struct irq_fwspec *fwspec)
 	irq_hw_number_t hwirq;
 	unsigned int type = IRQ_TYPE_NONE;
 	int virq;
+	struct irq_desc *desc;
 
 	if (fwspec->fwnode) {
 		domain = irq_find_matching_fwspec(fwspec, DOMAIN_BUS_WIRED);
@@ -787,8 +799,15 @@ unsigned int irq_create_fwspec_mapping(struct irq_fwspec *fwspec)
 		 * current trigger type then we are done so return the
 		 * interrupt number.
 		 */
-		if (type == IRQ_TYPE_NONE || type == irq_get_trigger_type(virq))
+		if (type == IRQ_TYPE_NONE || type == irq_get_trigger_type(virq)) {
+			desc = irq_to_desc(virq);
+			kobject_get(&desc->kobj);
+
+			pr_err("___K___ (%u) %s %u: virq %d counter %d\n",
+				smp_processor_id(),
+			       __func__, __LINE__, virq, kref_read(&desc->kobj.kref));
 			return virq;
+		}
 
 		/*
 		 * If the trigger type has not been set yet, then set
@@ -800,6 +819,8 @@ unsigned int irq_create_fwspec_mapping(struct irq_fwspec *fwspec)
 				return 0;
 
 			irqd_set_trigger_type(irq_data, type);
+			desc = irq_to_desc(virq);
+			kobject_get(&desc->kobj);
 			return virq;
 		}
 
@@ -852,22 +873,12 @@ EXPORT_SYMBOL_GPL(irq_create_of_mapping);
  */
 void irq_dispose_mapping(unsigned int virq)
 {
-	struct irq_data *irq_data = irq_get_irq_data(virq);
-	struct irq_domain *domain;
+	struct irq_desc *desc = irq_to_desc(virq);
 
-	if (!virq || !irq_data)
+	if (!virq || !desc)
 		return;
 
-	domain = irq_data->domain;
-	if (WARN_ON(domain == NULL))
-		return;
-
-	if (irq_domain_is_hierarchy(domain)) {
-		irq_domain_free_irqs(virq, 1);
-	} else {
-		irq_domain_disassociate(domain, virq);
-		irq_free_desc(virq);
-	}
+	kobject_put(&desc->kobj);
 }
 EXPORT_SYMBOL_GPL(irq_dispose_mapping);
 
@@ -1413,6 +1424,7 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 			    bool realloc, const struct irq_affinity_desc *affinity)
 {
 	int i, ret, virq;
+	bool get_ref = false;
 
 	if (domain == NULL) {
 		domain = irq_default_domain;
@@ -1422,6 +1434,7 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 
 	if (realloc && irq_base >= 0) {
 		virq = irq_base;
+		get_ref = true;
 	} else {
 		virq = irq_domain_alloc_descs(irq_base, nr_irqs, 0, node,
 					      affinity);
@@ -1453,8 +1466,14 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 		}
 	}
 	
-	for (i = 0; i < nr_irqs; i++)
+	for (i = 0; i < nr_irqs; i++) {
 		irq_domain_insert_irq(virq + i);
+		if (get_ref) {
+			struct irq_desc *desc = irq_to_desc(virq + i);
+
+			kobject_get(&desc->kobj);
+		}
+	}
 	mutex_unlock(&irq_domain_mutex);
 
 	return virq;

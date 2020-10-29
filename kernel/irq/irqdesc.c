@@ -419,20 +419,40 @@ err_desc:
 	return NULL;
 }
 
+static void delayed_free_desc(struct rcu_head *rhp);
 static void irq_kobj_release(struct kobject *kobj)
 {
 	struct irq_desc *desc = container_of(kobj, struct irq_desc, kobj);
+#ifdef CONFIG_IRQ_DOMAIN
+	struct irq_domain *domain;
+	unsigned int virq = desc->irq_data.irq;
 
-	free_masks(desc);
-	free_percpu(desc->kstat_irqs);
-	kfree(desc);
+	domain = desc->irq_data.domain;
+	if (domain) {
+		if (irq_domain_is_hierarchy(domain)) {
+			irq_domain_free_irqs(virq, 1);
+		} else {
+			irq_domain_disassociate(domain, virq);
+			irq_free_desc(virq);
+		}
+	}
+#endif
+	/*
+	 * We free the descriptor, masks and stat fields via RCU. That
+	 * allows demultiplex interrupts to do rcu based management of
+	 * the child interrupts.
+	 * This also allows us to use rcu in kstat_irqs_usr().
+	 */
+	call_rcu(&desc->rcu, delayed_free_desc);
 }
 
 static void delayed_free_desc(struct rcu_head *rhp)
 {
 	struct irq_desc *desc = container_of(rhp, struct irq_desc, rcu);
 
-	kobject_put(&desc->kobj);
+	free_masks(desc);
+	free_percpu(desc->kstat_irqs);
+	kfree(desc);
 }
 
 static void free_desc(unsigned int irq)
@@ -453,14 +473,6 @@ static void free_desc(unsigned int irq)
 	 */
 	irq_sysfs_del(desc);
 	delete_irq_desc(irq);
-
-	/*
-	 * We free the descriptor, masks and stat fields via RCU. That
-	 * allows demultiplex interrupts to do rcu based management of
-	 * the child interrupts.
-	 * This also allows us to use rcu in kstat_irqs_usr().
-	 */
-	call_rcu(&desc->rcu, delayed_free_desc);
 }
 
 static int alloc_descs(unsigned int start, unsigned int cnt, int node,
